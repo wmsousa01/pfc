@@ -39,8 +39,8 @@ export default function FinalCTA() {
 
           {/* Subtitle */}
           <p className="text-white/60 text-lg leading-relaxed max-w-xl">
-            Fale agora pelo WhatsApp e receba a proposta comercial completa.
-            Sem compromisso, sem burocracia.
+            Fale agora pelo WhatsApp e receba a proposta comercial completa com
+            os formatos disponíveis.
           </p>
 
           {/* Stats row */}
