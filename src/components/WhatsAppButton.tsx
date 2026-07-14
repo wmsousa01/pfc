@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { whatsapp } from "@/lib/config";
 
 export default function WhatsAppButton() {
   const [hovered, setHovered] = useState(false);
@@ -24,7 +25,7 @@ export default function WhatsAppButton() {
         <div className="absolute inset-0 rounded-full bg-[#25D366] animate-pulse-ring" />
 
         <a
-          href="https://wa.me/5519989331908?text=Vim%20pela%20landing%20page%20e%20quero%20anunciar"
+          href={whatsapp("Vim pelo site do Fora da Caixa e quero saber mais")}
           target="_blank"
           rel="noopener noreferrer"
           className="relative flex items-center justify-center w-14 h-14 bg-[#25D366] rounded-full shadow-lg hover:scale-110 transition-transform duration-200"

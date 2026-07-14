@@ -9,25 +9,26 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Papo Fora da Caixa | Patrocínios e Parcerias",
+  title: "Fora da Caixa | O hub do podcast de Mogi Guaçu",
   description:
-    "Coloque sua marca no centro da conversa da cidade com o Papo Fora da Caixa. O podcast independente de Mogi Guaçu com +90 mil visualizações mensais.",
+    "O ecossistema de conteúdo regional de Mogi Guaçu: lives semanais, quadros especializados e Shorts diários. Assista aos episódios, conheça os quadros e conecte sua marca à conversa da cidade.",
   keywords:
-    "podcast patrocínio, parceria comercial, publicidade local, Mogi Guaçu, Papo Fora da Caixa, PFC, marketing podcast",
-  authors: [{ name: "Papo Fora da Caixa" }],
+    "Fora da Caixa, Papo Fora da Caixa, podcast Mogi Guaçu, PFC, lives, quadros, PFC News, PFC Visita, Lado A Lado B, Tateios Escolares, patrocínio podcast, parceria local",
+  authors: [{ name: "Fora da Caixa" }],
+  metadataBase: new URL("https://foradacaixa.com.br"),
   openGraph: {
-    title: "Papo Fora da Caixa | Patrocínios e Parcerias",
+    title: "Fora da Caixa | O hub do podcast de Mogi Guaçu",
     description:
-      "Coloque sua marca no centro da conversa da cidade com o Papo Fora da Caixa.",
+      "Lives semanais, quadros especializados e Shorts diários. Assista, ouça e conecte sua marca à conversa da cidade.",
     type: "website",
     locale: "pt_BR",
-    siteName: "Papo Fora da Caixa",
+    siteName: "Fora da Caixa",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Papo Fora da Caixa | Patrocínios e Parcerias",
+    title: "Fora da Caixa | O hub do podcast de Mogi Guaçu",
     description:
-      "Coloque sua marca no centro da conversa da cidade com o Papo Fora da Caixa.",
+      "Lives semanais, quadros especializados e Shorts diários. Assista, ouça e conecte sua marca à conversa da cidade.",
   },
   robots: {
     index: true,
