@@ -109,8 +109,8 @@ export default async function Hero() {
             </div>
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.05] tracking-tight">
-              As melhores ideias não cabem em{" "}
-              <span className="text-gradient-gold">quatro paredes</span>
+              Histórias que conectam.{" "}
+              <span className="text-gradient-gold">Conversas que transformam.</span>
             </h1>
 
             <p className="text-lg text-white/70 leading-relaxed max-w-xl">
