@@ -7,6 +7,7 @@ import Differentials from "@/components/Differentials";
 import Plans from "@/components/Plans";
 import HowItWorks from "@/components/HowItWorks";
 import PartnersShowcase from "@/components/PartnersShowcase";
+import LeadCapture from "@/components/LeadCapture";
 import FinalCTA from "@/components/FinalCTA";
 import { partnershipFormats, quadros, whatsapp } from "@/lib/config";
 import { WhatsAppIcon, ArrowRight } from "@/components/icons";
@@ -44,15 +45,23 @@ export default function ParceriasPage() {
             audiência local do Fora da Caixa — com uma página exclusiva, QR code
             no episódio e tracking de acessos.
           </p>
-          <a
-            href={whatsapp("Quero uma proposta de parceria com o Fora da Caixa")}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-primary px-8 py-4 rounded-xl text-base flex items-center gap-3"
-          >
-            <WhatsAppIcon className="w-5 h-5" />
-            Solicitar proposta
-          </a>
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <a
+              href={whatsapp("Quero uma proposta de parceria com o Fora da Caixa")}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-primary px-8 py-4 rounded-xl text-base flex items-center gap-3"
+            >
+              <WhatsAppIcon className="w-5 h-5" />
+              Solicitar proposta
+            </a>
+            <a
+              href="#media-kit"
+              className="px-8 py-4 rounded-xl text-base font-bold border border-white/15 text-white/80 hover:border-gold-500/50 hover:text-white transition-colors"
+            >
+              Receber media kit
+            </a>
+          </div>
         </div>
       </section>
 
@@ -109,6 +118,7 @@ export default function ParceriasPage() {
       <Exposure />
       <Differentials />
       <Plans />
+      <LeadCapture />
       <PartnersShowcase />
       <HowItWorks />
 

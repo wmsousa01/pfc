@@ -1,11 +1,20 @@
 import AdminHeader from "@/components/admin/AdminHeader";
-import { getPartnersWithStats, getAllIgHighlights } from "@/lib/admin";
+import { getPartnersWithStats, getAllIgHighlights, getLeads } from "@/lib/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import {
   togglePartnerActive,
   saveHighlight,
   deleteHighlight,
+  updateLeadStatus,
+  deleteLead,
 } from "./actions";
+
+const LEAD_STATUS_STYLES: Record<string, string> = {
+  novo: "bg-gold-500/15 border-gold-500/40 text-gold-400",
+  contatado: "bg-sky-500/10 border-sky-500/30 text-sky-400",
+  fechado: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400",
+  descartado: "bg-white/5 border-white/10 text-white/40",
+};
 
 export const dynamic = "force-dynamic";
 
@@ -27,10 +36,12 @@ export default async function AdminDashboard() {
 
   const partners = await getPartnersWithStats();
   const highlights = await getAllIgHighlights();
+  const leads = await getLeads();
 
   const totalClicks30d = partners.reduce((s, p) => s + p.clicks_30d, 0);
   const totalClicksQr = partners.reduce((s, p) => s + p.clicks_qr, 0);
   const activeCount = partners.filter((p) => p.active).length;
+  const newLeads = leads.filter((l) => l.status === "novo").length;
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] pb-20">
@@ -38,8 +49,9 @@ export default async function AdminDashboard() {
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
         {/* Summary */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
           {[
+            { v: newLeads, l: "Leads novos" },
             { v: partners.length, l: "Parceiros" },
             { v: activeCount, l: "Ativos" },
             { v: totalClicks30d, l: "Acessos (30 dias)" },
@@ -50,6 +62,87 @@ export default async function AdminDashboard() {
               <div className="text-white/50 text-sm mt-1">{s.l}</div>
             </div>
           ))}
+        </div>
+
+        {/* Leads */}
+        <h2 className="text-xl font-bold text-white mb-4">Leads</h2>
+        <div className="bg-[#111] border border-[#222] rounded-xl overflow-hidden mb-12">
+          {leads.length === 0 ? (
+            <div className="p-8 text-center text-white/40 text-sm">
+              Nenhum lead ainda. Eles chegam pelo formulário de /parcerias.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-white/40 text-xs uppercase tracking-wider border-b border-[#222]">
+                    <th className="text-left font-medium px-5 py-3">Lead</th>
+                    <th className="text-left font-medium px-3 py-3">Segmento</th>
+                    <th className="text-left font-medium px-3 py-3">Contato</th>
+                    <th className="text-left font-medium px-3 py-3">Data</th>
+                    <th className="text-left font-medium px-3 py-3">Status</th>
+                    <th className="text-right font-medium px-5 py-3">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leads.map((l) => (
+                    <tr key={l.id} className="border-b border-[#1a1a1a] last:border-0 hover:bg-white/[0.02] align-top">
+                      <td className="px-5 py-3">
+                        <div className="text-white font-medium">{l.company}</div>
+                        <div className="text-white/40 text-xs">{l.name}</div>
+                        {l.message && (
+                          <div className="text-white/30 text-xs mt-1 max-w-[260px] whitespace-pre-wrap">
+                            {l.message}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-white/50">{l.segment ?? "—"}</td>
+                      <td className="px-3 py-3">
+                        <a
+                          href={`https://wa.me/${l.whatsapp.length <= 11 ? `55${l.whatsapp}` : l.whatsapp}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-emerald-400 hover:text-emerald-300 font-medium whitespace-nowrap"
+                        >
+                          {l.whatsapp}
+                        </a>
+                      </td>
+                      <td className="px-3 py-3 text-white/50 whitespace-nowrap">
+                        {new Date(l.created_at).toLocaleDateString("pt-BR")}
+                      </td>
+                      <td className="px-3 py-3">
+                        <form action={updateLeadStatus} className="flex flex-wrap gap-1.5">
+                          <input type="hidden" name="id" value={l.id} />
+                          {(["novo", "contatado", "fechado", "descartado"] as const).map((s) => (
+                            <button
+                              key={s}
+                              name="status"
+                              value={s}
+                              className={`text-xs font-semibold px-2.5 py-1 rounded-full border transition-colors ${
+                                l.status === s
+                                  ? LEAD_STATUS_STYLES[s]
+                                  : "bg-transparent border-[#2a2a2a] text-white/30 hover:text-white/60"
+                              }`}
+                            >
+                              {s}
+                            </button>
+                          ))}
+                        </form>
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <form action={deleteLead}>
+                          <input type="hidden" name="id" value={l.id} />
+                          <button className="text-red-400/70 hover:text-red-400 text-xs">
+                            Remover
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Partners */}

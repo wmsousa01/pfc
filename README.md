@@ -34,6 +34,8 @@ npm run dev
      `partner_clicks`, `ig_highlights`, RLS e um parceiro de exemplo.
    - [`supabase/002_brand_kit.sql`](supabase/002_brand_kit.sql) — colunas do
      kit de marca (paleta + estilo visual) e o bucket `partner-assets`.
+   - [`supabase/003_leads.sql`](supabase/003_leads.sql) — tabela `leads`
+     (formulário de media kit em `/parcerias`) e RLS.
 3. Em **Authentication → Users → Add user**, crie o usuário admin (e-mail +
    senha) que vai logar em `/admin`.
 

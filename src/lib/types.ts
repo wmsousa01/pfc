@@ -40,6 +40,19 @@ export type PartnerClick = {
   created_at: string;
 };
 
+/** Lead captado pelo formulário público de /parcerias. */
+export type Lead = {
+  id: string;
+  name: string;
+  company: string;
+  segment: string | null;
+  whatsapp: string;
+  message: string | null;
+  source: string | null;
+  status: "novo" | "contatado" | "fechado" | "descartado";
+  created_at: string;
+};
+
 /** Destaque manual do Instagram (curado no admin). */
 export type IgHighlight = {
   id: string;

@@ -177,6 +177,27 @@ export async function deleteHighlight(formData: FormData) {
   }
 }
 
+const LEAD_STATUSES = ["novo", "contatado", "fechado", "descartado"];
+
+export async function updateLeadStatus(formData: FormData) {
+  const supabase = await requireAuth();
+  const id = String(formData.get("id") ?? "");
+  const status = String(formData.get("status") ?? "");
+  if (id && LEAD_STATUSES.includes(status)) {
+    await supabase.from("leads").update({ status }).eq("id", id);
+    revalidatePath("/admin");
+  }
+}
+
+export async function deleteLead(formData: FormData) {
+  const supabase = await requireAuth();
+  const id = String(formData.get("id") ?? "");
+  if (id) {
+    await supabase.from("leads").delete().eq("id", id);
+    revalidatePath("/admin");
+  }
+}
+
 export async function signOut() {
   const supabase = createServerSupabase();
   await supabase.auth.signOut();

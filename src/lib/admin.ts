@@ -1,6 +1,6 @@
 import "server-only";
 import { createServerSupabase } from "./supabase/server";
-import type { IgHighlight, Partner } from "./types";
+import type { IgHighlight, Lead, Partner } from "./types";
 
 export type PartnerStats = Partner & {
   clicks_total: number;
@@ -74,6 +74,17 @@ export async function getPartnerById(id: string): Promise<Partner | null> {
     .eq("id", id)
     .maybeSingle();
   return (data as Partner) ?? null;
+}
+
+/** Leads do formulário público, mais recentes primeiro. */
+export async function getLeads(): Promise<Lead[]> {
+  const supabase = createServerSupabase();
+  const { data } = await supabase
+    .from("leads")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(200);
+  return (data as Lead[]) ?? [];
 }
 
 export async function getAllIgHighlights(): Promise<IgHighlight[]> {
