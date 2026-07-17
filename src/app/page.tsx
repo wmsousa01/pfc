@@ -1,5 +1,6 @@
 import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
+import PartnersStrip from "@/components/PartnersStrip";
 import ChannelStats from "@/components/ChannelStats";
 import Quadros from "@/components/Quadros";
 import OndeAssistir from "@/components/OndeAssistir";
@@ -17,6 +18,7 @@ export default function Home() {
     <main className="bg-dark-900 text-white overflow-x-hidden">
       <Navbar />
       <Hero />
+      <PartnersStrip />
       <ChannelStats />
       <Quadros />
       <OndeAssistir />
