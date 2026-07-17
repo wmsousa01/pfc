@@ -125,6 +125,7 @@ export async function savePartner(formData: FormData) {
 
   revalidatePath("/admin");
   revalidatePath("/parcerias");
+  revalidatePath("/");
   revalidatePath(`/parceiros/${slug}`);
   redirect("/admin");
 }
@@ -136,6 +137,7 @@ export async function deletePartner(formData: FormData) {
     await supabase.from("partners").delete().eq("id", id);
     revalidatePath("/admin");
     revalidatePath("/parcerias");
+    revalidatePath("/");
   }
   redirect("/admin");
 }
@@ -148,6 +150,7 @@ export async function togglePartnerActive(formData: FormData) {
     await supabase.from("partners").update({ active }).eq("id", id);
     revalidatePath("/admin");
     revalidatePath("/parcerias");
+    revalidatePath("/");
   }
 }
 
