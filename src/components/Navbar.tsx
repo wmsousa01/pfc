@@ -8,6 +8,7 @@ const links = [
   { label: "Episódios", href: "/#episodios" },
   { label: "Quadros", href: "/#quadros" },
   { label: "Números", href: "/#numeros" },
+  { label: "Loja", href: "/loja" },
   { label: "Parcerias", href: "/parcerias" },
 ];
 
