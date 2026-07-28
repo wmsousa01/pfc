@@ -20,6 +20,9 @@ export const youtube = {
   channelUrl: "https://www.youtube.com/@PapoForadaCaixa",
 };
 
+/** Tamanho mínimo de senha. Vale para o admin, o revendedor e a recuperação. */
+export const MIN_PASSWORD_LENGTH = 8;
+
 export const whatsappNumber = "5519989331908";
 
 export function whatsapp(message: string): string {

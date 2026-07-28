@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import CopyButton from "@/components/CopyButton";
+import PasswordCard from "@/components/auth/PasswordCard";
 import { signOutAction } from "@/lib/auth-actions";
 import { requireReseller } from "@/lib/auth";
 import { getResellerOrders, summarizeOrders } from "@/lib/orders";
@@ -250,6 +251,10 @@ export default async function ResellerDashboard() {
               </table>
             </div>
           )}
+        </div>
+
+        <div className="mt-12">
+          <PasswordCard />
         </div>
       </div>
     </div>

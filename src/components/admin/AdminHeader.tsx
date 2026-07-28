@@ -6,6 +6,7 @@ const NAV = [
   { href: "/admin/pedidos", label: "Pedidos" },
   { href: "/admin/revendedores", label: "Revendedores" },
   { href: "/admin/produtos", label: "Produtos" },
+  { href: "/admin/senha", label: "Minha conta" },
 ];
 
 export default function AdminHeader() {
