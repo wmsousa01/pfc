@@ -37,15 +37,6 @@ as $$
   select exists (select 1 from public.app_admins a where a.user_id = auth.uid());
 $$;
 
-create or replace function public.current_reseller_id()
-returns uuid
-language sql stable security definer set search_path = public
-as $$
-  select r.id from public.resellers r
-  where r.user_id = auth.uid() and r.active
-  limit 1;
-$$;
-
 -- ---------------------------------------------------------------------
 -- PRODUTOS
 -- Preço e custo em CENTAVOS (inteiro) — nada de float com dinheiro.
@@ -121,6 +112,17 @@ create table if not exists public.resellers (
 );
 
 create index if not exists resellers_user_idx on public.resellers (user_id);
+
+-- Precisa vir DEPOIS da tabela: o Postgres valida o corpo de funções
+-- `language sql` na hora do create, e a função referencia public.resellers.
+create or replace function public.current_reseller_id()
+returns uuid
+language sql stable security definer set search_path = public
+as $$
+  select r.id from public.resellers r
+  where r.user_id = auth.uid() and r.active
+  limit 1;
+$$;
 
 -- ---------------------------------------------------------------------
 -- PEDIDOS
