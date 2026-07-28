@@ -60,6 +60,12 @@ export async function changeOwnPasswordAction(
     password: current,
   });
 
+  // A conferência abre uma sessão descartável no servidor; sem revogar, cada
+  // troca de senha deixaria um refresh token órfão em auth.sessions.
+  // O escopo 'local' é obrigatório: signOut() sem argumento é GLOBAL e
+  // derrubaria a sessão real de quem está trocando a senha.
+  await verifier.auth.signOut({ scope: "local" });
+
   if (wrongPassword) return fail("A senha atual está incorreta.");
 
   const { error } = await supabase.auth.updateUser({ password: next });

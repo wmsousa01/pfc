@@ -28,8 +28,19 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Um cliente só para a página inteira, criado uma vez.
+  //
+  // `detectSessionInUrl: false` é essencial: no padrão, o cliente troca o
+  // ?code= por sessão sozinho ao montar, e aí fica impossível distinguir
+  // "sessão que nasceu deste link" de "sessão que a pessoa já tinha" — era
+  // por isso que quem estava logado trocava a senha aqui sem informar a
+  // atual, contornando a conferência de /admin/senha. Com o auto-exchange
+  // desligado, a única sessão que esta página aceita é a que ela mesma abriu.
+  const [supabase] = useState(() =>
+    createBrowserSupabase({ auth: { detectSessionInUrl: false } })
+  );
+
   useEffect(() => {
-    const supabase = createBrowserSupabase();
     let cancelled = false;
 
     async function prepare() {
@@ -43,15 +54,8 @@ export default function ResetPasswordPage() {
         return;
       }
 
-      // O cliente do @supabase/ssr troca o ?code= por sessão sozinho ao montar;
-      // por isso a sessão é conferida antes de tentar a troca manual.
-      const { data } = await supabase.auth.getSession();
-      if (cancelled) return;
-      if (data.session) {
-        setStatus({ kind: "ready" });
-        return;
-      }
-
+      // Estar logado NÃO autoriza trocar a senha aqui. Só o link do e-mail
+      // vale — sem `code`, nem se olha para a sessão existente.
       const code = params.get("code");
       if (!code) {
         setStatus({
@@ -69,7 +73,7 @@ export default function ResetPasswordPage() {
           ? {
               kind: "invalid",
               message:
-                "O link expirou ou já foi usado. Peça um novo na tela de login.",
+                "O link expirou, já foi usado, ou foi aberto num navegador diferente do que pediu a recuperação. Peça um novo na tela de login.",
             }
           : { kind: "ready" }
       );
@@ -79,7 +83,7 @@ export default function ResetPasswordPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [supabase]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -95,7 +99,8 @@ export default function ResetPasswordPage() {
     }
 
     setSaving(true);
-    const supabase = createBrowserSupabase();
+    // O MESMO cliente do effect: um cliente novo voltaria a tentar trocar o
+    // ?code= (que ainda está na URL) e já foi consumido.
     const { error } = await supabase.auth.updateUser({ password });
 
     if (error) {
