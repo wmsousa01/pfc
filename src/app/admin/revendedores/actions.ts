@@ -28,10 +28,17 @@ function revalidateAll(id?: string) {
 /**
  * Cria (ou reaproveita) a conta de login do revendedor e devolve o user_id.
  * Precisa do service-role: criar usuário é operação de admin do Supabase Auth.
+ *
+ * O caminho de "conta já existe" REDEFINE a senha dela. Isso é intencional
+ * quando se trata do próprio revendedor, e desastroso em qualquer outro caso —
+ * daí as duas travas abaixo. Sem elas, cadastrar um revendedor com o e-mail do
+ * admin trocava a senha do admin e amarrava a conta dele ao revendedor.
  */
 async function ensureAuthUser(
   email: string,
-  password: string
+  password: string,
+  /** Id do revendedor sendo salvo. Vazio quando é um cadastro novo. */
+  resellerId: string
 ): Promise<string> {
   const admin = createAdminSupabase();
   if (!admin) {
@@ -48,7 +55,7 @@ async function ensureAuthUser(
 
   if (!error && created?.user) return created.user.id;
 
-  // Já existe uma conta com esse e-mail: reaproveita e apenas redefine a senha.
+  // Já existe uma conta com esse e-mail.
   const { data: list } = await admin.auth.admin.listUsers({
     page: 1,
     perPage: 1000,
@@ -59,6 +66,34 @@ async function ensureAuthUser(
 
   if (!existing) {
     throw new Error(`Não foi possível criar o acesso: ${error?.message}`);
+  }
+
+  // Trava 1: nunca sequestrar uma conta de admin. Além de trocar a senha dele,
+  // não adiantaria nada — getSessionRole() resolve admin antes de revendedor,
+  // então essa conta jamais abriria o painel do parceiro.
+  const { data: isAdmin } = await admin
+    .from("app_admins")
+    .select("user_id")
+    .eq("user_id", existing.id)
+    .maybeSingle();
+
+  if (isAdmin) {
+    throw new Error(
+      `${email} é uma conta de administrador. Use outro e-mail para o acesso do revendedor — o painel /revendedor não abre para quem é admin.`
+    );
+  }
+
+  // Trava 2: a conta já é o acesso de OUTRO revendedor (user_id é unique).
+  const { data: owner } = await admin
+    .from("resellers")
+    .select("id, name")
+    .eq("user_id", existing.id)
+    .maybeSingle();
+
+  if (owner && owner.id !== resellerId) {
+    throw new Error(
+      `${email} já é o acesso de "${owner.name}". Use outro e-mail.`
+    );
   }
 
   await admin.auth.admin.updateUserById(existing.id, { password });
@@ -118,7 +153,7 @@ export async function saveReseller(formData: FormData) {
     if (!email) {
       throw new Error("Informe o e-mail para criar o acesso ao painel.");
     }
-    payload.user_id = await ensureAuthUser(email, password);
+    payload.user_id = await ensureAuthUser(email, password, id);
   }
 
   if (id) {

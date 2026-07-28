@@ -185,6 +185,11 @@ export default function ResellerForm({ reseller }: { reseller?: Reseller }) {
               ? "Este revendedor já tem acesso. Preencha a senha só para redefini-la."
               : "Preencha e-mail e senha para criar o login dele em /revendedor."}
           </p>
+          <p className="text-amber-400/70 text-xs mt-1.5">
+            Precisa ser um e-mail diferente do seu de admin. Quem é admin sempre
+            cai no /admin — para testar o painel do parceiro, crie um e-mail à
+            parte.
+          </p>
         </div>
 
         <div className="grid sm:grid-cols-2 gap-4">
