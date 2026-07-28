@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -o /dev/null -w \"status=%{http_code}\\\\n\" \"https://pfc-landing.vercel.app\")",
+      "Bash(curl -s \"https://pfc-landing.vercel.app\")",
+      "Bash(curl -s -o /dev/null -w \"status=%{http_code}\\\\n\" \"https://pfc-landing.vercel.app/parceiros/contenta-ai\")",
+      "Bash(curl -s \"https://pfc-landing.vercel.app/parceiros/contenta-ai\")",
+      "Bash(curl -s -o /dev/null -w \"status=%{http_code} -> %{redirect_url}\\\\n\" \"https://pfc-landing.vercel.app/admin\")"
+    ]
+  }
+}

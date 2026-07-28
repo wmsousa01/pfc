@@ -38,6 +38,7 @@ export default function Footer() {
               <a href="/#episodios" className="text-white/50 hover:text-white transition-colors">Episódios</a>
               <a href="/#quadros" className="text-white/50 hover:text-white transition-colors">Quadros</a>
               <a href="/#numeros" className="text-white/50 hover:text-white transition-colors">Números</a>
+              <a href="/loja" className="text-white/50 hover:text-white transition-colors">Loja</a>
               <a href="/parcerias" className="text-white/50 hover:text-white transition-colors">Parcerias</a>
             </div>
           </div>
@@ -77,6 +78,9 @@ export default function Footer() {
           </p>
           <div className="flex items-center gap-4">
             <p className="text-white/20 text-xs">{site.location} · Brasil</p>
+            <a href="/revendedor" className="text-white/20 hover:text-white/50 text-xs transition-colors">
+              Revendedor
+            </a>
             <a href="/admin" className="text-white/20 hover:text-white/50 text-xs transition-colors">
               Admin
             </a>

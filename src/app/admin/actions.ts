@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/auth";
 import type { PartnerSection } from "@/lib/types";
 
 const BUCKET = "partner-assets";
@@ -58,13 +59,13 @@ function slugify(input: string): string {
     .slice(0, 60);
 }
 
+/**
+ * Estar logado não basta mais: revendedores também têm conta. As actions do
+ * admin exigem o papel de admin (tabela app_admins).
+ */
 async function requireAuth() {
-  const supabase = createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/admin/login");
-  return supabase;
+  await requireAdmin();
+  return createServerSupabase();
 }
 
 function parseSections(formData: FormData): PartnerSection[] {

@@ -53,6 +53,143 @@ export type Lead = {
   created_at: string;
 };
 
+/** Produto da loja. Valores sempre em CENTAVOS. */
+export type Product = {
+  id: string;
+  sku: string;
+  name: string;
+  description: string | null;
+  detail: string | null;
+  price_cents: number;
+  cost_cents: number;
+  image_url: string | null;
+  /** Segunda imagem, revelada no hover (ex: frente da camiseta). */
+  image_alt_url: string | null;
+  /** Variações disponíveis (ex: ["P","M","G"]). Vazio = sem variação. */
+  variants: string[];
+  active: boolean;
+  sort_order: number;
+  created_at: string;
+};
+
+export type CommissionType = "percent" | "fixed";
+
+/** Revendedor: apresentador de quadro, influencer ou parceiro que indica vendas. */
+export type Reseller = {
+  id: string;
+  /** Conta de login (criada pelo admin). Null = ainda sem acesso ao painel. */
+  user_id: string | null;
+  /** Vira o link (/r/{slug}) e o cupom (slug em maiúsculas). */
+  slug: string;
+  name: string;
+  email: string | null;
+  whatsapp: string | null;
+  /** Papel dele no ecossistema: "Influencer", "Quadro PFC News"... */
+  role_label: string | null;
+  notes: string | null;
+  commission_type: CommissionType;
+  /** Percentual (quando 'percent') ou centavos por peça (quando 'fixed'). */
+  commission_value: number;
+  /** Desconto que o cupom dele dá ao cliente (0 a 30%). 0 = cupom só atribui. */
+  discount_percent: number;
+  active: boolean;
+  created_at: string;
+};
+
+/** Andamento da ENTREGA do pedido. */
+export type OrderStatus =
+  | "novo"
+  | "confirmado"
+  | "producao"
+  | "pronto"
+  | "entregue"
+  | "cancelado";
+
+/** Andamento do PAGAMENTO do cliente. */
+export type PaymentStatus = "pendente" | "pago" | "estornado";
+
+export type OrderItem = {
+  id: string;
+  order_id: string;
+  product_id: string | null;
+  product_name: string;
+  variant: string | null;
+  qty: number;
+  unit_price_cents: number;
+  unit_cost_cents: number;
+};
+
+export type Order = {
+  id: string;
+  code: string;
+  reseller_id: string | null;
+  customer_name: string;
+  customer_whatsapp: string;
+  customer_note: string | null;
+  delivery_method: string;
+  delivery_address: string | null;
+  status: OrderStatus;
+  payment_status: PaymentStatus;
+  /** Valor LÍQUIDO cobrado do cliente — já com o desconto do cupom aplicado. */
+  total_cents: number;
+  /** Desconto do cupom, congelado no pedido. */
+  discount_cents: number;
+  cost_cents: number;
+  commission_cents: number;
+  commission_paid: boolean;
+  commission_paid_at: string | null;
+  delivered_at: string | null;
+  source: string | null;
+  created_at: string;
+};
+
+/** Pedido com os itens e o revendedor já resolvidos (usado nas listagens). */
+export type OrderWithDetails = Order & {
+  items: OrderItem[];
+  reseller: Pick<Reseller, "id" | "name" | "slug"> | null;
+};
+
+/**
+ * O que o REVENDEDOR enxerga (views `reseller_orders` / `reseller_order_items`,
+ * migração 005). Sem custo de produção — que é margem do PFC — e sem os dados
+ * de contato do cliente, que ele não precisa para acompanhar comissão.
+ */
+export type ResellerOrderItem = Omit<OrderItem, "unit_cost_cents">;
+
+export type ResellerOrder = Omit<
+  Order,
+  "cost_cents" | "customer_whatsapp" | "delivery_address" | "source"
+> & { items: ResellerOrderItem[] };
+
+/**
+ * O mínimo que `summarizeOrders` precisa. Existe para os mesmos números
+ * valerem para o admin (pedido completo) e para o revendedor (pedido podado).
+ */
+export type SummarizableOrder = {
+  status: OrderStatus;
+  payment_status: PaymentStatus;
+  total_cents: number;
+  commission_cents: number;
+  commission_paid: boolean;
+  items: { qty: number }[];
+};
+
+/** Números consolidados de um revendedor (exclui pedidos cancelados). */
+export type ResellerStats = {
+  orders: number;
+  units: number;
+  /** Faturamento bruto gerado por ele. */
+  revenue_cents: number;
+  commission_cents: number;
+  commission_paid_cents: number;
+  /** Comissão de pedidos já entregues e pagos pelo cliente, ainda não repassada. */
+  commission_due_cents: number;
+  delivered: number;
+  pending_delivery: number;
+};
+
+export type ResellerWithStats = Reseller & { stats: ResellerStats };
+
 /** Destaque manual do Instagram (curado no admin). */
 export type IgHighlight = {
   id: string;

@@ -1,5 +1,8 @@
 import AdminHeader from "@/components/admin/AdminHeader";
 import { getPartnersWithStats, getAllIgHighlights, getLeads } from "@/lib/admin";
+import { getOrders, summarizeShop } from "@/lib/orders";
+import { requireAdmin } from "@/lib/auth";
+import { brl } from "@/lib/money";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import {
   togglePartnerActive,
@@ -34,9 +37,12 @@ export default async function AdminDashboard() {
     );
   }
 
+  await requireAdmin();
+
   const partners = await getPartnersWithStats();
   const highlights = await getAllIgHighlights();
   const leads = await getLeads();
+  const shop = summarizeShop(await getOrders({ limit: 500 }));
 
   const totalClicks30d = partners.reduce((s, p) => s + p.clicks_30d, 0);
   const totalClicksQr = partners.reduce((s, p) => s + p.clicks_qr, 0);
@@ -59,6 +65,27 @@ export default async function AdminDashboard() {
           ].map((s, i) => (
             <div key={i} className="bg-[#111] border border-[#222] rounded-xl p-5">
               <div className="text-3xl font-black text-gold-500">{s.v}</div>
+              <div className="text-white/50 text-sm mt-1">{s.l}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Loja */}
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold text-white">Loja</h2>
+          <a href="/admin/pedidos" className="text-gold-500 hover:text-gold-400 text-sm font-medium">
+            Ver pedidos →
+          </a>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
+          {[
+            { v: String(shop.awaiting), l: "Pedidos novos" },
+            { v: String(shop.pending_delivery), l: "A entregar" },
+            { v: brl(shop.commission_due_cents), l: "Comissão a repassar" },
+            { v: brl(shop.profit_cents), l: "Lucro líquido" },
+          ].map((s) => (
+            <div key={s.l} className="bg-[#111] border border-[#222] rounded-xl p-5">
+              <div className="text-2xl font-black text-gold-500 break-words">{s.v}</div>
               <div className="text-white/50 text-sm mt-1">{s.l}</div>
             </div>
           ))}
