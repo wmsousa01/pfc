@@ -59,7 +59,7 @@ export default function About() {
 
             <blockquote className="mt-2 p-6 bg-gradient-to-r from-gold-500/10 to-transparent border border-gold-500/20 rounded-xl">
               <p className="text-gold-400 font-semibold italic leading-relaxed">
-                &ldquo;Porque as melhores ideias não cabem em quatro paredes.&rdquo;
+                &ldquo;Conteúdo que conecta pessoas, histórias e a cidade.&rdquo;
               </p>
             </blockquote>
           </div>

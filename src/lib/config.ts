@@ -10,7 +10,15 @@ export const site = {
   location: "Mogi Guaçu · SP",
   description:
     "O ecossistema de conteúdo regional de Mogi Guaçu: lives semanais, quadros especializados e Shorts diários. Assista, ouça e conecte sua marca à conversa da cidade.",
-  url: "https://foradacaixa.com.br",
+  /**
+   * Host canônico. É `www`: o apex responde 308 para ele, e cada hop a mais
+   * é uma chance a mais de falhar num QR impresso lido com conexão ruim.
+   * Sai de NEXT_PUBLIC_SITE_URL para não haver dois lugares dizendo o domínio.
+   */
+  url: (process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.pfctv.com.br").replace(
+    /\/$/,
+    ""
+  ),
 };
 
 /** Canal do YouTube (channel_id resolvido a partir de @PapoForadaCaixa). */

@@ -224,7 +224,8 @@ const { data: panel } = await admin
   .eq("partner_id", saved.id)
   .single();
 
-const base = (env.NEXT_PUBLIC_SITE_URL || "https://pfctv.com.br").replace(/\/$/, "");
+// Host canônico COM www — o apex só redireciona, e esses links vão para QR.
+const base = (env.NEXT_PUBLIC_SITE_URL || "https://www.pfctv.com.br").replace(/\/$/, "");
 console.log("\nGeladeiras e Cia cadastrada ✅");
 console.log("Página:  " + base + "/parceiros/" + SLUG);
 console.log("QR:      " + base + "/go/" + SLUG + "?src=qr");
