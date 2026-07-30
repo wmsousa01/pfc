@@ -132,6 +132,48 @@ body {
   }
 }
 
+/* ---------------------------------------------------------------------
+   Página do parceiro: entrada do hero e brilho da marca respirando.
+   Só CSS — nada de observer/JS para não pesar em conexão de celular.
+   --------------------------------------------------------------------- */
+@keyframes partner-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes partner-float {
+  0%,
+  100% {
+    transform: translate(-50%, 0) scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: translate(-50%, 18px) scale(1.06);
+    opacity: 1;
+  }
+}
+
+.partner-rise {
+  animation: partner-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.partner-float {
+  animation: partner-float 9s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .partner-rise,
+  .partner-float {
+    animation: none;
+  }
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

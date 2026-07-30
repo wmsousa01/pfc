@@ -2,8 +2,22 @@ import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import AdminHeader from "@/components/admin/AdminHeader";
 import PartnerForm from "@/components/admin/PartnerForm";
+import CopyButton from "@/components/CopyButton";
 import { getPartnerById, getPartnerClickTotal } from "@/lib/admin";
+import {
+  getOrCreatePanelToken,
+  getPartnerLeads,
+  summarizePartnerLeads,
+} from "@/lib/partner-leads";
+import { labelFor, TEMPERATURE_LABEL } from "@/lib/lead-triage";
 import { qrDataUrl, trackingUrl } from "@/lib/qr";
+import type { LeadTemperature } from "@/lib/types";
+
+const TEMP_STYLE: Record<LeadTemperature, string> = {
+  quente: "bg-orange-500/15 border-orange-500/40 text-orange-400",
+  morno: "bg-yellow-500/10 border-yellow-500/30 text-yellow-400",
+  frio: "bg-white/5 border-white/10 text-white/40",
+};
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +40,15 @@ export default async function EditPartnerPage({
   const base = baseUrlFromHeaders();
   const track = trackingUrl(base, partner.slug);
   const qr = await qrDataUrl(track);
+
+  const [leads, panelToken] = await Promise.all([
+    getPartnerLeads(partner.id, 50),
+    getOrCreatePanelToken(partner.id),
+  ]);
+  const leadSummary = summarizePartnerLeads(leads);
+  const panelUrl = panelToken
+    ? `${base}/parceiros/${partner.slug}/painel?token=${panelToken}`
+    : null;
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] pb-20">
@@ -81,7 +104,129 @@ export default async function EditPartnerPage({
                 </div>
               </div>
             </div>
+
+            {/* Link do painel do parceiro */}
+            {panelUrl && (
+              <div className="bg-[#111] border border-[#222] rounded-xl p-5">
+                <h3 className="text-white font-semibold mb-1">Painel do parceiro</h3>
+                <p className="text-white/40 text-xs mb-4">
+                  Link secreto e somente leitura: ele acompanha os próprios leads
+                  e acessos. Envie só para o parceiro.
+                </p>
+                <div className="flex flex-col gap-2">
+                  <CopyButton value={panelUrl} label="Copiar link do painel" />
+                  <a
+                    href={panelUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-gold-500 hover:text-gold-400 text-xs text-center"
+                  >
+                    Abrir painel ↗
+                  </a>
+                </div>
+                <p className="text-white/25 text-[10px] mt-3 break-all">{panelUrl}</p>
+              </div>
+            )}
+
+            <div className="bg-[#111] border border-[#222] rounded-xl p-5">
+              <h3 className="text-white font-semibold mb-3">Leads da página</h3>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <div className="text-2xl font-black text-gold-500">{leadSummary.total}</div>
+                  <div className="text-white/40 text-xs">Total</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-black text-orange-400">{leadSummary.quentes}</div>
+                  <div className="text-white/40 text-xs">Quentes</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-black text-white">{leadSummary.last7d}</div>
+                  <div className="text-white/40 text-xs">7 dias</div>
+                </div>
+              </div>
+            </div>
           </div>
+        </div>
+
+        {/* Leads qualificados */}
+        <h2 className="text-xl font-bold text-white mt-12 mb-4">
+          Leads qualificados
+        </h2>
+        <div className="bg-[#111] border border-[#222] rounded-xl overflow-hidden">
+          {leads.length === 0 ? (
+            <div className="p-8 text-center text-white/40 text-sm">
+              Nenhum lead ainda. Eles chegam pela triagem da página do parceiro.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-white/40 text-xs uppercase tracking-wider border-b border-[#222]">
+                    <th className="text-left font-medium px-5 py-3">Lead</th>
+                    <th className="text-left font-medium px-3 py-3">Qualificação</th>
+                    <th className="text-left font-medium px-3 py-3">Temperatura</th>
+                    <th className="text-left font-medium px-3 py-3">Origem</th>
+                    <th className="text-left font-medium px-3 py-3">Data</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leads.map((l) => (
+                    <tr
+                      key={l.id}
+                      className="border-b border-[#1a1a1a] last:border-0 hover:bg-white/[0.02] align-top"
+                    >
+                      <td className="px-5 py-3">
+                        <div className="text-white font-medium">{l.name}</div>
+                        <a
+                          href={`https://wa.me/${l.whatsapp}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-emerald-400 hover:text-emerald-300 text-xs"
+                        >
+                          {l.whatsapp}
+                        </a>
+                        {l.city && (
+                          <div className="text-white/30 text-xs mt-0.5">{l.city}</div>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-white/60 text-xs leading-relaxed max-w-[280px]">
+                        {[
+                          labelFor("need", l.need),
+                          l.quantity ? `${l.quantity} un.` : null,
+                          labelFor("mode", l.mode),
+                          labelFor("timeframe", l.timeframe),
+                          labelFor("business_type", l.business_type),
+                        ]
+                          .filter((x): x is string => Boolean(x) && x !== "—")
+                          .join(" · ")}
+                        {l.note && (
+                          <div className="text-white/30 mt-1 whitespace-pre-wrap">
+                            “{l.note}”
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-3">
+                        <span
+                          className={`text-xs font-semibold px-2.5 py-1 rounded-full border whitespace-nowrap ${TEMP_STYLE[l.temperature]}`}
+                        >
+                          {TEMPERATURE_LABEL[l.temperature]} {l.score}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 text-white/50 text-xs">
+                        {l.source ?? "site"}
+                        {l.handed_off_at && (
+                          <div className="text-emerald-400/70">foi ao WhatsApp</div>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-white/50 text-xs whitespace-nowrap">
+                        {new Date(l.created_at).toLocaleDateString("pt-BR")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </div>

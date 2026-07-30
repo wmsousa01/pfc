@@ -271,6 +271,44 @@ export default function PartnerForm({ partner }: { partner?: Partner }) {
         </div>
       </div>
 
+      {/* Contato do parceiro — alimenta a triagem de leads da landing */}
+      <fieldset className="border border-[#222] rounded-xl p-5">
+        <legend className="px-2 text-gold-500 text-sm font-bold">Contato e leads</legend>
+        <div className="grid sm:grid-cols-3 gap-4">
+          <div>
+            <label className="admin-label">WhatsApp (recebe os leads)</label>
+            <input
+              name="whatsapp"
+              defaultValue={partner?.whatsapp ?? ""}
+              className="admin-input mt-1.5"
+              placeholder="(19) 99827-2913"
+            />
+          </div>
+          <div>
+            <label className="admin-label">Instagram</label>
+            <input
+              name="instagram"
+              defaultValue={partner?.instagram ?? ""}
+              className="admin-input mt-1.5"
+              placeholder="geladeirasecia_"
+            />
+          </div>
+          <div>
+            <label className="admin-label">Cidade</label>
+            <input
+              name="city"
+              defaultValue={partner?.city ?? ""}
+              className="admin-input mt-1.5"
+              placeholder="Mogi Guaçu/SP"
+            />
+          </div>
+        </div>
+        <p className="text-white/30 text-xs mt-3">
+          Com o WhatsApp preenchido, a página do parceiro ganha a triagem de
+          leads e o botão de contato direto. Sem ele, fica só o CTA simples.
+        </p>
+      </fieldset>
+
       {/* Sections */}
       <div>
         <label className="admin-label">Seções da página</label>

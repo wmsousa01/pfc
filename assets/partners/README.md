@@ -23,3 +23,5 @@ Supabase Storage (bucket `partner-assets/<slug>/`), enviadas pelo painel
 ## Parceiros cadastrados
 
 - **contenta-ai** — Contenta AI (https://www.contentaai.com.br) · 1º parceiro
+- **geladeiras-e-cia** — Geladeiras e Cia (Mogi Guaçu/SP) · locação e venda de
+  freezers, geladeiras e cervejeiras · página com triagem de leads ativa

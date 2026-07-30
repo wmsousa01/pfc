@@ -4,6 +4,68 @@ export type PartnerSection = {
   body: string;
 };
 
+/** Número de destaque na faixa de prova social (ex: "4.319" / "avaliações"). */
+export type PartnerStat = {
+  value: string;
+  label: string;
+  /** Link opcional (ex: perfil do Google). */
+  href?: string;
+};
+
+/** Um diferencial do parceiro. `icon` é uma chave de `partnerIcons`. */
+export type PartnerPerk = {
+  icon: string;
+  title: string;
+  body: string;
+};
+
+/** Uma linha de produto exibida em card. */
+export type PartnerProduct = {
+  name: string;
+  body: string;
+  /** Etiquetas curtas (ex: "Bivolt", "Inverter"). */
+  tags?: string[];
+  image_url?: string | null;
+  /** Valor pré-selecionado na triagem quando o visitante clica no card. */
+  need?: string;
+};
+
+export type PartnerStep = { title: string; body: string };
+export type PartnerFaq = { q: string; a: string };
+
+/** Ajustes da triagem de leads na página do parceiro. */
+export type PartnerTriage = {
+  /** Desliga o formulário e deixa só o CTA de WhatsApp. */
+  enabled?: boolean;
+  title?: string;
+  subtitle?: string;
+  /** Tipos de negócio ofertados na 1ª pergunta (sobrescreve o padrão). */
+  business_types?: string[];
+  /** Tipos que valem pontuação extra por serem o cliente ideal do parceiro. */
+  ideal_business_types?: string[];
+  /** Cidades/bairros sugeridos no campo de localização. */
+  cities?: string[];
+};
+
+/** Conteúdo rico da landing do parceiro (coluna `partners.content`). */
+export type PartnerContent = {
+  /** Frase curta acima do nome, no topo. */
+  eyebrow?: string;
+  /** Bullets logo abaixo da tagline. */
+  highlights?: string[];
+  stats?: PartnerStat[];
+  perks?: PartnerPerk[];
+  products?: PartnerProduct[];
+  steps?: PartnerStep[];
+  faq?: PartnerFaq[];
+  /** Endereço/horário exibidos no bloco de contato. */
+  address?: string;
+  hours?: string[];
+  /** Mensagem pré-preenchida do botão flutuante de WhatsApp. */
+  whatsapp_message?: string;
+  triage?: PartnerTriage;
+};
+
 export type Partner = {
   id: string;
   slug: string;
@@ -27,7 +89,47 @@ export type Partner = {
   /** Preset de estilo visual (moderno|elegante|vibrante|minimalista|corporativo). */
   style_preset: string | null;
   sections: PartnerSection[] | null;
+  /** WhatsApp do parceiro, só dígitos com DDI (destino dos leads). */
+  whatsapp: string | null;
+  /** Handle do Instagram, sem @. */
+  instagram: string | null;
+  city: string | null;
+  /** Conteúdo rico da landing. `{}` = página no formato simples. */
+  content: PartnerContent | null;
   active: boolean;
+  created_at: string;
+};
+
+/** Temperatura do lead, calculada pela triagem. */
+export type LeadTemperature = "quente" | "morno" | "frio";
+
+export type PartnerLeadStatus =
+  | "novo"
+  | "contatado"
+  | "negociando"
+  | "fechado"
+  | "perdido";
+
+/** Lead qualificado captado na página de um parceiro. */
+export type PartnerLead = {
+  id: string;
+  partner_id: string;
+  name: string;
+  whatsapp: string;
+  city: string | null;
+  business_type: string | null;
+  need: string | null;
+  mode: string | null;
+  quantity: number | null;
+  timeframe: string | null;
+  note: string | null;
+  score: number;
+  temperature: LeadTemperature;
+  channel: string;
+  source: string | null;
+  answers: Record<string, unknown>;
+  status: PartnerLeadStatus;
+  handed_off_at: string | null;
   created_at: string;
 };
 
@@ -150,9 +252,10 @@ export type OrderWithDetails = Order & {
 };
 
 /**
- * O que o REVENDEDOR enxerga (views `reseller_orders` / `reseller_order_items`,
- * migração 005). Sem custo de produção — que é margem do PFC — e sem os dados
- * de contato do cliente, que ele não precisa para acompanhar comissão.
+ * O que o REVENDEDOR enxerga (funções `reseller_orders()` /
+ * `reseller_order_items()`, migração 007). Sem custo de produção — que é margem
+ * do PFC — e sem os dados de contato do cliente, que ele não precisa para
+ * acompanhar comissão.
  */
 export type ResellerOrderItem = Omit<OrderItem, "unit_cost_cents">;
 

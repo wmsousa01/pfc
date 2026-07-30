@@ -41,9 +41,16 @@ npm run dev
      reaperto das policies antigas.
    - [`supabase/005_desconto_e_privacidade.sql`](supabase/005_desconto_e_privacidade.sql)
      — desconto do cupom (`resellers.discount_percent`, `orders.discount_cents`)
-     e as views `reseller_orders` / `reseller_order_items`, que substituem a
-     leitura direta da tabela `orders` pelo revendedor para não expor o custo de
-     produção nem o contato do cliente.
+     e o fim da leitura direta da tabela `orders` pelo revendedor, para não
+     expor o custo de produção nem o contato do cliente.
+   - [`supabase/006_parceiro_leads.sql`](supabase/006_parceiro_leads.sql) —
+     conteúdo rico da landing do parceiro (`partners.content`, `whatsapp`,
+     `instagram`, `city`), a tabela `partner_leads` (triagem qualificada) e
+     `partner_panels` (token do painel read-only do parceiro).
+   - [`supabase/007_painel_revendedor_rpc.sql`](supabase/007_painel_revendedor_rpc.sql)
+     — troca as views do painel do revendedor por funções
+     `reseller_orders()` / `reseller_order_items()`. Mesmas colunas, mesmo
+     filtro; sai do lint `security_definer_view` do advisor.
 3. Em **Authentication → Users → Add user**, crie o usuário admin (e-mail +
    senha) que vai logar em `/admin`.
 

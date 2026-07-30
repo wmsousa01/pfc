@@ -22,5 +22,8 @@ export async function GET(
   const url = request.nextUrl.clone();
   url.search = "";
   url.pathname = partner ? `/parceiros/${params.slug}` : "/parcerias";
+  // Leva a origem adiante: a triagem da landing marca de onde veio o lead
+  // (a página segue estática — quem lê o parâmetro é o formulário, no cliente).
+  if (partner) url.searchParams.set("src", source);
   return NextResponse.redirect(url);
 }

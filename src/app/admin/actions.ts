@@ -49,6 +49,13 @@ async function resolveAsset(
   return admin.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }
 
+/** Telefone em dígitos com DDI 55 (formato que o wa.me espera). */
+function normalizePhone(raw: string): string | null {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length < 10) return null;
+  return digits.startsWith("55") && digits.length >= 12 ? digits : `55${digits}`;
+}
+
 function slugify(input: string): string {
   return input
     .toLowerCase()
@@ -113,6 +120,11 @@ export async function savePartner(formData: FormData) {
     color_bg: String(formData.get("color_bg") ?? "").trim() || "#0a0a0a",
     style_preset: String(formData.get("style_preset") ?? "").trim() || "moderno",
     sections: parseSections(formData),
+    whatsapp: normalizePhone(String(formData.get("whatsapp") ?? "")),
+    instagram:
+      (String(formData.get("instagram") ?? "").trim().replace(/^@/, "") ||
+        null) as string | null,
+    city: (String(formData.get("city") ?? "").trim() || null) as string | null,
     active: formData.get("active") === "on",
   };
 
