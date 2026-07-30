@@ -94,32 +94,30 @@ export async function getOrders(options?: {
 /**
  * Pedidos do revendedor LOGADO, para o painel dele.
  *
- * Lê as views `reseller_orders` / `reseller_order_items` (migração 005), que
- * não expõem cost_cents nem os dados de contato do cliente — a tabela `orders`
- * crua deixou de ser legível pelo revendedor de propósito.
+ * Chama as funções `reseller_orders()` / `reseller_order_items()` (migração
+ * 007), que não expõem cost_cents nem os dados de contato do cliente — a
+ * tabela `orders` crua deixou de ser legível pelo revendedor de propósito.
+ * Eram views até a 006; viraram funções para sair do lint
+ * `security_definer_view` do advisor, sem mudar o que o painel enxerga.
  *
  * São duas consultas em vez de um join embutido porque o PostgREST não
- * relaciona views automaticamente de forma confiável.
+ * relaciona esses resultados automaticamente de forma confiável.
  */
 export async function getResellerOrders(limit = 300): Promise<ResellerOrder[]> {
   const supabase = createServerSupabase();
 
   const { data: orderRows } = await supabase
-    .from("reseller_orders")
-    .select("*")
+    .rpc("reseller_orders")
     .order("created_at", { ascending: false })
     .limit(limit);
 
   const orders = (orderRows ?? []) as Omit<ResellerOrder, "items">[];
   if (orders.length === 0) return [];
 
-  const { data: itemRows } = await supabase
-    .from("reseller_order_items")
-    .select("*")
-    .in(
-      "order_id",
-      orders.map((o) => o.id)
-    );
+  const { data: itemRows } = await supabase.rpc("reseller_order_items").in(
+    "order_id",
+    orders.map((o) => o.id)
+  );
 
   const byOrder = new Map<string, ResellerOrderItem[]>();
   for (const item of (itemRows ?? []) as ResellerOrderItem[]) {
