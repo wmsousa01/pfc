@@ -4,6 +4,7 @@ import ContentSectionForm from "@/components/admin/ContentSectionForm";
 import { requireAdmin } from "@/lib/auth";
 import { getPartnerById } from "@/lib/admin";
 import { findContentSection } from "@/lib/partner-content-schema";
+import { derivePartnerLinks } from "@/lib/partner-links";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,13 @@ export default async function PartnerContentSectionPage({
   if (section.kind === "list") {
     const saved = content[section.contentKey as string];
     initial = Array.isArray(saved) ? (saved as Row[]) : [];
+
+    // Botões nunca ficam salvos até alguém editar: a página os deriva do
+    // cadastro. Abrir o editor vazio faria parecer que não existem — então
+    // ele já vem com os que estão no ar, prontos para mexer.
+    if (section.contentKey === "links" && initial.length === 0) {
+      initial = derivePartnerLinks(partner, partner.content ?? {}) as Row[];
+    }
   } else if (section.container) {
     const saved = content[section.container];
     initial = saved && typeof saved === "object" ? (saved as Row) : {};

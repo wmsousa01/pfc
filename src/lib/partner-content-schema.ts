@@ -1,3 +1,4 @@
+import { LINK_ICONS } from "./partner-links";
 import type { PartnerContent } from "./types";
 
 /**
@@ -224,6 +225,46 @@ export const PARTNER_CONTENT_SECTIONS: ContentSection[] = [
         label: "Mensagem pré-escrita do WhatsApp",
         kind: "textarea",
         help: "O que já aparece digitado quando o visitante abre a conversa.",
+      },
+    ],
+  },
+  {
+    slug: "botoes",
+    label: "Botões de contato",
+    description:
+      "Os botões no fim da página. Vazio, eles são montados sozinhos a partir do WhatsApp, Instagram e site do cadastro.",
+    kind: "list",
+    contentKey: "links",
+    itemLabel: "Botão",
+    emptyEffect:
+      "Sem nenhum botão aqui, a página volta a montar os três padrão do cadastro.",
+    fields: [
+      {
+        name: "label",
+        label: "Texto do botão",
+        kind: "text",
+        required: true,
+        placeholder: "Falar no WhatsApp",
+      },
+      {
+        name: "url",
+        label: "Link",
+        kind: "url",
+        required: true,
+        placeholder: "https://wa.me/55...",
+      },
+      {
+        name: "icon",
+        label: "Ícone",
+        kind: "select",
+        options: LINK_ICONS,
+        help: "\"none\" deixa o botão só com o texto.",
+      },
+      {
+        name: "primary",
+        label: "Botão principal (preenchido com a cor da marca)",
+        kind: "boolean",
+        help: "Sem nenhum marcado, o primeiro da lista vira o principal.",
       },
     ],
   },

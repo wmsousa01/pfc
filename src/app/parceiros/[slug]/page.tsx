@@ -10,7 +10,17 @@ import { ArrowRight, MicIcon, InstagramIcon, WhatsAppIcon } from "@/components/i
 import { getPartnerBySlug, getActivePartnerSlugs } from "@/lib/partners";
 import { site } from "@/lib/config";
 import { buildPartnerTheme, withAlpha } from "@/lib/brandkit";
+import { partnerLinksFor, whatsappHref } from "@/lib/partner-links";
 import type { PartnerContent } from "@/lib/types";
+
+/** Ícone de cada `link.icon`. Chave desconhecida = botão só com texto. */
+const LINK_ICON_COMPONENTS: Record<
+  string,
+  ((p: { className?: string }) => JSX.Element) | undefined
+> = {
+  whatsapp: WhatsAppIcon,
+  instagram: InstagramIcon,
+};
 
 export const revalidate = 300;
 
@@ -52,11 +62,13 @@ export default async function PartnerPage({
   const triage = content.triage;
   const triageOn = triage?.enabled !== false && Boolean(partner.whatsapp);
 
-  const waHref = partner.whatsapp
-    ? `https://wa.me/${partner.whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(
-        content.whatsapp_message ?? `Olá! Vim pela página de vocês no ${site.brand}.`
-      )}`
-    : partner.cta_url;
+  const waHref = whatsappHref(partner, content);
+
+  // Botões do bloco de contato: a lista editada em /admin ou, na falta dela,
+  // os três derivados do cadastro (WhatsApp, Instagram, site).
+  const contactLinks = partnerLinksFor(partner, content);
+  const hasPrimaryLink = contactLinks.some((l) => l.primary);
+  const hasPlaceInfo = Boolean(content.address || content.hours?.length);
 
   const card = {
     backgroundColor: t.surface,
@@ -551,11 +563,22 @@ export default async function PartnerPage({
         </section>
       ) : null}
 
-      {/* ============================== CONTATO =========================== */}
-      {(content.address || content.hours?.length || partner.instagram || waHref) && (
+      {/* ============================== CONTATO ===========================
+          A coluna da esquerda é endereço + horário. Sem os dois, ela virava um
+          vazio e os botões ficavam encostados à direita — por isso o layout só
+          vira duas colunas quando existe informação para a esquerda. */}
+      {(hasPlaceInfo || contactLinks.length > 0) && (
         <section className="section-py pt-0">
           <div className="container-px max-w-4xl mx-auto">
-            <div className="p-8 grid sm:grid-cols-2 gap-8" style={card}>
+            <div
+              className={`p-8 gap-8 ${
+                hasPlaceInfo
+                  ? "grid sm:grid-cols-2"
+                  : "flex flex-col max-w-sm mx-auto"
+              }`}
+              style={card}
+            >
+              {hasPlaceInfo && (
               <div className="flex flex-col gap-5">
                 {content.address && (
                   <div className="flex gap-3">
@@ -586,55 +609,45 @@ export default async function PartnerPage({
                   </div>
                 ) : null}
               </div>
+              )}
 
               <div className="flex flex-col gap-3 sm:justify-center">
-                {waHref && (
-                  <a
-                    href={waHref}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-6 py-3.5 font-bold flex items-center justify-center gap-2.5 transition-transform hover:-translate-y-0.5"
-                    style={{
-                      backgroundColor: t.primary,
-                      color: t.onPrimary,
-                      borderRadius: t.radius,
-                    }}
-                  >
-                    <WhatsAppIcon className="w-5 h-5" />
-                    Falar no WhatsApp
-                  </a>
-                )}
-                {partner.instagram && (
-                  <a
-                    href={`https://instagram.com/${partner.instagram.replace(/^@/, "")}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-6 py-3.5 font-semibold flex items-center justify-center gap-2.5"
-                    style={{
-                      borderRadius: t.radius,
-                      border: `1px solid ${t.border}`,
-                      color: t.fg,
-                    }}
-                  >
-                    <InstagramIcon className="w-5 h-5" />@
-                    {partner.instagram.replace(/^@/, "")}
-                  </a>
-                )}
-                {partner.website && (
-                  <a
-                    href={partner.website}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-6 py-3.5 font-semibold text-center"
-                    style={{
-                      borderRadius: t.radius,
-                      border: `1px solid ${t.border}`,
-                      color: t.fg,
-                    }}
-                  >
-                    Visitar o site
-                  </a>
-                )}
+                {contactLinks.map((link, i) => {
+                  // Sem nenhum marcado, o primeiro é o principal — assim a
+                  // lista nunca fica sem um botão de destaque.
+                  const isPrimary = hasPrimaryLink ? link.primary : i === 0;
+                  const Icon = LINK_ICON_COMPONENTS[link.icon ?? ""];
+
+                  return (
+                    <a
+                      key={`${link.url}-${i}`}
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`px-6 py-3.5 flex items-center justify-center gap-2.5 ${
+                        isPrimary
+                          ? "font-bold transition-transform hover:-translate-y-0.5"
+                          : "font-semibold"
+                      }`}
+                      style={
+                        isPrimary
+                          ? {
+                              backgroundColor: t.primary,
+                              color: t.onPrimary,
+                              borderRadius: t.radius,
+                            }
+                          : {
+                              borderRadius: t.radius,
+                              border: `1px solid ${t.border}`,
+                              color: t.fg,
+                            }
+                      }
+                    >
+                      {Icon && <Icon className="w-5 h-5" />}
+                      {link.label}
+                    </a>
+                  );
+                })}
               </div>
             </div>
           </div>

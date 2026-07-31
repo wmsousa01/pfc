@@ -47,6 +47,16 @@ export type PartnerTriage = {
   cities?: string[];
 };
 
+/** Um botão do bloco de contato. */
+export type PartnerLink = {
+  label: string;
+  url: string;
+  /** "whatsapp" | "instagram" | "site" | "none". Desconhecido = sem ícone. */
+  icon?: string;
+  /** Botão preenchido com a cor da marca. Sem nenhum marcado, o 1º vira o primário. */
+  primary?: boolean;
+};
+
 /** Conteúdo rico da landing do parceiro (coluna `partners.content`). */
 export type PartnerContent = {
   /** Frase curta acima do nome, no topo. */
@@ -61,6 +71,8 @@ export type PartnerContent = {
   /** Endereço/horário exibidos no bloco de contato. */
   address?: string;
   hours?: string[];
+  /** Botões do bloco de contato. Vazio = derivados do cadastro (ver partner-links.ts). */
+  links?: PartnerLink[];
   /** Mensagem pré-preenchida do botão flutuante de WhatsApp. */
   whatsapp_message?: string;
   triage?: PartnerTriage;
