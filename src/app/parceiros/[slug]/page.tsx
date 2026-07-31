@@ -249,9 +249,13 @@ export default async function PartnerPage({
             </div>
           </div>
 
-          {/* Faixa de números */}
+          {/* Faixa de números.
+              flex centralizado em vez de grade de 4 colunas: a grade fixa só
+              fechava com exatamente 4 (ou 8) itens — com 3, sobrava a última
+              coluna vazia e o grupo encostava à esquerda. Assim qualquer
+              quantidade fica centrada, inclusive a última linha quando quebra. */}
           {content.stats?.length ? (
-            <div className="max-w-4xl mx-auto mt-14 grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="max-w-4xl mx-auto mt-14 flex flex-wrap justify-center gap-3">
               {content.stats.map((s) => {
                 const inner = (
                   <>
@@ -266,19 +270,23 @@ export default async function PartnerPage({
                     </div>
                   </>
                 );
+                // `grow` com base e teto: os cards dividem a linha por igual,
+                // sem esticar demais quando são poucos.
+                const box = "p-5 text-center basis-40 grow max-w-[15rem]";
+
                 return s.href ? (
                   <a
                     key={s.label}
                     href={s.href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-5 text-center transition-transform hover:-translate-y-0.5"
+                    className={`${box} transition-transform hover:-translate-y-0.5`}
                     style={card}
                   >
                     {inner}
                   </a>
                 ) : (
-                  <div key={s.label} className="p-5 text-center" style={card}>
+                  <div key={s.label} className={box} style={card}>
                     {inner}
                   </div>
                 );
