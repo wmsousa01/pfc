@@ -67,6 +67,19 @@ export default async function EditPartnerPage({
 
           {/* Sidebar: QR + stats */}
           <div className="flex flex-col gap-6">
+            <a
+              href={`/admin/parceiros/${partner.id}/conteudo`}
+              className="bg-[#111] border border-gold-500/25 hover:border-gold-500/60 rounded-xl p-5 transition-colors group"
+            >
+              <h3 className="text-white font-semibold group-hover:text-gold-400 transition-colors">
+                Conteúdo da página →
+              </h3>
+              <p className="text-white/40 text-xs mt-1 leading-relaxed">
+                Números, benefícios, produtos, passos, FAQ, contato e triagem.
+                Seção sem item some da página — é aqui que se tira um bloco.
+              </p>
+            </a>
+
             <div className="bg-[#111] border border-[#222] rounded-xl p-5">
               <h3 className="text-white font-semibold mb-1">QR code do episódio</h3>
               <p className="text-white/40 text-xs mb-4">
