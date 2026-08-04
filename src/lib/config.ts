@@ -44,11 +44,19 @@ export const social = {
   whatsapp: whatsapp("Vim pelo site do Fora da Caixa e quero saber mais"),
 };
 
-/** Números do canal — Media Kit Junho/2026. Atualize aqui quando mudar. */
+/**
+ * Números do canal. Atualize aqui quando mudar.
+ *
+ * `subscribers`, `totalVideos` e `totalViews` foram reconferidos em 04/08/2026
+ * direto na página pública do canal (bloco aboutChannelViewModel) — os valores
+ * do Media Kit de Junho/2026 estavam defasados para menos. Os demais saem do
+ * YouTube Studio e não têm equivalente público: só dá para atualizá-los de
+ * dentro do Studio.
+ */
 export const channelStats = {
-  subscribers: "1.370",
-  totalVideos: "2.340",
-  totalViews: "+799 mil",
+  subscribers: "1,53 mil",
+  totalVideos: "2.650",
+  totalViews: "825.187",
   views12m: "806 mil",
   watchHoursYear: "4.474",
   likes12m: "11.319",

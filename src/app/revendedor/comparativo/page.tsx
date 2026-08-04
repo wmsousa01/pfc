@@ -4,17 +4,24 @@ import { channelStats, whatsapp } from "@/lib/config";
 import {
   atualizadoEm,
   criterios,
+  mesesAtivo,
+  nf,
   PROCEDENCIA_LABEL,
+  rankingYouTube,
+  referenciasRegionais,
   veiculosOrdenados,
+  viewsPorMes,
+  viewsPorVideo,
   type Celula,
   type CriterioId,
   type Tom,
+  type Veiculo,
 } from "@/lib/benchmark";
 import { MicIcon, WhatsAppIcon } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
 
-/** Critérios que viram o resumo de topo — são onde o PFC é o único "sim". */
+/** Critérios do resumo de topo — onde o PFC é o único "sim". */
 const RESUMO: CriterioId[] = [
   "relatorio",
   "rastreio",
@@ -35,11 +42,13 @@ const TOM_TEXTO: Record<Tom, string> = {
 };
 
 function Selo({ celula }: { celula: Celula }) {
-  const destaque = celula.procedencia === "medido";
+  const forte =
+    celula.procedencia === "medido" ||
+    celula.procedencia === "publico-conferivel";
   return (
     <span
       className={`inline-block text-[10px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded ${
-        destaque
+        forte
           ? "bg-gold-500/15 text-gold-500 border border-gold-500/30"
           : "text-white/30"
       }`}
@@ -49,22 +58,197 @@ function Selo({ celula }: { celula: Celula }) {
   );
 }
 
+/**
+ * Barras de visualizações por mês.
+ *
+ * Uma série só, então não há legenda: o rótulo direto em cada barra carrega a
+ * identidade, e a cor é apenas ênfase no nosso canal. Barras minúsculas ganham
+ * 3px de largura mínima para não sumirem — a proporção real continua legível
+ * porque o número vem escrito ao lado, nunca só desenhado.
+ */
+function BarrasViewsMes() {
+  const max = Math.max(...rankingYouTube.map((v) => viewsPorMes(v.youtube)));
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      {rankingYouTube.map((v) => {
+        const vm = viewsPorMes(v.youtube);
+        const pct = (vm / max) * 100;
+        return (
+          <div key={v.id} className="grid sm:grid-cols-[190px_1fr] gap-1 sm:gap-4 sm:items-center">
+            <div className="min-w-0">
+              <div
+                className={`text-sm font-semibold truncate ${
+                  v.destaque ? "text-gold-500" : "text-white/70"
+                }`}
+              >
+                {v.nome}
+              </div>
+              <div className="text-white/25 text-[11px] truncate">
+                {v.cidade} · {v.tipo}
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div
+                className="h-5 rounded-r-[4px] shrink-0"
+                style={{
+                  width: `max(3px, ${pct}%)`,
+                  background: v.destaque
+                    ? "#FFD700"
+                    : "rgba(255,255,255,0.22)",
+                }}
+              />
+              <span
+                className={`text-sm font-semibold tabular-nums whitespace-nowrap ${
+                  v.destaque ? "text-gold-500" : "text-white/50"
+                }`}
+              >
+                {nf.format(vm)}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function CardVeiculo({ v }: { v: Veiculo }) {
+  return (
+    <article
+      className={`rounded-2xl border p-5 sm:p-6 ${
+        v.destaque
+          ? "border-gold-500/30 bg-gradient-to-br from-gold-500/[0.07] to-transparent"
+          : "border-[#222] bg-[#111]"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h3
+            className={`font-black text-xl ${
+              v.destaque ? "text-gold-500" : "text-white"
+            }`}
+          >
+            {v.nome}
+          </h3>
+          <div className="text-white/35 text-xs mt-0.5">
+            {v.tipo} · {v.cidade}
+          </div>
+        </div>
+        {v.youtube && (
+          <div className="text-right">
+            <div className="text-white/70 font-bold text-sm">
+              {v.youtube.inscritosLabel}
+            </div>
+            <div className="text-white/25 text-[11px]">inscritos</div>
+          </div>
+        )}
+      </div>
+
+      <p className="text-white/60 text-sm leading-relaxed mt-3">
+        <span className="text-white/35 text-[11px] uppercase tracking-wider font-bold block mb-1">
+          O que faz bem
+        </span>
+        {v.forca}
+      </p>
+
+      {v.youtube && (
+        <div className="grid grid-cols-3 gap-2 mt-4">
+          {[
+            { v: nf.format(v.youtube.viewsTotais), l: "views totais" },
+            { v: nf.format(viewsPorMes(v.youtube)), l: "views por mês" },
+            { v: nf.format(viewsPorVideo(v.youtube)), l: "views por vídeo" },
+          ].map((s) => (
+            <div
+              key={s.l}
+              className="bg-black/30 border border-[#222] rounded-lg px-3 py-2"
+            >
+              <div
+                className={`font-bold text-sm tabular-nums ${
+                  v.destaque ? "text-gold-500" : "text-white/70"
+                }`}
+              >
+                {s.v}
+              </div>
+              <div className="text-white/30 text-[10px]">{s.l}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <dl className="mt-5 flex flex-col gap-3">
+        {criterios.map((crit) => {
+          const c = v.indicadores[crit.id];
+          return (
+            <div
+              key={crit.id}
+              className="grid sm:grid-cols-[220px_1fr] gap-1 sm:gap-4 border-t border-[#1c1c1c] pt-3"
+            >
+              <dt className="text-white/40 text-xs sm:text-sm leading-snug">
+                {crit.label}
+              </dt>
+              <dd>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`font-semibold text-sm ${TOM_TEXTO[c.tom]}`}>
+                    {c.valor}
+                  </span>
+                  <Selo celula={c} />
+                </div>
+                {c.nota && (
+                  <div className="text-white/35 text-xs leading-relaxed mt-1">
+                    {c.nota}
+                  </div>
+                )}
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
+
+      <div className="text-white/25 text-xs mt-5 pt-4 border-t border-[#1c1c1c]">
+        Fonte:{" "}
+        {v.fonteUrl ? (
+          <a
+            href={v.fonteUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-white/50"
+          >
+            {v.fonte}
+          </a>
+        ) : (
+          v.fonte
+        )}
+        {v.youtube && (
+          <>
+            {" "}
+            · canal criado em {v.youtube.desde.split("-").reverse().join("/")} ·{" "}
+            {mesesAtivo(v.youtube)} meses no ar
+          </>
+        )}
+      </div>
+    </article>
+  );
+}
+
 export default async function ComparativoPage() {
   const role = await requireResellerOrAdmin();
   const apresentador =
     role.kind === "reseller" ? role.reseller.name : "Fora da Caixa";
   const voltarHref = role.kind === "admin" ? "/admin" : "/revendedor";
 
+  const pfc = rankingYouTube.find((v) => v.destaque)!;
+  const novaOnda = rankingYouTube.find((v) => v.id === "nova-onda")!;
+
   const tiles = [
-    { v: channelStats.views12m, l: "views em 12 meses" },
-    { v: channelStats.weeklyContent, l: "peças por semana" },
-    { v: channelStats.watchHoursYear, l: "horas assistidas no ano" },
-    { v: channelStats.bestMonth, l: `melhor mês (${channelStats.bestMonthLabel})` },
+    { v: nf.format(pfc.youtube.viewsTotais), l: "visualizações no canal" },
+    { v: nf.format(viewsPorMes(pfc.youtube)), l: "visualizações por mês" },
+    { v: nf.format(pfc.youtube.videos), l: "vídeos publicados" },
+    { v: `${mesesAtivo(pfc.youtube)} meses`, l: "de canal no ar" },
   ];
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] pb-24">
-      {/* Barra de contexto — some na impressão para não sujar o material */}
       <header className="border-b border-[#1a1a1a] bg-[#0d0d0d] print:hidden">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -88,20 +272,18 @@ export default async function ComparativoPage() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6">
         {/* Abertura */}
         <div className="pt-10 sm:pt-14">
-          <span className="section-tag">
-            Mídia local · Mogi Guaçu e região
-          </span>
+          <span className="section-tag">Mídia local · Mogi Guaçu e região</span>
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white mt-3 leading-[1.1]">
             Onde anunciar na cidade,{" "}
-            <span className="text-gradient-gold">lado a lado</span>
+            <span className="text-gradient-gold">com os números na mesa</span>
           </h1>
           <p className="text-white/55 mt-4 leading-relaxed max-w-2xl">
-            Um comparativo dos veículos que disputam a mesma verba de anúncio em
-            Mogi Guaçu e região. Cada número traz de onde veio — e onde o
-            veículo não publica o dado, está escrito que não publica.
+            Todo número de YouTube desta página é público: você abre o canal, vai
+            em “Sobre” e confere na hora — o nosso e o dos outros. Onde o veículo
+            não publica o dado, está escrito que não publica.
           </p>
           <p className="text-white/30 text-xs mt-3">
-            Fontes públicas conferidas em {atualizadoEm}.
+            Coletado em {atualizadoEm} nas páginas públicas dos canais.
           </p>
         </div>
 
@@ -110,16 +292,13 @@ export default async function ComparativoPage() {
           <h2 className="text-white font-bold text-lg">
             Os números do Fora da Caixa
           </h2>
-          <p className="text-white/40 text-sm mt-1">
-            Saem do painel do YouTube e podem ser conferidos na tela, ao vivo.
-          </p>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-5">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
             {tiles.map((t) => (
               <div
                 key={t.l}
                 className="bg-[#111] border border-[#222] rounded-xl p-5"
               >
-                <div className="text-2xl sm:text-3xl font-black text-gold-500 break-words">
+                <div className="text-2xl sm:text-3xl font-black text-gold-500 break-words tabular-nums">
                   {t.v}
                 </div>
                 <div className="text-white/50 text-sm mt-1 leading-snug">
@@ -130,11 +309,106 @@ export default async function ComparativoPage() {
           </div>
         </section>
 
-        {/* Resumo — os 4 diferenciais */}
+        {/* Gráfico */}
         <section className="mt-14">
           <h2 className="text-white font-bold text-lg">
-            O que muda na prática
+            Visualizações por mês no YouTube
           </h2>
+          <p className="text-white/40 text-sm mt-1 max-w-2xl leading-relaxed">
+            Total do canal dividido pelos meses desde que ele existe. Sem isso um
+            canal de 2014 pareceria maior só por ser mais velho.
+          </p>
+
+          <div className="bg-[#111] border border-[#222] rounded-2xl p-5 sm:p-6 mt-5">
+            <BarrasViewsMes />
+          </div>
+
+          <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-4">
+            <p className="text-white/50 text-sm leading-relaxed">
+              <strong className="text-white/80">
+                Isto mede só o YouTube.
+              </strong>{" "}
+              A audiência de rádio da Nova Onda está no FM, não entra neste
+              gráfico e é real — são 30 anos alcançando quem não usa rede social.
+              O que o gráfico mostra é uma coisa só: quem entrega mais vídeo por
+              mês em Mogi Guaçu.
+            </p>
+          </div>
+        </section>
+
+        {/* O argumento dos inscritos */}
+        <section className="mt-14">
+          <div className="rounded-2xl border border-gold-500/25 bg-gradient-to-br from-gold-500/[0.08] to-transparent p-6 sm:p-8">
+            <span className="section-tag">Por que inscrito não é a medida</span>
+            <h2 className="text-2xl sm:text-3xl font-black text-white mt-3 leading-tight">
+              Tem canal aqui com mais inscritos que o nosso{" "}
+              <span className="text-gradient-gold">
+                e um quarto das visualizações
+              </span>
+            </h2>
+            <div className="grid sm:grid-cols-2 gap-4 mt-6">
+              {[
+                {
+                  nome: novaOnda.nome,
+                  sub: novaOnda.youtube.inscritosLabel,
+                  views: nf.format(novaOnda.youtube.viewsTotais),
+                  destaque: false,
+                },
+                {
+                  nome: pfc.nome,
+                  sub: pfc.youtube.inscritosLabel,
+                  views: nf.format(pfc.youtube.viewsTotais),
+                  destaque: true,
+                },
+              ].map((c) => (
+                <div
+                  key={c.nome}
+                  className={`rounded-xl border p-5 ${
+                    c.destaque
+                      ? "border-gold-500/30 bg-black/30"
+                      : "border-[#222] bg-black/30"
+                  }`}
+                >
+                  <div
+                    className={`font-bold ${
+                      c.destaque ? "text-gold-500" : "text-white/80"
+                    }`}
+                  >
+                    {c.nome}
+                  </div>
+                  <div className="flex items-end gap-6 mt-3">
+                    <div>
+                      <div className="text-white/70 font-black text-xl tabular-nums">
+                        {c.sub}
+                      </div>
+                      <div className="text-white/30 text-xs">inscritos</div>
+                    </div>
+                    <div>
+                      <div
+                        className={`font-black text-xl tabular-nums ${
+                          c.destaque ? "text-gold-500" : "text-white/70"
+                        }`}
+                      >
+                        {c.views}
+                      </div>
+                      <div className="text-white/30 text-xs">visualizações</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-white/55 text-sm leading-relaxed mt-5">
+              Inscrito mede quem assinou o canal um dia. Visualização mede quem
+              assistiu. Quando você paga anúncio, está comprando a segunda coisa
+              — e é por isso que este material não lidera por inscritos, nem os
+              nossos.
+            </p>
+          </div>
+        </section>
+
+        {/* Resumo — os 4 diferenciais */}
+        <section className="mt-14">
+          <h2 className="text-white font-bold text-lg">O que muda na prática</h2>
           <p className="text-white/40 text-sm mt-1">
             Quatro perguntas que separam os veículos. O resto é detalhe.
           </p>
@@ -200,86 +474,26 @@ export default async function ComparativoPage() {
           <p className="text-white/40 text-sm mt-1">
             Cada um começa pelo que faz bem — porque cada um faz alguma coisa bem.
           </p>
-
           <div className="flex flex-col gap-4 mt-5">
             {veiculosOrdenados.map((v) => (
-              <article
-                key={v.id}
-                className={`rounded-2xl border p-5 sm:p-6 ${
-                  v.destaque
-                    ? "border-gold-500/30 bg-gradient-to-br from-gold-500/[0.07] to-transparent"
-                    : "border-[#222] bg-[#111]"
-                }`}
-              >
-                <div className="flex items-start justify-between gap-4 flex-wrap">
-                  <div>
-                    <h3
-                      className={`font-black text-xl ${
-                        v.destaque ? "text-gold-500" : "text-white"
-                      }`}
-                    >
-                      {v.nome}
-                    </h3>
-                    <div className="text-white/35 text-xs mt-0.5">
-                      {v.tipo} · {v.cidade}
-                    </div>
-                  </div>
-                </div>
+              <CardVeiculo key={v.id} v={v} />
+            ))}
+          </div>
+        </section>
 
-                <p className="text-white/60 text-sm leading-relaxed mt-3">
-                  <span className="text-white/35 text-[11px] uppercase tracking-wider font-bold block mb-1">
-                    O que faz bem
-                  </span>
-                  {v.forca}
-                </p>
-
-                <dl className="mt-5 flex flex-col gap-3">
-                  {criterios.map((crit) => {
-                    const c = v.indicadores[crit.id];
-                    return (
-                      <div
-                        key={crit.id}
-                        className="grid sm:grid-cols-[220px_1fr] gap-1 sm:gap-4 border-t border-[#1c1c1c] pt-3"
-                      >
-                        <dt className="text-white/40 text-xs sm:text-sm leading-snug">
-                          {crit.label}
-                        </dt>
-                        <dd>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span
-                              className={`font-semibold text-sm ${TOM_TEXTO[c.tom]}`}
-                            >
-                              {c.valor}
-                            </span>
-                            <Selo celula={c} />
-                          </div>
-                          {c.nota && (
-                            <div className="text-white/35 text-xs leading-relaxed mt-1">
-                              {c.nota}
-                            </div>
-                          )}
-                        </dd>
-                      </div>
-                    );
-                  })}
-                </dl>
-
-                <div className="text-white/25 text-xs mt-5 pt-4 border-t border-[#1c1c1c]">
-                  Fonte:{" "}
-                  {v.fonteUrl ? (
-                    <a
-                      href={v.fonteUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline hover:text-white/50"
-                    >
-                      {v.fonte}
-                    </a>
-                  ) : (
-                    v.fonte
-                  )}
-                </div>
-              </article>
+        {/* Referências regionais */}
+        <section className="mt-14">
+          <h2 className="text-white font-bold text-lg">
+            Fora de Mogi Guaçu, para dar régua
+          </h2>
+          <p className="text-white/40 text-sm mt-1 max-w-2xl leading-relaxed">
+            Não disputam a mesma verba, mas mostram o que é possível no interior.
+            O Itapira News tem mais audiência que todo mundo desta lista — vale
+            saber que existe antes que o cliente pergunte.
+          </p>
+          <div className="flex flex-col gap-4 mt-5">
+            {referenciasRegionais.map((v) => (
+              <CardVeiculo key={v.id} v={v} />
             ))}
           </div>
         </section>
@@ -292,8 +506,8 @@ export default async function ComparativoPage() {
           <div className="grid sm:grid-cols-2 gap-4 mt-5">
             {[
               {
-                t: "Medido não é a mesma coisa que declarado",
-                d: "Número medido sai de um painel que dá para abrir na sua frente. Número declarado é o que o veículo publica sobre si mesmo. Os dois podem estar certos — mas só um deles você consegue conferir.",
+                t: "Todo número de YouTube aqui é conferível",
+                d: "Abra qualquer canal da lista, clique em “Sobre” e o total de visualizações está lá. Não pedimos que você acredite em nós — pedimos que você confira.",
               },
               {
                 t: "Cobertura não é audiência",
@@ -301,11 +515,11 @@ export default async function ComparativoPage() {
               },
               {
                 t: "Seguidor não é entrega",
-                d: "Um perfil com 34 mil seguidores não entrega 34 mil visualizações por post — normalmente entrega uma fração. Por isso seguidores e views aparecem aqui como coisas separadas, e não somados.",
+                d: "Um perfil com 34 mil seguidores não entrega 34 mil visualizações por post. Por isso seguidores do Instagram e visualizações do YouTube aparecem aqui separados, e nunca somados.",
               },
               {
-                t: "As lacunas são reais",
-                d: "Onde está escrito “não divulgado”, é porque o veículo não publica o dado — não porque não procuramos. Preferimos a lacuna a um número inventado, inclusive quando a lacuna é nossa.",
+                t: "Onde nós perdemos",
+                d: `Nossa média por vídeo é ${nf.format(viewsPorVideo(pfc.youtube))}, e tem canal da cidade com média bem maior publicando muito menos. Nós ganhamos no volume, não na peça isolada — e isso está na tabela.`,
               },
             ].map((c) => (
               <div
@@ -321,12 +535,12 @@ export default async function ComparativoPage() {
           </div>
           <p className="text-white/25 text-xs leading-relaxed mt-4">
             Este material descreve veículos a partir de informação pública, sem
-            juízo sobre a qualidade do trabalho de ninguém. Rádio, portal e
+            juízo sobre a qualidade do trabalho de ninguém. Rádio, TV, portal e
             perfil local cumprem funções que este canal não cumpre.
           </p>
         </section>
 
-        {/* CTA — fecha a conversa com o cliente */}
+        {/* CTA */}
         <section className="mt-14">
           <div className="rounded-2xl border border-gold-500/25 bg-gradient-to-br from-gold-500/[0.08] to-transparent p-6 sm:p-8">
             <h2 className="text-2xl sm:text-3xl font-black text-white leading-tight">
@@ -360,8 +574,8 @@ export default async function ComparativoPage() {
           </div>
         </section>
 
-        {/* Orientação interna — fechada por padrão para não abrir na frente do cliente */}
-        <details className="mt-10 group print:hidden">
+        {/* Orientação interna — fechada para não abrir na frente do cliente */}
+        <details className="mt-10 print:hidden">
           <summary className="cursor-pointer list-none flex items-center gap-2 text-white/40 hover:text-white/70 text-sm border border-[#222] rounded-xl px-4 py-3 bg-[#0d0d0d]">
             <span className="text-gold-500/70">▸</span>
             Só para você — como usar esta página na reunião
@@ -376,7 +590,7 @@ export default async function ComparativoPage() {
               </strong>{" "}
               Mogi Guaçu é pequena, e o cliente provavelmente já anunciou em pelo
               menos um dos veículos da lista. Se ele sentir que foi bobo na
-              escolha passada, ele não compra de você. Comece sempre pela coluna
+              escolha passada, ele não compra de você. Comece sempre pela linha
               “o que faz bem”.
             </p>
             <p>
@@ -386,18 +600,19 @@ export default async function ComparativoPage() {
             </p>
             <p>
               <strong className="text-white/80">
-                Se perguntarem quantos inscritos temos:
+                A jogada mais forte da página:
               </strong>{" "}
-              responda o número real e volte para views ({channelStats.views12m}{" "}
-              em 12 meses). Inscrito mede quem assinou o canal; view mede quem
-              assistiu. Quem paga anúncio está comprando a segunda coisa.
+              o bloco dos inscritos. A Nova Onda tem mais inscritos que a gente e
+              um quarto das visualizações. Use isso para derrubar a pergunta
+              “quantos inscritos você tem?” antes que ela vire objeção — e
+              repare que funciona porque é contra nós que o argumento parece
+              pesar primeiro.
             </p>
             <p>
-              <strong className="text-white/80">
-                Se perguntarem os views do concorrente:
-              </strong>{" "}
-              diga que eles não publicam — e que é justamente esse o ponto.
-              Nunca chute um número por eles.
+              <strong className="text-white/80">Se conferirem na hora:</strong>{" "}
+              ótimo, deixe conferir. Todo número de YouTube aqui está na aba
+              “Sobre” do canal. Se algum estiver diferente, é porque o canal
+              cresceu desde {atualizadoEm} — avise para atualizarmos.
             </p>
             <p>
               <strong className="text-white/80">Onde fechar:</strong> não tente
