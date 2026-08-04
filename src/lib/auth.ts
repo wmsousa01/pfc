@@ -67,3 +67,17 @@ export async function requireReseller(): Promise<
   if (role.kind === "admin") redirect("/admin");
   redirect("/sem-acesso");
 }
+
+/**
+ * Gate do material de apoio comercial (ex.: /revendedor/comparativo).
+ *
+ * Diferente de requireReseller(): o admin também passa. São páginas que o
+ * admin precisa abrir para conferir e para usar nas próprias reuniões —
+ * mandá-lo para /admin ali seria só um beco sem saída.
+ */
+export async function requireResellerOrAdmin(): Promise<SessionRole> {
+  const role = await getSessionRole();
+  if (role.kind === "reseller" || role.kind === "admin") return role;
+  if (role.kind === "anon") redirect("/revendedor/login");
+  redirect("/sem-acesso");
+}

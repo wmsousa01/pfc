@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import Link from "next/link";
 import CopyButton from "@/components/CopyButton";
 import PasswordCard from "@/components/auth/PasswordCard";
 import { signOutAction } from "@/lib/auth-actions";
@@ -97,6 +98,26 @@ export default async function ResellerDashboard() {
           &quot;A receber&quot; é a comissão de pedidos já entregues e pagos pelo
           cliente. {brl(stats.commission_paid_cents)} já foram repassados a você.
         </p>
+
+        {/* Material de apoio comercial */}
+        <Link
+          href="/revendedor/comparativo"
+          className="mt-8 block rounded-xl border border-gold-500/25 bg-gradient-to-br from-gold-500/[0.08] to-transparent p-5 hover:border-gold-500/50 transition-colors"
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-gold-500 font-bold">
+                Comparativo da mídia local 📊
+              </div>
+              <p className="text-white/50 text-sm mt-1 leading-relaxed">
+                A página que você abre na reunião: Fora da Caixa lado a lado com
+                rádio, Instagram e podcasts da região. Tem uma orientação de uso
+                no fim — leia antes da primeira visita.
+              </p>
+            </div>
+            <span className="text-gold-500 text-xl shrink-0">→</span>
+          </div>
+        </Link>
 
         {/* Divulgação */}
         <div className="grid md:grid-cols-3 gap-6 mt-10">
