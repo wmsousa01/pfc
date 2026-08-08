@@ -39,6 +39,7 @@ export default function Footer() {
               <a href="/#quadros" className="text-white/50 hover:text-white transition-colors">Quadros</a>
               <a href="/#numeros" className="text-white/50 hover:text-white transition-colors">Números</a>
               <a href="/loja" className="text-white/50 hover:text-white transition-colors">Loja</a>
+              <a href="/cortes" className="text-white/50 hover:text-white transition-colors">Cortes</a>
               <a href="/parcerias" className="text-white/50 hover:text-white transition-colors">Parcerias</a>
             </div>
           </div>
