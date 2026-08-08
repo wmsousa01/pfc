@@ -107,7 +107,7 @@ acontece no WhatsApp.
 **Revendedor** é quem indica venda: apresentador de quadro, influencer ou
 parceiro. Cada um tem um `slug` que vira duas coisas:
 
-- **link** `foradacaixa.com.br/r/{slug}` — leva à loja com o cupom aplicado e
+- **link** `pfctv.com.br/r/{slug}` — leva à loja com o cupom aplicado e
   deixa um cookie de 30 dias (a venda continua creditada se o cliente voltar
   depois);
 - **cupom** `{SLUG}` — para quem digita no checkout.
