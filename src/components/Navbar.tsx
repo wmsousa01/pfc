@@ -49,8 +49,9 @@ export default function Navbar() {
             </div>
           </a>
 
-          {/* Desktop nav */}
-          <nav className="hidden md:flex items-center gap-7">
+          {/* Desktop nav — só a partir de lg: sete links + logo + CTA não
+              cabem nos 768px do md sem quebrar a linha e estourar o h-16. */}
+          <nav className="hidden lg:flex items-center gap-6">
             {links.map((l) => (
               <a
                 key={l.href}
@@ -77,7 +78,7 @@ export default function Navbar() {
             {/* Mobile toggle */}
             <button
               onClick={() => setOpen((v) => !v)}
-              className="md:hidden w-10 h-10 flex items-center justify-center rounded-lg border border-[#2a2a2a] text-white"
+              className="lg:hidden w-10 h-10 flex items-center justify-center rounded-lg border border-[#2a2a2a] text-white"
               aria-label="Abrir menu"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -90,7 +91,7 @@ export default function Navbar() {
 
       {/* Mobile menu */}
       {open && (
-        <div className="md:hidden bg-black/95 backdrop-blur-md border-b border-[#222]">
+        <div className="lg:hidden bg-black/95 backdrop-blur-md border-b border-[#222]">
           <nav className="container-px py-4 flex flex-col gap-1">
             {links.map((l) => (
               <a
