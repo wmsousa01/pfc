@@ -110,6 +110,8 @@ export type Partner = {
   content: PartnerContent | null;
   active: boolean;
   created_at: string;
+  /** Última edição do conteúdo (migration 008). Alimenta o sitemap. */
+  updated_at?: string | null;
 };
 
 /** Temperatura do lead, calculada pela triagem. */

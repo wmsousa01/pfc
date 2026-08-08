@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { site } from "@/lib/config";
 import "./globals.css";
 
 const inter = Inter({
@@ -15,7 +16,10 @@ export const metadata: Metadata = {
   keywords:
     "Fora da Caixa, Papo Fora da Caixa, podcast Mogi Guaçu, PFC, lives, quadros, PFC News, PFC Visita, Lado A Lado B, Tateios Escolares, patrocínio podcast, parceria local",
   authors: [{ name: "Fora da Caixa" }],
-  metadataBase: new URL("https://foradacaixa.com.br"),
+  // Mesmo host que robots.ts e sitemap.ts anunciam. Se aqui dissesse outro
+  // domínio, as URLs absolutas do OG apontariam para um site e o sitemap para
+  // outro — e os dois passariam a competir como conteúdo duplicado.
+  metadataBase: new URL(site.url),
   openGraph: {
     title: "Fora da Caixa | O hub do podcast de Mogi Guaçu",
     description:
