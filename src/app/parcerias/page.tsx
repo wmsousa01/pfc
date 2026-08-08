@@ -132,7 +132,7 @@ export default function ParceriasPage() {
             </h2>
             <p className="text-white/60 mt-4 leading-relaxed max-w-2xl">
               Todo parceiro ganha uma landing page dentro do site
-              (foradacaixa.com.br/parceiros/sua-marca). Durante o episódio, um QR
+              (pfctv.com.br/parceiros/sua-marca). Durante o episódio, um QR
               code na tela leva a audiência direto para lá — e você acompanha
               quantos acessos o seu QR gerou.
             </p>
