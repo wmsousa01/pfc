@@ -75,7 +75,7 @@ const plans: Plan[] = [
       "Menções ao vivo",
       "Conteúdos especiais",
       "Episódio temático",
-      "PFC Visita",
+      "Prioridade na agenda do PFC Visita",
       "Relatório de resultados",
     ],
     ctaLabel: "Quero ser Master",

@@ -47,6 +47,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.9,
     },
     {
+      path: "/pfc-visita",
+      alterado: "2026-10-22",
+      changeFrequency: "monthly" as const,
+      priority: 0.9,
+    },
+    {
       path: "/como-anunciar",
       alterado: "2026-08-04",
       changeFrequency: "monthly" as const,
