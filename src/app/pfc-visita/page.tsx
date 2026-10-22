@@ -122,8 +122,8 @@ const passos = [
   },
   {
     n: "2",
-    t: "Agenda numa quarta",
-    d: "A Visita grava às quartas. São poucas por mês, por ordem de confirmação.",
+    t: "Agendamos a gravação",
+    d: "Combinamos com você o dia e o horário que melhor encaixam no seu movimento.",
   },
   {
     n: "3",
@@ -132,8 +132,8 @@ const passos = [
   },
   {
     n: "4",
-    t: "No ar no mesmo dia",
-    d: "O episódio é publicado na própria quarta. Os shorts e o post saem na sequência.",
+    t: "Episódio no ar",
+    d: "Editamos e publicamos o episódio no canal, junto com os shorts e o post em collab.",
   },
 ];
 
@@ -180,7 +180,7 @@ export default function PfcVisitaPage() {
           <div className="flex flex-col gap-6 text-center lg:text-left items-center lg:items-start">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-gold-500 animate-pulse" />
-              <span className="section-tag">PFC Visita · Gravações às quartas</span>
+              <span className="section-tag">PFC Visita · Gravado no seu negócio</span>
             </div>
             <h1 className="text-4xl sm:text-5xl lg:text-[3.4rem] font-black leading-[1.05] tracking-tight">
               A câmera do PFC vai até o seu negócio.{" "}
@@ -501,14 +501,14 @@ export default function PfcVisitaPage() {
         <div className="container-px max-w-3xl mx-auto text-center flex flex-col items-center gap-6">
           <span className="section-tag">Agenda limitada</span>
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black leading-tight">
-            A Visita só grava às quartas.{" "}
+            A cidade já conhece o seu produto.{" "}
             <span className="text-gradient-gold">
-              A próxima pode ser no seu negócio.
+              Agora deixa ela conhecer você.
             </span>
           </h2>
           <p className="text-white/55 leading-relaxed max-w-xl">
-            São poucas vagas por mês, preenchidas por ordem de confirmação.
-            Chama no WhatsApp e a gente vê a próxima quarta livre.
+            São poucas Visitas por mês, agendadas por ordem de confirmação.
+            Chama no WhatsApp e a gente marca o dia da sua gravação.
           </p>
           <a
             href={cta}
