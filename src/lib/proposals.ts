@@ -25,6 +25,12 @@ export type Proposal = {
   /** Último dia em que a condição vale (YYYY-MM-DD, horário de Brasília). */
   validUntil: string;
   paymentUrl?: string;
+  /**
+   * Parcelas sem juros no cartão, com o juro absorvido pelo PFC. Só preencha
+   * se o Link de Pagamento foi criado assim — sem isso o Mercado Pago repassa
+   * o juro ao cliente e a parcela mostrada aqui vira promessa falsa.
+   */
+  installmentsNoInterest?: number;
 };
 
 export const proposals: Proposal[] = [
@@ -44,7 +50,8 @@ export const proposals: Proposal[] = [
       "Página própria no site do PFC, com QR rastreável e painel de contatos",
     ],
     validUntil: "2026-11-06",
-    paymentUrl: "https://mpago.la/26Sik2u",
+    paymentUrl: "https://mpago.li/2tAGUym",
+    installmentsNoInterest: 12,
   },
 ];
 

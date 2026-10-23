@@ -128,8 +128,25 @@ export default function PropostaPage({
               {brl(p.price)}
             </div>
             <p className="text-white/55 text-sm mt-2">
-              Equivale a{" "}
-              <strong className="text-white/85">{brl(perMonth)}/mês</strong>
+              {p.installmentsNoInterest ? (
+                <>
+                  ou{" "}
+                  <strong className="text-white/85">
+                    {p.installmentsNoInterest}x de{" "}
+                    {(p.price / p.installmentsNoInterest).toLocaleString(
+                      "pt-BR",
+                      { style: "currency", currency: "BRL" }
+                    )}{" "}
+                    sem juros
+                  </strong>{" "}
+                  no cartão
+                </>
+              ) : (
+                <>
+                  À vista. Equivale a{" "}
+                  <strong className="text-white/85">{brl(perMonth)}/mês</strong>
+                </>
+              )}
             </p>
             {p.discountReason && (
               <div className="mt-4 inline-flex bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold px-3 py-1.5 rounded-full">
