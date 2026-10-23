@@ -29,6 +29,10 @@ export type Proposal = {
    * Parcelas sem juros no cartão, com o juro absorvido pelo PFC. Só preencha
    * se o Link de Pagamento foi criado assim — sem isso o Mercado Pago repassa
    * o juro ao cliente e a parcela mostrada aqui vira promessa falsa.
+   *
+   * Proposta com desconto é à vista por regra (lib/payment). Parcelar sem
+   * juros em cima do desconto é exceção decidida caso a caso, com o líquido
+   * conferido em `netReceived`.
    */
   installmentsNoInterest?: number;
 };

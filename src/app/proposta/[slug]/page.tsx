@@ -5,6 +5,7 @@ import Footer from "@/components/Footer";
 import { channelStats, whatsapp } from "@/lib/config";
 import { getProposal, isExpired, proposals } from "@/lib/proposals";
 import { WhatsAppIcon, ArrowRight } from "@/components/icons";
+import { installmentLabel, PAYMENT_TERMS_CASH } from "@/lib/payment";
 
 /**
  * Proposta individual que leva direto ao pagamento.
@@ -132,12 +133,7 @@ export default function PropostaPage({
                 <>
                   ou{" "}
                   <strong className="text-white/85">
-                    {p.installmentsNoInterest}x de{" "}
-                    {(p.price / p.installmentsNoInterest).toLocaleString(
-                      "pt-BR",
-                      { style: "currency", currency: "BRL" }
-                    )}{" "}
-                    sem juros
+                    {installmentLabel(p.price, p.installmentsNoInterest)}
                   </strong>{" "}
                   no cartão
                 </>
@@ -166,7 +162,10 @@ export default function PropostaPage({
                   <ArrowRight className="w-4 h-4" />
                 </a>
                 <p className="text-white/35 text-xs text-center mt-3 leading-relaxed">
-                  Pagamento seguro pelo Mercado Pago: Pix, boleto ou cartão.
+                  Pagamento seguro pelo Mercado Pago.{" "}
+                  {p.installmentsNoInterest
+                    ? `Pix à vista ou cartão em até ${p.installmentsNoInterest}x sem juros.`
+                    : PAYMENT_TERMS_CASH}
                 </p>
               </>
             ) : null}

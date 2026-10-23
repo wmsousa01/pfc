@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { installmentLabel, PAYMENT_TERMS } from "@/lib/payment";
 
 type Plan = {
   id: string;
@@ -10,7 +11,6 @@ type Plan = {
   highlighted: boolean;
   monthlyPrice: number;
   yearlyPrice: number;
-  yearlyEquivalent: number;
   savings: number;
   features: string[];
   ctaLabel: string;
@@ -25,7 +25,6 @@ const plans: Plan[] = [
     highlighted: false,
     monthlyPrice: 297,
     yearlyPrice: 2851,
-    yearlyEquivalent: 237,
     savings: 713,
     features: [
       "Inserções pontuais",
@@ -45,7 +44,6 @@ const plans: Plan[] = [
     highlighted: true,
     monthlyPrice: 797,
     yearlyPrice: 7651,
-    yearlyEquivalent: 637,
     savings: 1913,
     features: [
       "Logo no estúdio",
@@ -66,7 +64,6 @@ const plans: Plan[] = [
     highlighted: false,
     monthlyPrice: 1997,
     yearlyPrice: 19171,
-    yearlyEquivalent: 1597,
     savings: 4793,
     features: [
       "Exclusividade por segmento",
@@ -120,7 +117,6 @@ function PlanCard({ plan, isYearly }: { plan: Plan; isYearly: boolean }) {
     highlighted,
     monthlyPrice,
     yearlyPrice,
-    yearlyEquivalent,
     savings,
     features,
     ctaLabel,
@@ -191,9 +187,9 @@ function PlanCard({ plan, isYearly }: { plan: Plan; isYearly: boolean }) {
               <span className="text-white/40 text-sm">/ano</span>
             </div>
             <p className="text-white/50 text-sm mt-1.5">
-              Equivale a{" "}
+              Pix à vista ou{" "}
               <strong className="text-white/80">
-                R$&nbsp;{fmt(yearlyEquivalent)}/mês
+                {installmentLabel(yearlyPrice)}
               </strong>
             </p>
             <div className="mt-2.5 inline-flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold px-2.5 py-1 rounded-full">
@@ -218,9 +214,9 @@ function PlanCard({ plan, isYearly }: { plan: Plan; isYearly: boolean }) {
             <p className="text-white/40 text-xs mt-1.5">
               Ou{" "}
               <span className="text-gold-500/80 font-semibold">
-                R$&nbsp;{fmt(yearlyEquivalent)}/mês
+                R$&nbsp;{fmt(yearlyPrice)}/ano
               </span>{" "}
-              no plano anual
+              no plano anual, 20% mais barato
             </p>
           </>
         )}
@@ -342,7 +338,8 @@ export default function Plans() {
 
         {/* Fine print */}
         <p className="text-center text-white/25 text-xs mt-4">
-          Os planos podem ser personalizados conforme o objetivo da marca e
+          Mensal: Pix ou cartão, mês a mês. Anual: {PAYMENT_TERMS} Os planos
+          podem ser personalizados conforme o objetivo da marca e
           disponibilidade editorial.
         </p>
       </div>

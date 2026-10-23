@@ -5,6 +5,7 @@ import Footer from "@/components/Footer";
 import VideoFacade from "@/components/VideoFacade";
 import { channelStats, whatsapp } from "@/lib/config";
 import { WhatsAppIcon, ArrowRight, InstagramIcon } from "@/components/icons";
+import { installmentLabel, PAYMENT_TERMS_CASH } from "@/lib/payment";
 
 export const metadata: Metadata = {
   title: "PFC Visita: um episódio inteiro sobre o seu negócio | Fora da Caixa",
@@ -28,6 +29,11 @@ export const metadata: Metadata = {
  * porque além da produção externa a Visita sai no canal do PFC.
  */
 
+/**
+ * Avulso parcela até 3x sem juros (líquido ~R$ 1.498, ainda acima do "Do
+ * Zero"). O preço de cliente já é desconto: só à vista — ver lib/payment.
+ */
+const VALOR_AVULSO = 1690;
 const PRECO_AVULSO = "R$ 1.690";
 const PRECO_CLIENTE = "R$ 1.350";
 
@@ -401,7 +407,7 @@ export default function PfcVisitaPage() {
               Preço fechado, tudo incluso
             </h2>
             <p className="text-white/55 mt-4 leading-relaxed">
-              À vista ou em 2×. Sem mensalidade e sem fidelidade.
+              Sem mensalidade e sem fidelidade.
             </p>
           </div>
 
@@ -413,6 +419,12 @@ export default function PfcVisitaPage() {
               <div className="text-white font-black text-4xl mt-3">
                 {PRECO_AVULSO}
               </div>
+              <p className="text-white/55 text-sm mt-2">
+                Pix à vista ou{" "}
+                <strong className="text-white/80">
+                  {installmentLabel(VALOR_AVULSO)}
+                </strong>
+              </p>
               <p className="text-white/50 text-sm mt-3 leading-relaxed flex-1">
                 Para quem quer conhecer o PFC começando pela Visita.
               </p>
@@ -442,6 +454,9 @@ export default function PfcVisitaPage() {
                   {PRECO_AVULSO}
                 </span>
               </div>
+              <p className="text-white/55 text-sm mt-2">
+                {PAYMENT_TERMS_CASH}
+              </p>
               <p className="text-white/55 text-sm mt-3 leading-relaxed flex-1">
                 Para quem tem qualquer plano de patrocínio ativo: Apoio,
                 Patrocinador ou Master.
