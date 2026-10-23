@@ -10,6 +10,30 @@ import { labelFor, TEMPERATURE_LABEL } from "@/lib/lead-triage";
 import { buildPartnerTheme, withAlpha } from "@/lib/brandkit";
 import { site } from "@/lib/config";
 import type { LeadTemperature, PartnerLead } from "@/lib/types";
+import { getPanelExtras, getTermsAcceptance, formatDocument } from "@/lib/client-area";
+import { buildTerms } from "@/lib/terms";
+import { getClientDeliveries, type DeliveryStatus } from "@/lib/jira";
+import AcceptTermsForm from "@/components/partner/AcceptTermsForm";
+
+type Tab = "entregas" | "termos" | "resultados";
+
+const STATUS_LABEL: Record<DeliveryStatus, string> = {
+  programado: "Programado",
+  em_producao: "Em produção",
+  entregue: "Entregue",
+};
+
+const STATUS_COLOR: Record<DeliveryStatus, string> = {
+  programado: "#64748b",
+  em_producao: "#eab308",
+  entregue: "#22c55e",
+};
+
+function dataBR(iso: string): string {
+  return new Date(iso.length === 10 ? `${iso}T12:00:00` : iso).toLocaleDateString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+  });
+}
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +69,7 @@ export default async function PartnerPanelPage({
   searchParams,
 }: {
   params: { slug: string };
-  searchParams: { token?: string };
+  searchParams: { token?: string; aba?: string };
 }) {
   const token = searchParams.token ?? "";
   const partner = await getPartnerByPanelToken(token);
@@ -53,10 +77,32 @@ export default async function PartnerPanelPage({
   // Token inválido ou de outro parceiro: 404, sem pistas.
   if (!partner || partner.slug !== params.slug) notFound();
 
-  const [leads, clicks] = await Promise.all([
+  const [leads, clicks, extras] = await Promise.all([
     getPartnerLeads(partner.id),
     getPartnerClickSummary(partner.id),
+    getPanelExtras(partner.id),
   ]);
+
+  /*
+   * Área do cliente: só aparece para quem tem contrato registrado. Parceiro
+   * sem contrato continua vendo o painel de sempre, sem abas.
+   */
+  const terms = extras.contract ? buildTerms(partner.name, extras.contract) : null;
+  const [acceptance, deliveries] = await Promise.all([
+    terms ? getTermsAcceptance(partner.id, terms.version) : null,
+    extras.jiraEpic ? getClientDeliveries(extras.jiraEpic) : null,
+  ]);
+  const hasClientArea = Boolean(terms);
+  const requested = searchParams.aba;
+  const tab: Tab = !hasClientArea
+    ? "resultados"
+    : requested === "termos" || requested === "entregas" || requested === "resultados"
+      ? requested
+      : acceptance
+        ? "entregas"
+        : "termos";
+  const tabHref = (a: Tab) =>
+    `/parceiros/${partner.slug}/painel?token=${token}&aba=${a}`;
   const summary = summarizePartnerLeads(leads);
   const t = buildPartnerTheme(partner);
 
@@ -89,7 +135,7 @@ export default async function PartnerPanelPage({
               className="text-[11px] font-bold uppercase tracking-[0.18em]"
               style={{ color: t.primaryText }}
             >
-              Painel do parceiro · {site.brand}
+              {hasClientArea ? "Área do cliente" : "Painel do parceiro"} · {site.brand}
             </span>
             <h1 className="text-3xl mt-2" style={t.heading}>
               {partner.name}
@@ -106,6 +152,169 @@ export default async function PartnerPanelPage({
           </a>
         </div>
 
+        {hasClientArea && (
+          <nav
+            className="mt-8 flex gap-1 p-1 overflow-x-auto"
+            style={{ ...card, borderRadius: t.radius }}
+          >
+            {(
+              [
+                ["entregas", "Entregas"],
+                ["termos", acceptance ? "Termos ✓" : "Termos"],
+                ["resultados", "Resultados"],
+              ] as [Tab, string][]
+            ).map(([a, label]) => (
+              <a
+                key={a}
+                href={tabHref(a)}
+                className="flex-1 text-center whitespace-nowrap px-4 py-2.5 text-sm font-bold"
+                style={
+                  tab === a
+                    ? { backgroundColor: t.primary, color: t.onPrimary, borderRadius: t.radius }
+                    : { color: t.fgMuted }
+                }
+              >
+                {label}
+              </a>
+            ))}
+          </nav>
+        )}
+
+        {hasClientArea && !acceptance && tab !== "termos" && (
+          <a
+            href={tabHref("termos")}
+            className="mt-4 block p-4 text-sm font-semibold"
+            style={{
+              ...card,
+              borderColor: withAlpha(t.primary, "66"),
+              color: t.fg,
+            }}
+          >
+            Falta o aceite dos termos do seu plano. Leva 2 minutos →
+          </a>
+        )}
+
+        {/* Termos */}
+        {tab === "termos" && terms && extras.contract && (
+          <section className="mt-6 p-6 sm:p-8" style={card}>
+            <h2 className="text-xl" style={t.heading}>
+              Termos do Plano {extras.contract.plan}
+            </h2>
+            <p className="text-xs mt-1" style={{ color: t.fgSubtle }}>
+              Versão {terms.version}
+            </p>
+
+            <div className="mt-6 flex flex-col gap-6">
+              {terms.sections.map((s) => (
+                <div key={s.title}>
+                  <h3 className="font-bold" style={{ color: t.fg }}>
+                    {s.title}
+                  </h3>
+                  {s.paragraphs.map((p) => (
+                    <p
+                      key={p}
+                      className="text-sm leading-relaxed mt-2"
+                      style={{ color: t.fgMuted }}
+                    >
+                      {p}
+                    </p>
+                  ))}
+                </div>
+              ))}
+            </div>
+
+            <div className="h-px my-8" style={{ backgroundColor: t.border }} />
+
+            {acceptance ? (
+              <p className="text-sm leading-relaxed" style={{ color: t.fg }}>
+                <strong>Aceito</strong> por {acceptance.accepted_name} (
+                {formatDocument(acceptance.accepted_document)}) em{" "}
+                {new Date(acceptance.accepted_at).toLocaleString("pt-BR", {
+                  timeZone: "America/Sao_Paulo",
+                })}
+                .
+              </p>
+            ) : (
+              <AcceptTermsForm token={token} termsHash={terms.hash} t={t} />
+            )}
+          </section>
+        )}
+
+        {/* Entregas */}
+        {tab === "entregas" && (
+          <section className="mt-6">
+            {deliveries === null ? (
+              <div className="p-10 text-center" style={card}>
+                <p style={{ color: t.fgMuted }}>
+                  {extras.jiraEpic
+                    ? "Não conseguimos carregar suas entregas agora. Tente de novo em alguns minutos."
+                    : "Suas entregas aparecem aqui assim que o planejamento do seu plano for publicado."}
+                </p>
+              </div>
+            ) : deliveries.length === 0 ? (
+              <div className="p-10 text-center" style={card}>
+                <p style={{ color: t.fgMuted }}>
+                  O planejamento das suas entregas está sendo montado. Assim
+                  que a primeira for agendada, ela aparece aqui.
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {deliveries.map((d) => (
+                  <div key={d.key} className="p-5" style={card}>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="font-bold" style={{ color: t.fg }}>
+                        {d.title}
+                      </div>
+                      <span
+                        className="text-[11px] font-bold px-2.5 py-1 whitespace-nowrap"
+                        style={{
+                          borderRadius: 999,
+                          backgroundColor: withAlpha(STATUS_COLOR[d.status], "22"),
+                          color: STATUS_COLOR[d.status],
+                          border: `1px solid ${withAlpha(STATUS_COLOR[d.status], "55")}`,
+                        }}
+                      >
+                        {STATUS_LABEL[d.status]}
+                      </span>
+                    </div>
+                    <div className="text-xs mt-1.5" style={{ color: t.fgSubtle }}>
+                      {d.status === "entregue" && d.deliveredAt
+                        ? `Entregue em ${dataBR(d.deliveredAt)}`
+                        : d.dueDate
+                          ? `Previsto para ${dataBR(d.dueDate)}`
+                          : "Data a combinar"}
+                    </div>
+                    {d.links.length > 0 && (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {d.links.map((l) => (
+                          <a
+                            key={l.url}
+                            href={l.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm font-semibold px-3.5 py-2"
+                            style={{
+                              borderRadius: t.radius,
+                              backgroundColor: withAlpha(t.primary, "1a"),
+                              color: t.primaryText,
+                              border: `1px solid ${withAlpha(t.primary, "40")}`,
+                            }}
+                          >
+                            {l.title} ↗
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {tab === "resultados" && (
+        <>
         {/* KPIs */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mt-8">
           {kpis.map((k) => (
@@ -255,6 +464,8 @@ export default async function PartnerPanelPage({
               </div>
             ))}
           </div>
+        )}
+        </>
         )}
 
         <p className="text-xs mt-10 leading-relaxed" style={{ color: t.fgSubtle }}>

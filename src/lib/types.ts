@@ -317,3 +317,32 @@ export type IgHighlight = {
   sort_order: number;
   created_at: string;
 };
+
+/**
+ * Condição contratada por um cliente (fica em `partner_panels.contract`, que é
+ * privado — nunca em `partners.content`, que é público).
+ */
+export type ClientContract = {
+  plan: string;
+  /** Valor total do contrato, em reais. */
+  price: number;
+  /** Como foi pago, em texto livre: "12x sem juros no cartão (Mercado Pago)". */
+  payment: string;
+  /** Primeiro dia de vigência (YYYY-MM-DD). */
+  start: string;
+  months: number;
+  /** O que o plano entrega — vira a cláusula de entregas dos termos. */
+  deliverables: string[];
+  terms_version: string;
+};
+
+/** Registro oficial do aceite (tabela imutável `partner_terms_acceptances`). */
+export type TermsAcceptance = {
+  id: string;
+  partner_id: string;
+  terms_version: string;
+  terms_hash: string;
+  accepted_name: string;
+  accepted_document: string;
+  accepted_at: string;
+};
