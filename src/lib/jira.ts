@@ -10,11 +10,27 @@ import "server-only";
  *   - o material entregue entra como link na tarefa ("Adicionar link da web").
  *     A descrição da tarefa não é mostrada: é onde o time escreve à vontade.
  *
- * A URL do site é fixa de propósito: o .env compartilhado dos projetos tem um
- * JIRA_BASE_URL de outro site, e o mesmo token autentica nos dois.
+ * Credenciais: o site usa a conta de serviço (SAJIRA_*), para que o que o
+ * portal escreve no Jira saia em nome dela e o time receba notificação como
+ * observador. Token de conta de serviço só autentica pelo gateway
+ * api.atlassian.com — no endereço do site ele responde 401/404. O token
+ * pessoal (JIRA_*) fica de reserva, pelo endereço do site.
+ *
+ * Os endereços são fixos de propósito: o .env compartilhado dos projetos tem
+ * um JIRA_BASE_URL de outro site Atlassian.
  */
 
-const BASE = "https://tarefaspfc.atlassian.net";
+const CLOUD_ID = "6808672a-a23e-4f25-94dd-4ebc6f1106e2"; // tarefaspfc
+const SITE_URL = "https://tarefaspfc.atlassian.net";
+
+function credentials(): { base: string; email: string; token: string } | null {
+  const { SAJIRA_EMAIL, SAJIRA_TOKEN, JIRA_EMAIL, JIRA_TOKEN } = process.env;
+  if (SAJIRA_EMAIL && SAJIRA_TOKEN)
+    return { base: `https://api.atlassian.com/ex/jira/${CLOUD_ID}`, email: SAJIRA_EMAIL, token: SAJIRA_TOKEN };
+  if (JIRA_EMAIL && JIRA_TOKEN) return { base: SITE_URL, email: JIRA_EMAIL, token: JIRA_TOKEN };
+  return null;
+}
+
 const CLIENT_LABEL = "entrega-cliente";
 const EPIC_KEY = /^[A-Z][A-Z0-9]+-\d+$/;
 
@@ -31,29 +47,26 @@ export type ClientDelivery = {
   links: DeliveryLink[];
 };
 
-function authHeader(): string | null {
-  const email = process.env.JIRA_EMAIL;
-  const token = process.env.JIRA_TOKEN;
-  if (!email || !token) return null;
-  return `Basic ${Buffer.from(`${email}:${token}`).toString("base64")}`;
+function authHeader(c: { email: string; token: string }): string {
+  return `Basic ${Buffer.from(`${c.email}:${c.token}`).toString("base64")}`;
 }
 
 export function isJiraConfigured(): boolean {
-  return authHeader() !== null;
+  return credentials() !== null;
 }
 
 async function jira<T>(
   path: string,
   init: RequestInit & { revalidate?: number } = {}
 ): Promise<T | null> {
-  const auth = authHeader();
-  if (!auth) return null;
+  const c = credentials();
+  if (!c) return null;
   const { revalidate, ...rest } = init;
   try {
-    const res = await fetch(`${BASE}${path}`, {
+    const res = await fetch(`${c.base}${path}`, {
       ...rest,
       headers: {
-        Authorization: auth,
+        Authorization: authHeader(c),
         Accept: "application/json",
         "Content-Type": "application/json",
         ...rest.headers,
@@ -205,12 +218,21 @@ export async function createChatIssue(
 ): Promise<string | null> {
   if (!EPIC_KEY.test(epicKey)) return null;
   const project = epicKey.split("-")[0];
+  // Tipo pelo id, nunca pelo nome: o nome segue o idioma de quem chama — a
+  // conta de serviço vê "Task", o time vê "Tarefa".
+  const meta = await jira<{ issueTypes: { id: string; hierarchyLevel: number; subtask?: boolean }[] }>(
+    `/rest/api/3/project/${project}`,
+    { revalidate: 3600 }
+  );
+  const taskType = meta?.issueTypes.find((t) => t.hierarchyLevel === 0 && !t.subtask)?.id;
+  if (!taskType) return null;
+
   const created = await jira<{ key: string }>("/rest/api/3/issue", {
     method: "POST",
     body: JSON.stringify({
       fields: {
         project: { key: project },
-        issuetype: { name: "Tarefa" },
+        issuetype: { id: taskType },
         parent: { key: epicKey },
         summary: `Conversa com o cliente · ${clientName}`,
         labels: [CHAT_LABEL],
@@ -328,10 +350,12 @@ export async function fetchChatAttachment(
 ): Promise<Response | null> {
   const list = await getChatAttachments(issueKey);
   if (!list?.some((a) => a.id === attachmentId)) return null;
-  const auth = authHeader();
-  if (!auth) return null;
-  const res = await fetch(`${BASE}/rest/api/3/attachment/content/${attachmentId}`, {
-    headers: { Authorization: auth },
+  const c = credentials();
+  if (!c) return null;
+  // O Jira responde com redirect para um link assinado da mídia, que o fetch
+  // segue sozinho.
+  const res = await fetch(`${c.base}/rest/api/3/attachment/content/${attachmentId}`, {
+    headers: { Authorization: authHeader(c) },
     cache: "no-store",
   });
   return res.ok ? res : null;
