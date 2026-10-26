@@ -10,12 +10,23 @@ import { labelFor, TEMPERATURE_LABEL } from "@/lib/lead-triage";
 import { buildPartnerTheme, withAlpha } from "@/lib/brandkit";
 import { site } from "@/lib/config";
 import type { LeadTemperature, PartnerLead } from "@/lib/types";
-import { getPanelExtras, getTermsAcceptance, formatDocument } from "@/lib/client-area";
+import {
+  getPanelExtras,
+  getTermsAcceptance,
+  formatDocument,
+  getClientFiles,
+} from "@/lib/client-area";
 import { buildTerms } from "@/lib/terms";
-import { getClientDeliveries, type DeliveryStatus } from "@/lib/jira";
+import {
+  getClientDeliveries,
+  getChatAttachments,
+  getChatMessages,
+  type DeliveryStatus,
+} from "@/lib/jira";
+import MessageForm from "@/components/partner/MessageForm";
 import AcceptTermsForm from "@/components/partner/AcceptTermsForm";
 
-type Tab = "entregas" | "termos" | "resultados";
+type Tab = "entregas" | "mensagens" | "termos" | "resultados";
 
 const STATUS_LABEL: Record<DeliveryStatus, string> = {
   programado: "Programado",
@@ -96,11 +107,28 @@ export default async function PartnerPanelPage({
   const requested = searchParams.aba;
   const tab: Tab = !hasClientArea
     ? "resultados"
-    : requested === "termos" || requested === "entregas" || requested === "resultados"
+    : requested === "termos" ||
+        requested === "entregas" ||
+        requested === "mensagens" ||
+        requested === "resultados"
       ? requested
       : acceptance
         ? "entregas"
         : "termos";
+  // A conversa só é buscada na aba dela: são 3 chamadas ao Jira a cada visita.
+  const [messages, teamFiles, clientFiles] =
+    tab === "mensagens"
+      ? await Promise.all([
+          extras.jiraChat ? getChatMessages(extras.jiraChat) : [],
+          extras.jiraChat ? getChatAttachments(extras.jiraChat) : [],
+          getClientFiles(partner.id),
+        ])
+      : [null, null, []];
+  const fileHref = (id: string) =>
+    `/parceiros/${partner.slug}/painel/arquivo?token=${token}&id=${id}`;
+  const anexoHref = (id: string) =>
+    `/parceiros/${partner.slug}/painel/anexo?token=${token}&id=${id}`;
+
   const tabHref = (a: Tab) =>
     `/parceiros/${partner.slug}/painel?token=${token}&aba=${a}`;
   const summary = summarizePartnerLeads(leads);
@@ -160,6 +188,7 @@ export default async function PartnerPanelPage({
             {(
               [
                 ["entregas", "Entregas"],
+                ["mensagens", "Mensagens"],
                 ["termos", acceptance ? "Termos ✓" : "Termos"],
                 ["resultados", "Resultados"],
               ] as [Tab, string][]
@@ -308,6 +337,110 @@ export default async function PartnerPanelPage({
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Mensagens */}
+        {tab === "mensagens" && (
+          <section className="mt-6 flex flex-col gap-6">
+            <div className="p-6" style={card}>
+              <h2 className="text-lg" style={t.heading}>
+                Fale com a equipe do PFC
+              </h2>
+              <p className="text-sm mt-1 mb-5" style={{ color: t.fgMuted }}>
+                Mande aqui o material, as ideias e os dados dos imóveis. Fica
+                tudo organizado no mesmo lugar, e a equipe responde por aqui.
+              </p>
+              <MessageForm token={token} t={t} />
+            </div>
+
+            {messages === null ? (
+              <div className="p-6 text-center text-sm" style={{ ...card, color: t.fgMuted }}>
+                Não conseguimos carregar a conversa agora. Tente de novo em alguns minutos.
+              </div>
+            ) : messages.length > 0 ? (
+              <div className="flex flex-col gap-3">
+                {[...messages].reverse().map((m) => {
+                  const attached = clientFiles.filter((f) => f.jira_comment_id === m.id);
+                  // Na mensagem do cliente, a lista de anexos do Jira aponta para o
+                  // admin; aqui ele vê os botões de download dele, logo abaixo.
+                  const body = m.text.replace(/^📎 .*$/gm, "").trim();
+                  return (
+                    <div
+                      key={m.id}
+                      className="p-5"
+                      style={{
+                        ...card,
+                        borderColor: m.fromClient ? t.border : withAlpha(t.primary, "55"),
+                        backgroundColor: m.fromClient ? t.surface : withAlpha(t.primary, "0d"),
+                      }}
+                    >
+                      <div className="flex justify-between gap-3 text-xs" style={{ color: t.fgSubtle }}>
+                        <span className="font-bold" style={{ color: m.fromClient ? t.fg : t.primaryText }}>
+                          {m.fromClient ? "Você" : `${m.author} · PFC`}
+                        </span>
+                        <span>
+                          {new Date(m.createdAt).toLocaleString("pt-BR", {
+                            timeZone: "America/Sao_Paulo",
+                            day: "2-digit",
+                            month: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                      {body && body !== "Enviou arquivos." && (
+                        <p className="text-sm leading-relaxed mt-2 whitespace-pre-line" style={{ color: t.fg }}>
+                          {body}
+                        </p>
+                      )}
+                      {attached.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {attached.map((f) => (
+                            <a
+                              key={f.id}
+                              href={fileHref(f.id)}
+                              className="text-xs font-semibold px-3 py-1.5"
+                              style={{
+                                borderRadius: t.radius,
+                                backgroundColor: t.surfaceStrong,
+                                border: `1px solid ${t.border}`,
+                                color: t.fg,
+                              }}
+                            >
+                              📎 {f.file_name}
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            {teamFiles && teamFiles.length > 0 && (
+              <div className="p-6" style={card}>
+                <h3 className="font-bold" style={{ color: t.fg }}>
+                  Arquivos enviados pelo PFC
+                </h3>
+                <div className="mt-4 flex flex-col gap-2">
+                  {teamFiles.map((a) => (
+                    <a
+                      key={a.id}
+                      href={anexoHref(a.id)}
+                      className="flex justify-between gap-3 text-sm"
+                      style={{ color: t.primaryText }}
+                    >
+                      <span className="truncate">⬇ {a.fileName}</span>
+                      <span className="flex-shrink-0" style={{ color: t.fgSubtle }}>
+                        {dataBR(a.createdAt)}
+                      </span>
+                    </a>
+                  ))}
+                </div>
               </div>
             )}
           </section>

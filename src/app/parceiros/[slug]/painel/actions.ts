@@ -2,15 +2,21 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { getPartnerByPanelToken } from "@/lib/partner-leads";
 import {
+  createUploadTargets,
   formatDocument,
   getPanelExtras,
   isValidDocument,
+  linkFilesToComment,
   recordTermsAcceptance,
+  registerClientFiles,
+  setJiraChat,
 } from "@/lib/client-area";
 import { buildTerms } from "@/lib/terms";
-import { commentOnEpic } from "@/lib/jira";
+import { commentOnEpic, createChatIssue, postClientMessage } from "@/lib/jira";
+import { site } from "@/lib/config";
 
 export type AcceptTermsState = { error: string | null };
 
@@ -75,4 +81,67 @@ export async function acceptTermsAction(
   }
 
   redirect(`/parceiros/${partner.slug}/painel?token=${token}&aba=entregas`);
+}
+
+/* ---------------------------------------------------------------------
+ * Mensagens e arquivos
+ * ------------------------------------------------------------------- */
+
+export type UploadPrep =
+  | { ok: true; targets: { path: string; token: string; name: string }[] }
+  | { ok: false; error: string };
+
+/** 1º passo do envio: URLs assinadas para o navegador subir os arquivos. */
+export async function prepareUploadAction(
+  token: string,
+  files: { name: string; size: number; type: string }[]
+): Promise<UploadPrep> {
+  const partner = await getPartnerByPanelToken(token);
+  if (!partner) return { ok: false, error: "Link inválido." };
+  const targets = await createUploadTargets(partner.id, files);
+  return typeof targets === "string" ? { ok: false, error: targets } : { ok: true, targets };
+}
+
+/**
+ * 2º passo: registra os arquivos já enviados e publica a mensagem na
+ * conversa do Jira. A tarefa da conversa nasce na primeira mensagem.
+ */
+export async function sendMessageAction(
+  token: string,
+  text: string,
+  uploaded: { path: string; name: string }[]
+): Promise<{ ok: boolean; error: string | null }> {
+  const partner = await getPartnerByPanelToken(token);
+  if (!partner) return { ok: false, error: "Link inválido." };
+
+  const body = text.trim().slice(0, 5000);
+  if (!body && uploaded.length === 0)
+    return { ok: false, error: "Escreva uma mensagem ou anexe um arquivo." };
+
+  const extras = await getPanelExtras(partner.id);
+  if (!extras.jiraEpic) return { ok: false, error: "Mensagens ainda não liberadas. Fale com o PFC." };
+
+  let chat = extras.jiraChat;
+  if (!chat) {
+    chat = await createChatIssue(extras.jiraEpic, partner.name);
+    if (!chat) return { ok: false, error: "Não foi possível enviar agora. Tente de novo em instantes." };
+    await setJiraChat(partner.id, chat);
+  }
+
+  const files = await registerClientFiles(partner.id, uploaded);
+  if (!files) return { ok: false, error: "Algum arquivo não terminou de subir. Envie de novo." };
+
+  const commentId = await postClientMessage(
+    chat,
+    body || "Enviou arquivos.",
+    files.map((f) => ({ name: f.file_name, url: `${site.url}/admin/arquivos/${f.id}` }))
+  );
+  if (!commentId) return { ok: false, error: "Não foi possível enviar agora. Tente de novo em instantes." };
+
+  await linkFilesToComment(
+    files.map((f) => f.id),
+    commentId
+  );
+  revalidatePath(`/parceiros/${partner.slug}/painel`);
+  return { ok: true, error: null };
 }
