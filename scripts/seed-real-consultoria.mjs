@@ -6,9 +6,9 @@
  *
  * Pré-requisito: supabase/009_area_do_cliente.sql aplicado.
  *
- * A página nasce INATIVA: só vai ao ar quando o cliente mandar o kit da marca
- * (logo.png e cover.jpg em assets/partners/real-consultoria/ e WhatsApp
- * abaixo). O painel — termos e entregas — funciona desde já, porque o token
+ * A página nasce INATIVA: só vai ao ar com logo.png e WhatsApp (a capa é
+ * opcional — sem ela o hero usa o degradê da marca). Logo em
+ * assets/partners/real-consultoria/. O painel funciona desde já, porque o token
  * não depende de o parceiro estar ativo.
  */
 import fs from "node:fs";
@@ -68,6 +68,24 @@ const contract = {
   terms_version: "patrocinio-2026-10",
 };
 
+/**
+ * Página simples, sem capa (a fachada ainda não existe — o hero usa o
+ * degradê da marca) e sem triagem: os imóveis entram por QR com
+ * `?src=<imovel>` e o contato vai direto ao WhatsApp. Textos só com o que
+ * é fato conhecido; revisar com o cliente.
+ */
+const content = {
+  eyebrow: "Imóveis · Parceiro Fora da Caixa",
+  highlights: [
+    "CRECI 21.184-J",
+    "Imóveis apresentados no PFC",
+    "Atendimento direto no WhatsApp",
+  ],
+  whatsapp_message:
+    "Olá! Vi um imóvel da Real Consultoria no Fora da Caixa e quero mais informações.",
+  triage: { enabled: false },
+};
+
 const logo_url = await upload("logo.png");
 const cover_url = await upload("cover.jpg");
 const ready = Boolean(logo_url && WHATSAPP);
@@ -76,8 +94,10 @@ const row = {
   slug: SLUG,
   name: "Real Consultoria em Imóveis",
   plan: "Apoio",
-  tagline: null,
-  description: null,
+  tagline: "Consultoria para comprar e vender imóvel com quem entende do mercado.",
+  description:
+    "Consultoria imobiliária para quem quer comprar ou vender imóvel. Registrada no CRECI sob o nº 21.184-J.",
+  content,
   instagram: "realconsultoriaemimoveis",
   whatsapp: WHATSAPP || null,
   cta_url: WHATSAPP ? `https://wa.me/${WHATSAPP}` : null,
