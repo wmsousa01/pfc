@@ -82,7 +82,11 @@ const row = {
   whatsapp: WHATSAPP || null,
   cta_url: WHATSAPP ? `https://wa.me/${WHATSAPP}` : null,
   cta_label: WHATSAPP ? "Falar no WhatsApp" : null,
-  style_preset: "elegante",
+  // Paleta amostrada do logo (ver assets/partners/real-consultoria/brand.md)
+  accent: "#FF6600",
+  color_secondary: "#09095F",
+  color_bg: "#06063F",
+  style_preset: "corporativo",
   sections: [],
   active: ready,
 };
