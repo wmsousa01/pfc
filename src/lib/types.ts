@@ -37,6 +37,16 @@ export type PartnerFaq = { q: string; a: string };
 export type PartnerTriage = {
   /** Desliga o formulário e deixa só o CTA de WhatsApp. */
   enabled?: boolean;
+  /**
+   * Conjunto de perguntas. "refrigeracao" (padrão, Geladeiras e Cia) ou
+   * "imoveis" (imobiliária de alto padrão, com piso de valor — ver
+   * src/lib/lead-triage-imoveis.ts).
+   */
+  kind?: "refrigeracao" | "imoveis";
+  /** Textos do bloco ao lado do formulário (bullets). */
+  bullets?: string[];
+  /** Texto do botão principal que leva à triagem. */
+  cta?: string;
   title?: string;
   subtitle?: string;
   /** Tipos de negócio ofertados na 1ª pergunta (sobrescreve o padrão). */

@@ -7,6 +7,7 @@ import type {
   PartnerLeadStatus,
 } from "./types";
 import { scoreLead, type LeadScore, type TriageAnswers } from "./lead-triage";
+import { scoreImovelLead, type ImovelAnswers } from "./lead-triage-imoveis";
 
 export type LeadMeta = {
   /** 'qr' | 'direct' | 'ig' ... — de onde a visita veio. */
@@ -46,6 +47,45 @@ export async function createPartnerLead(
       channel: meta.channel ?? "site",
       source: meta.source ?? null,
       answers: { ...answers, reasons: result.reasons },
+    })
+    .select("*")
+    .maybeSingle();
+
+  return { lead: (data as PartnerLead) ?? null, result };
+}
+
+/**
+ * Lead da triagem de imóveis. Mesmas colunas, outro significado (ver
+ * lead-triage-imoveis.ts); `answers.kind` é o que o painel lê para rotular.
+ */
+export async function createImovelLead(
+  partner: Partner,
+  answers: ImovelAnswers,
+  meta: LeadMeta = {}
+): Promise<{ lead: PartnerLead | null; result: ReturnType<typeof scoreImovelLead> }> {
+  const result = scoreImovelLead(answers);
+
+  const admin = createAdminSupabase();
+  if (!admin) return { lead: null, result };
+
+  const { data } = await admin
+    .from("partner_leads")
+    .insert({
+      partner_id: partner.id,
+      name: answers.name.slice(0, 120),
+      whatsapp: answers.whatsapp,
+      city: answers.city.trim().slice(0, 120) || null,
+      business_type: answers.business_type || null,
+      need: answers.need || null,
+      mode: answers.mode || null,
+      quantity: null,
+      timeframe: answers.timeframe || null,
+      note: answers.note.trim().slice(0, 1000) || null,
+      score: result.score,
+      temperature: result.temperature,
+      channel: meta.channel ?? "site",
+      source: meta.source ?? null,
+      answers: { ...answers, kind: "imoveis", reasons: result.reasons },
     })
     .select("*")
     .maybeSingle();

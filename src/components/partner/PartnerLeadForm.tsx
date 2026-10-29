@@ -15,6 +15,7 @@ import {
   businessTypesFor,
   type TriageOption,
 } from "@/lib/lead-triage";
+import { imovelSteps, type ImovelOption } from "@/lib/lead-triage-imoveis";
 import type { PartnerTheme } from "@/lib/brandkit";
 import type { PartnerTriage } from "@/lib/types";
 import { WhatsAppIcon } from "@/components/icons";
@@ -23,6 +24,8 @@ import { CheckIcon } from "./icons";
 type Answers = {
   need: string;
   mode: string;
+  /** Só na triagem de imóveis. */
+  payment: string;
   business_type: string;
   quantity: string;
   timeframe: string;
@@ -43,6 +46,7 @@ const INITIAL_STATE: PartnerLeadState = {
 const EMPTY: Answers = {
   need: "",
   mode: "",
+  payment: "",
   business_type: "",
   quantity: "",
   timeframe: "",
@@ -56,7 +60,7 @@ type Step = {
   key: keyof Answers | "contato";
   question: string;
   helper?: string;
-  options?: TriageOption[];
+  options?: ImovelOption[];
   /** Opções em coluna (rótulos longos) em vez de grade. */
   stacked?: boolean;
 };
@@ -100,16 +104,24 @@ export default function PartnerLeadForm({
   theme,
   triage,
   source,
+  fallbackUrl,
+  fallbackLabel,
 }: {
   slug: string;
   partnerName: string;
   theme: PartnerTheme;
   triage?: PartnerTriage;
   source?: string;
+  /** Para onde levar quem fica fora do perfil (ex.: Instagram do parceiro). */
+  fallbackUrl?: string | null;
+  fallbackLabel?: string;
 }) {
   const [state, formAction] = useFormState(submitPartnerLead, INITIAL_STATE);
   const [answers, setAnswers] = useState<Answers>(EMPTY);
   const [step, setStep] = useState(0);
+  /** Mensagem de "fora do perfil" quando a resposta encerra a triagem. */
+  const [stopped, setStopped] = useState<string | null>(null);
+  const imoveis = triage?.kind === "imoveis";
   const [origin, setOrigin] = useState(source ?? "");
   const shellRef = useRef<HTMLDivElement>(null);
   const mounted = useRef(false);
@@ -122,7 +134,9 @@ export default function PartnerLeadForm({
     if (src) setOrigin(src.slice(0, 40));
   }, []);
 
-  const steps: Step[] = [
+  const steps: Step[] = imoveis
+    ? imovelSteps(answers.need, partnerName)
+    : [
     {
       key: "need",
       question: "O que você precisa gelar?",
@@ -170,8 +184,12 @@ export default function PartnerLeadForm({
     shellRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [step, state.ok]);
 
-  function pick(key: keyof Answers, value: string) {
+  function pick(key: keyof Answers, value: string, stop?: string) {
     setAnswers((prev) => ({ ...prev, [key]: value }));
+    if (stop) {
+      setStopped(stop);
+      return;
+    }
     // Uma pergunta respondida avança sozinha: menos atrito, menos abandono.
     setStep((s) => Math.min(s + 1, total - 1));
   }
@@ -248,6 +266,41 @@ export default function PartnerLeadForm({
         <p className="text-xs mt-5" style={{ color: theme.fgSubtle }}>
           Seu contato é usado só para este atendimento.
         </p>
+      </div>
+    );
+  }
+
+  /* ---------------------------- fora do perfil --------------------------- */
+  if (stopped) {
+    return (
+      <div ref={shellRef} className="p-7 sm:p-9 text-center" style={cardStyle}>
+        <p className="leading-relaxed max-w-md mx-auto" style={{ color: theme.fg }}>
+          {stopped}
+        </p>
+        <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+          {fallbackUrl && (
+            <a
+              href={fallbackUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-6 py-3.5 font-bold text-sm"
+              style={{ backgroundColor: theme.primary, color: theme.onPrimary, borderRadius: theme.radius }}
+            >
+              {fallbackLabel ?? "Conhecer o parceiro"}
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setStopped(null);
+              setAnswers((p) => ({ ...p, mode: "" }));
+            }}
+            className="px-6 py-3.5 text-sm font-semibold"
+            style={{ border: `1px solid ${theme.border}`, borderRadius: theme.radius, color: theme.fgMuted }}
+          >
+            ← Escolher outra faixa
+          </button>
+        </div>
       </div>
     );
   }
@@ -337,7 +390,7 @@ export default function PartnerLeadForm({
                   type="button"
                   role="radio"
                   aria-checked={selected}
-                  onClick={() => pick(key, o.value)}
+                  onClick={() => pick(key, o.value, o.stop)}
                   className="text-left p-4 transition-all hover:-translate-y-0.5"
                   style={{
                     borderRadius: Math.max(10, theme.radius - 4),
@@ -388,7 +441,7 @@ export default function PartnerLeadForm({
               name="city"
               value={answers.city}
               onChange={(e) => setAnswers((p) => ({ ...p, city: e.target.value }))}
-              placeholder="Cidade / bairro"
+              placeholder={imoveis ? "Cidade ou bairro de interesse" : "Cidade / bairro"}
               list="triage-cities"
               className="w-full px-4 py-3.5 text-sm outline-none placeholder:opacity-40"
               style={inputStyle}
@@ -405,7 +458,11 @@ export default function PartnerLeadForm({
               rows={3}
               value={answers.note}
               onChange={(e) => setAnswers((p) => ({ ...p, note: e.target.value }))}
-              placeholder="Quer contar mais alguma coisa? (opcional)"
+              placeholder={
+                imoveis
+                  ? "Quartos, condomínio, algo indispensável? (opcional)"
+                  : "Quer contar mais alguma coisa? (opcional)"
+              }
               className="w-full px-4 py-3.5 text-sm outline-none placeholder:opacity-40 resize-none"
               style={inputStyle}
             />
@@ -417,7 +474,16 @@ export default function PartnerLeadForm({
             )}
 
             <div className={canSubmit ? "" : "opacity-60"}>
-              <SubmitButton theme={theme} label="Quero minha proposta" />
+              <SubmitButton
+                theme={theme}
+                label={
+                  imoveis
+                    ? answers.need === "vender"
+                      ? "Quero avaliar meu imóvel"
+                      : "Quero ver as opções"
+                    : "Quero minha proposta"
+                }
+              />
             </div>
             <p className="text-xs text-center" style={{ color: theme.fgSubtle }}>
               Sem compromisso. Você fala direto com a {partnerName}.

@@ -10,6 +10,7 @@ import {
   summarizePartnerLeads,
 } from "@/lib/partner-leads";
 import { labelFor, TEMPERATURE_LABEL } from "@/lib/lead-triage";
+import { imovelLeadChips, isImovelLead } from "@/lib/lead-triage-imoveis";
 import { qrDataUrl, trackingUrl } from "@/lib/qr";
 import type { LeadTemperature } from "@/lib/types";
 
@@ -203,13 +204,16 @@ export default async function EditPartnerPage({
                         )}
                       </td>
                       <td className="px-3 py-3 text-white/60 text-xs leading-relaxed max-w-[280px]">
-                        {[
-                          labelFor("need", l.need),
-                          l.quantity ? `${l.quantity} un.` : null,
-                          labelFor("mode", l.mode),
-                          labelFor("timeframe", l.timeframe),
-                          labelFor("business_type", l.business_type),
-                        ]
+                        {(isImovelLead(l)
+                          ? imovelLeadChips(l)
+                          : [
+                              labelFor("need", l.need),
+                              l.quantity ? `${l.quantity} un.` : null,
+                              labelFor("mode", l.mode),
+                              labelFor("timeframe", l.timeframe),
+                              labelFor("business_type", l.business_type),
+                            ]
+                        )
                           .filter((x): x is string => Boolean(x) && x !== "—")
                           .join(" · ")}
                         {l.note && (

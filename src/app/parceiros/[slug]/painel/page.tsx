@@ -7,6 +7,7 @@ import {
   summarizePartnerLeads,
 } from "@/lib/partner-leads";
 import { labelFor, TEMPERATURE_LABEL } from "@/lib/lead-triage";
+import { imovelLeadChips, isImovelLead } from "@/lib/lead-triage-imoveis";
 import { buildPartnerTheme, withAlpha } from "@/lib/brandkit";
 import { site } from "@/lib/config";
 import type { LeadTemperature, PartnerLead } from "@/lib/types";
@@ -562,13 +563,16 @@ export default async function PartnerPanelPage({
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {[
-                    labelFor("need", l.need),
-                    l.quantity ? `${l.quantity}${l.quantity >= 3 ? "+" : ""} unidade${l.quantity > 1 ? "s" : ""}` : null,
-                    labelFor("mode", l.mode),
-                    labelFor("timeframe", l.timeframe),
-                    labelFor("business_type", l.business_type),
-                  ]
+                  {(isImovelLead(l)
+                    ? imovelLeadChips(l)
+                    : [
+                        labelFor("need", l.need),
+                        l.quantity ? `${l.quantity}${l.quantity >= 3 ? "+" : ""} unidade${l.quantity > 1 ? "s" : ""}` : null,
+                        labelFor("mode", l.mode),
+                        labelFor("timeframe", l.timeframe),
+                        labelFor("business_type", l.business_type),
+                      ]
+                  )
                     .filter((x): x is string => Boolean(x) && x !== "—")
                     .map((chip) => (
                       <span

@@ -2,9 +2,16 @@
 
 import { getPartnerBySlug } from "@/lib/partners";
 import {
+  createImovelLead,
   createPartnerLead,
   markLeadHandedOff,
 } from "@/lib/partner-leads";
+import {
+  buildImovelBrief,
+  isOutOfProfile,
+  MIN_PRICE_LABEL,
+  type ImovelAnswers,
+} from "@/lib/lead-triage-imoveis";
 import {
   buildLeadBrief,
   normalizeWhatsapp,
@@ -60,6 +67,37 @@ export async function submitPartnerLead(
   if (!name) return fail("Diga seu nome para a gente te chamar direito.");
   if (!whatsapp) return fail("Informe um WhatsApp válido com DDD.");
 
+  const source = String(formData.get("source") ?? "").trim() || null;
+  const field = (k: string) => String(formData.get(k) ?? "").trim();
+
+  if (partner.content?.triage?.kind === "imoveis") {
+    const imovel: ImovelAnswers = {
+      name: name.slice(0, 120),
+      whatsapp,
+      need: field("need"),
+      business_type: field("business_type"),
+      mode: field("mode"),
+      payment: field("need") === "vender" ? "" : field("payment"),
+      timeframe: field("timeframe"),
+      city: field("city"),
+      note: field("note"),
+    };
+    // O formulário já para antes do contato quando está abaixo do piso; isto
+    // segura quem montar o POST na mão.
+    if (isOutOfProfile(imovel)) return fail(`Atendemos imóveis a partir de ${MIN_PRICE_LABEL}.`);
+
+    const { lead, result } = await createImovelLead(partner, imovel, { source });
+    const brief = buildImovelBrief(imovel, result, partner.name, site.brand, source);
+    const destination = partner.whatsapp?.replace(/\D/g, "") || whatsappNumber;
+    return {
+      ok: true,
+      error: null,
+      waUrl: `https://wa.me/${destination}?text=${encodeURIComponent(brief)}`,
+      temperature: result.temperature,
+      leadId: lead?.id ?? null,
+    };
+  }
+
   const qtyRaw = String(formData.get("quantity") ?? "").trim();
   const qty = Number.parseInt(qtyRaw, 10);
 
@@ -74,8 +112,6 @@ export async function submitPartnerLead(
     city: String(formData.get("city") ?? "").trim(),
     note: String(formData.get("note") ?? "").trim(),
   };
-
-  const source = String(formData.get("source") ?? "").trim() || null;
 
   const { lead, result } = await createPartnerLead(partner, answers, { source });
 

@@ -70,6 +70,10 @@ export default async function PartnerPage({
   const ctaIsWhatsapp = /(^|\/\/)(wa\.me|api\.whatsapp\.com)\//.test(partner.cta_url ?? "");
   const primaryCtaUrl = ctaIsWhatsapp && waHref ? waHref : partner.cta_url;
   const showWaButton = Boolean(waHref) && !(ctaIsWhatsapp && !triageOn);
+  // Rótulos do CTA da triagem: imóveis não pedem "proposta", pedem opções.
+  const imoveis = triage?.kind === "imoveis";
+  const triageCta = triage?.cta ?? (imoveis ? "Encontrar meu imóvel" : "Pedir minha proposta");
+  const triageCtaShort = imoveis ? "Ver opções" : "Pedir proposta";
 
   // Botões do bloco de contato: a lista editada em /admin ou, na falta dela,
   // os três derivados do cadastro (WhatsApp, Instagram, site).
@@ -225,7 +229,7 @@ export default async function PartnerPage({
                     boxShadow: `0 14px 36px ${withAlpha(t.primary, "55")}`,
                   }}
                 >
-                  Pedir minha proposta
+                  {triageCta}
                   <ArrowRight className="w-4 h-4" />
                 </a>
               ) : (
@@ -511,11 +515,13 @@ export default async function PartnerPage({
                   {partner.name} — sem precisar repetir tudo no WhatsApp.
                 </p>
                 <ul className="mt-6 flex flex-col gap-3">
-                  {[
-                    "Atendimento de quem entende do seu tipo de negócio",
-                    "Indicação do equipamento certo para o seu espaço",
-                    "Resposta direta no seu WhatsApp",
-                  ].map((item) => (
+                  {(
+                    triage?.bullets ?? [
+                      "Atendimento de quem entende do seu tipo de negócio",
+                      "Indicação do equipamento certo para o seu espaço",
+                      "Resposta direta no seu WhatsApp",
+                    ]
+                  ).map((item) => (
                     <li
                       key={item}
                       className="flex items-start gap-2.5 text-sm"
@@ -535,6 +541,8 @@ export default async function PartnerPage({
                 partnerName={partner.name}
                 theme={t}
                 triage={triage}
+                fallbackUrl={partner.instagram ? `https://instagram.com/${partner.instagram}` : null}
+                fallbackLabel={partner.instagram ? `Ver @${partner.instagram}` : undefined}
               />
             </div>
           </div>
@@ -722,7 +730,7 @@ export default async function PartnerPage({
               borderRadius: t.radius,
             }}
           >
-            Pedir proposta
+            {triageCtaShort}
           </a>
           {waHref && (
             <a
