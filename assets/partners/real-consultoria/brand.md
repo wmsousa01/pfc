@@ -29,6 +29,6 @@ o arquivo original em vetor (PDF, AI, SVG), pedir.
 
 ## Falta
 
-- [ ] WhatsApp de atendimento
+- [x] WhatsApp de atendimento: (19) 99756-5350
 - [ ] Foto de capa (fachada, equipe ou imóvel de destaque)
 - [ ] Cidade/região de atuação e um parágrafo sobre a empresa

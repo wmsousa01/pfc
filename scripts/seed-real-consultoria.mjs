@@ -30,7 +30,7 @@ const SLUG = "real-consultoria";
 const BUCKET = "partner-assets";
 const dir = path.join("assets", "partners", SLUG);
 /** Preencher quando o cliente mandar: só dígitos, com DDI. */
-const WHATSAPP = "";
+const WHATSAPP = "5519997565350";
 const JIRA_EPIC = "PROD-65";
 
 const MIME = { ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml" };
