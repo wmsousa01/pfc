@@ -69,21 +69,34 @@ const contract = {
 };
 
 /**
- * Página simples, sem capa (não há foto da fachada — o hero usa o degradê
- * da marca) e sem triagem: os imóveis entram por QR com `?src=<imovel>` e o
- * contato vai direto ao WhatsApp. Textos só com o que o cliente confirmou.
+ * Página sem capa (não há foto da fachada — o hero usa o degradê da marca)
+ * e com a triagem de imóveis de alto padrão: piso de R$ 500 mil. Quem está
+ * abaixo do piso para no formulário e não chega ao WhatsApp do corretor.
+ * Os imóveis divulgados no PFC entram por QR com `?src=<imovel>`, e o nome
+ * do imóvel vai junto na mensagem. Ver src/lib/lead-triage-imoveis.ts.
  */
 const content = {
-  eyebrow: "Imóveis em Mogi Guaçu e região",
+  eyebrow: "Imóveis de alto padrão · Mogi Guaçu e região",
   highlights: [
+    "Imóveis a partir de R$ 500 mil",
     "No mercado desde 2009",
     "CRECI 21.184-J",
-    "Imóveis apresentados no PFC",
-    "Atendimento direto no WhatsApp",
   ],
   whatsapp_message:
     "Olá! Vi um imóvel da Real Consultoria no Fora da Caixa e quero mais informações.",
-  triage: { enabled: false },
+  triage: {
+    enabled: true,
+    kind: "imoveis",
+    cta: "Encontrar meu imóvel",
+    title: "Seleção sob medida",
+    subtitle: "Diga o que procura e receba só os imóveis que fazem sentido para você",
+    bullets: [
+      "Imóveis de alto padrão, a partir de R$ 500 mil",
+      "Opções filtradas pelo seu perfil, orçamento e prazo",
+      "Atendimento direto com o consultor da Real, no seu WhatsApp",
+    ],
+    cities: ["Mogi Guaçu", "Mogi Mirim", "Itapira", "Estiva Gerbi", "Holambra", "Outra cidade"],
+  },
 };
 
 const logo_url = await upload("logo.png");
@@ -94,7 +107,7 @@ const row = {
   slug: SLUG,
   name: "Real Consultoria em Imóveis",
   plan: "Apoio",
-  tagline: "Desde 2009 no mercado imobiliário de Mogi Guaçu e região.",
+  tagline: "Seu próximo imóvel de alto padrão em Mogi Guaçu e região.",
   description:
     "Somos uma empresa que desde 2009 atua no mercado imobiliário de Mogi Guaçu e região. Consultoria para quem quer comprar ou vender imóvel, registrada no CRECI sob o nº 21.184-J.",
   city: "Mogi Guaçu/SP",
