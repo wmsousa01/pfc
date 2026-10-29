@@ -69,14 +69,14 @@ const contract = {
 };
 
 /**
- * Página simples, sem capa (a fachada ainda não existe — o hero usa o
- * degradê da marca) e sem triagem: os imóveis entram por QR com
- * `?src=<imovel>` e o contato vai direto ao WhatsApp. Textos só com o que
- * é fato conhecido; revisar com o cliente.
+ * Página simples, sem capa (não há foto da fachada — o hero usa o degradê
+ * da marca) e sem triagem: os imóveis entram por QR com `?src=<imovel>` e o
+ * contato vai direto ao WhatsApp. Textos só com o que o cliente confirmou.
  */
 const content = {
-  eyebrow: "Imóveis · Parceiro Fora da Caixa",
+  eyebrow: "Imóveis em Mogi Guaçu e região",
   highlights: [
+    "No mercado desde 2009",
     "CRECI 21.184-J",
     "Imóveis apresentados no PFC",
     "Atendimento direto no WhatsApp",
@@ -94,9 +94,10 @@ const row = {
   slug: SLUG,
   name: "Real Consultoria em Imóveis",
   plan: "Apoio",
-  tagline: "Consultoria para comprar e vender imóvel com quem entende do mercado.",
+  tagline: "Desde 2009 no mercado imobiliário de Mogi Guaçu e região.",
   description:
-    "Consultoria imobiliária para quem quer comprar ou vender imóvel. Registrada no CRECI sob o nº 21.184-J.",
+    "Somos uma empresa que desde 2009 atua no mercado imobiliário de Mogi Guaçu e região. Consultoria para quem quer comprar ou vender imóvel, registrada no CRECI sob o nº 21.184-J.",
+  city: "Mogi Guaçu/SP",
   content,
   instagram: "realconsultoriaemimoveis",
   whatsapp: WHATSAPP || null,

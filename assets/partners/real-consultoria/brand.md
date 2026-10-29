@@ -30,5 +30,5 @@ o arquivo original em vetor (PDF, AI, SVG), pedir.
 ## Falta
 
 - [x] WhatsApp de atendimento: (19) 99756-5350
-- [ ] Foto de capa (fachada, equipe ou imóvel de destaque)
-- [ ] Cidade/região de atuação e um parágrafo sobre a empresa
+- [x] Sobre a empresa: "desde 2009 atua no mercado imobiliário de Mogi Guaçu e Região" (29/10/2026)
+- [ ] Foto de capa — não há foto da fachada; a página usa o degradê da marca. Uma foto de imóvel de destaque ou da equipe serviria.
