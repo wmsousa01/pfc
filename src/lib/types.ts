@@ -47,6 +47,12 @@ export type PartnerTriage = {
   bullets?: string[];
   /** Texto do botão principal que leva à triagem. */
   cta?: string;
+  /**
+   * Só em "imoveis": o que fazer com quem está abaixo do piso de valor.
+   * "refer" (padrão) deixa passar marcado para encaminhamento; "block" para
+   * o formulário sem gerar lead.
+   */
+  below_floor?: "refer" | "block";
   title?: string;
   subtitle?: string;
   /** Tipos de negócio ofertados na 1ª pergunta (sobrescreve o padrão). */

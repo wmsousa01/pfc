@@ -135,7 +135,7 @@ export default function PartnerLeadForm({
   }, []);
 
   const steps: Step[] = imoveis
-    ? imovelSteps(answers.need, partnerName)
+    ? imovelSteps(answers.need, partnerName, triage?.below_floor)
     : [
     {
       key: "need",

@@ -3,9 +3,12 @@
  * "imoveis"). Módulo PURO, como o lead-triage: o formulário monta as
  * perguntas daqui e a server action pontua com as mesmas regras.
  *
- * O FILTRO: quem procura (ou quer vender) imóvel abaixo do piso não vira
- * lead — o formulário para nessa pergunta e explica, sem levar ao WhatsApp
- * do corretor. É o que poupa o tempo dele, que só atende a partir do piso.
+ * O PISO (R$ 500 mil) tem dois modos, em content.triage.below_floor:
+ *   - "refer" (padrão): quem está abaixo do piso segue normalmente e chega
+ *     ao corretor marcado "abaixo do piso — avaliar encaminhamento". Pedido
+ *     da Real em 10/2026: lead de R$ 250–300 mil vai para outro parceiro dela;
+ *   - "block": o formulário para nessa pergunta e explica, sem levar ao
+ *     WhatsApp do corretor nem gravar lead.
  *
  * Gravação: reaproveita as colunas de `partner_leads` (need = intenção,
  * business_type = tipo de imóvel, mode = faixa de valor, timeframe = prazo)
@@ -40,12 +43,24 @@ export const PROPERTY_TYPES: ImovelOption[] = [
 
 const OUT_OF_PROFILE = `A Real Consultoria trabalha com imóveis a partir de ${MIN_PRICE_LABEL}. Para valores abaixo disso, ela não é a melhor indicação — mas obrigado pelo interesse!`;
 
-export const PRICE_RANGES: ImovelOption[] = [
-  { value: "500k_1mi", label: "R$ 500 mil a 1 milhão" },
-  { value: "1mi_2mi", label: "R$ 1 a 2 milhões" },
-  { value: "2mi_mais", label: "Acima de R$ 2 milhões" },
-  { value: "ate_500k", label: `Até ${MIN_PRICE_LABEL}`, stop: OUT_OF_PROFILE },
-];
+export type BelowFloor = "refer" | "block";
+
+export const BELOW_FLOOR = "ate_500k";
+
+export function priceRanges(belowFloor: BelowFloor = "refer"): ImovelOption[] {
+  return [
+    { value: "500k_1mi", label: "R$ 500 mil a 1 milhão" },
+    { value: "1mi_2mi", label: "R$ 1 a 2 milhões" },
+    { value: "2mi_mais", label: "Acima de R$ 2 milhões" },
+    {
+      value: BELOW_FLOOR,
+      label: `Até ${MIN_PRICE_LABEL}`,
+      stop: belowFloor === "block" ? OUT_OF_PROFILE : undefined,
+    },
+  ];
+}
+
+export const PRICE_RANGES = priceRanges();
 
 export const PAYMENTS: ImovelOption[] = [
   { value: "a_vista", label: "À vista", hint: "Recurso disponível" },
@@ -83,7 +98,11 @@ export type ImovelStep = {
 };
 
 /** Perguntas na ordem; quem vende não responde forma de pagamento. */
-export function imovelSteps(intent: string, partnerName: string): ImovelStep[] {
+export function imovelSteps(
+  intent: string,
+  partnerName: string,
+  belowFloor: BelowFloor = "refer"
+): ImovelStep[] {
   const selling = intent === "vender";
   const steps: ImovelStep[] = [
     { key: "need", question: "O que você quer fazer?", options: INTENTS },
@@ -97,7 +116,7 @@ export function imovelSteps(intent: string, partnerName: string): ImovelStep[] {
       key: "mode",
       question: selling ? "Quanto vale o seu imóvel, mais ou menos?" : "Qual a faixa de valor?",
       helper: "Uma faixa aproximada já ajuda a separar as opções certas.",
-      options: PRICE_RANGES,
+      options: priceRanges(belowFloor),
       stacked: true,
     },
   ];
@@ -137,8 +156,16 @@ export type ImovelAnswers = {
   note: string;
 };
 
-export function isOutOfProfile(a: Pick<ImovelAnswers, "mode">): boolean {
-  return PRICE_RANGES.find((o) => o.value === a.mode)?.stop !== undefined;
+export function isBelowFloor(a: Pick<ImovelAnswers, "mode">): boolean {
+  return a.mode === BELOW_FLOOR;
+}
+
+/** Só bloqueia no modo "block"; no "refer" o lead segue marcado. */
+export function isOutOfProfile(
+  a: Pick<ImovelAnswers, "mode">,
+  belowFloor: BelowFloor = "refer"
+): boolean {
+  return belowFloor === "block" && isBelowFloor(a);
 }
 
 const TIMEFRAME_POINTS: Record<string, number> = { "30d": 35, "3m": 25, "6m": 14, pesquisando: 3 };
@@ -160,10 +187,11 @@ export function scoreImovelLead(a: ImovelAnswers): {
   temperature: LeadTemperature;
   reasons: string[];
 } {
-  if (isOutOfProfile(a)) {
-    return { score: 0, temperature: "frio", reasons: [`Abaixo de ${MIN_PRICE_LABEL}`] };
-  }
   const reasons: string[] = [];
+  // Abaixo do piso a nota segue as mesmas regras (um comprador à vista de
+  // R$ 300 mil em 30 dias é quente para quem recebe o encaminhamento), só
+  // não ganha pontos de faixa — e leva a marca para o corretor decidir.
+  if (isBelowFloor(a)) reasons.push(`Abaixo de ${MIN_PRICE_LABEL}: avaliar encaminhamento`);
   let score = 0;
 
   score += TIMEFRAME_POINTS[a.timeframe] ?? 0;
@@ -223,6 +251,7 @@ export function buildImovelBrief(
     `*Imóvel:* ${imovelLabel("business_type", a.business_type)}`,
     `*${selling ? "Valor estimado" : "Faixa"}:* ${imovelLabel("mode", a.mode)}`,
   ];
+  if (isBelowFloor(a)) lines.splice(1, 0, `⚠️ _Abaixo de ${MIN_PRICE_LABEL} — avaliar encaminhamento_`);
   if (!selling) lines.push(`*Pagamento:* ${imovelLabel("payment", a.payment)}`);
   lines.push(`*Prazo:* ${imovelLabel("timeframe", a.timeframe)}`);
   if (a.city.trim()) lines.push(`*Região:* ${a.city.trim()}`);
@@ -237,6 +266,7 @@ export function buildImovelBrief(
 export function imovelLeadChips(l: PartnerLead): string[] {
   const payment = typeof l.answers?.payment === "string" ? l.answers.payment : "";
   return [
+    l.mode === BELOW_FLOOR ? "Encaminhar" : null,
     imovelLabel("need", l.need),
     imovelLabel("business_type", l.business_type),
     imovelLabel("mode", l.mode),

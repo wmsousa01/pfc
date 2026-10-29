@@ -82,9 +82,9 @@ export async function submitPartnerLead(
       city: field("city"),
       note: field("note"),
     };
-    // O formulário já para antes do contato quando está abaixo do piso; isto
-    // segura quem montar o POST na mão.
-    if (isOutOfProfile(imovel)) return fail(`Atendemos imóveis a partir de ${MIN_PRICE_LABEL}.`);
+    // No modo "block" o formulário já para antes do contato; isto segura quem
+    // montar o POST na mão.
+    if (isOutOfProfile(imovel, partner.content?.triage?.below_floor)) return fail(`Atendemos imóveis a partir de ${MIN_PRICE_LABEL}.`);
 
     const { lead, result } = await createImovelLead(partner, imovel, { source });
     const brief = buildImovelBrief(imovel, result, partner.name, site.brand, source);

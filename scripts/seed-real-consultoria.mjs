@@ -71,7 +71,8 @@ const contract = {
 /**
  * Página sem capa (não há foto da fachada — o hero usa o degradê da marca)
  * e com a triagem de imóveis de alto padrão: piso de R$ 500 mil. Quem está
- * abaixo do piso para no formulário e não chega ao WhatsApp do corretor.
+ * abaixo do piso passa marcado "avaliar encaminhamento" — a Real repassa
+ * esses clientes a outro parceiro dela (pedido do Eduardo, 29/10/2026).
  * Os imóveis divulgados no PFC entram por QR com `?src=<imovel>`, e o nome
  * do imóvel vai junto na mensagem. Ver src/lib/lead-triage-imoveis.ts.
  */
@@ -87,6 +88,7 @@ const content = {
   triage: {
     enabled: true,
     kind: "imoveis",
+    below_floor: "refer",
     cta: "Encontrar meu imóvel",
     title: "Seleção sob medida",
     subtitle: "Diga o que procura e receba só os imóveis que fazem sentido para você",
