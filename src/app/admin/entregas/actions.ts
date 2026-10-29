@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import {
   addDeliveryLink,
@@ -14,6 +15,8 @@ import { CURRENT_TERMS_VERSION } from "@/lib/terms";
 import type { ClientContract } from "@/lib/types";
 
 const PATH = "/admin/entregas";
+// "layout": a lista e a página de cada cliente mostram as mesmas entregas.
+const refresh = () => revalidatePath(PATH, "layout");
 const ISSUE_KEY = /^[A-Z][A-Z0-9]+-\d+$/;
 
 function str(form: FormData, key: string): string {
@@ -30,7 +33,7 @@ export async function createDeliveryAction(form: FormData): Promise<void> {
   const title = str(form, "title").slice(0, 200);
   if (!ISSUE_KEY.test(epic) || title.length < 3) return;
   await createDelivery(epic, title, isoDate(str(form, "due")));
-  revalidatePath(PATH);
+  refresh();
 }
 
 /** Marca como entregue; se vier um link, anexa antes, para o cliente já ver. */
@@ -41,7 +44,7 @@ export async function deliverAction(form: FormData): Promise<void> {
   const url = str(form, "url");
   if (url) await addDeliveryLink(key, url, str(form, "link_title"));
   await transitionTo(key, "done");
-  revalidatePath(PATH);
+  refresh();
 }
 
 export async function addLinkAction(form: FormData): Promise<void> {
@@ -50,7 +53,7 @@ export async function addLinkAction(form: FormData): Promise<void> {
   const url = str(form, "url");
   if (!ISSUE_KEY.test(key) || !url) return;
   await addDeliveryLink(key, url, str(form, "link_title"));
-  revalidatePath(PATH);
+  refresh();
 }
 
 export async function reopenAction(form: FormData): Promise<void> {
@@ -58,7 +61,7 @@ export async function reopenAction(form: FormData): Promise<void> {
   const key = str(form, "key");
   if (!ISSUE_KEY.test(key)) return;
   await transitionTo(key, "new");
-  revalidatePath(PATH);
+  refresh();
 }
 
 export async function rotateTokenAction(form: FormData): Promise<void> {
@@ -67,7 +70,7 @@ export async function rotateTokenAction(form: FormData): Promise<void> {
   if (form.get("confirm") !== "on") return;
   const partnerId = str(form, "partner_id");
   if (partnerId) await rotatePanelToken(partnerId);
-  revalidatePath(PATH);
+  refresh();
 }
 
 /**
@@ -104,5 +107,6 @@ export async function activateClientAreaAction(form: FormData): Promise<void> {
   ]);
   if (!epic) return;
   await setClientContract(partner.id, epic, contract);
-  revalidatePath(PATH);
+  refresh();
+  redirect(`${PATH}/${partner.slug}`);
 }
