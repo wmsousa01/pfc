@@ -111,13 +111,17 @@ type RemoteLink = { object?: { url?: string; title?: string } };
  * Devolve null quando o Jira não responde — a página mostra aviso, não vazio.
  */
 export async function getClientDeliveries(
-  epicKey: string
+  epicKey: string,
+  opts: { fresh?: boolean } = {}
 ): Promise<ClientDelivery[] | null> {
   if (!EPIC_KEY.test(epicKey)) return null;
+  // O portal do cliente tolera 60s de atraso; o admin, logo depois de mexer
+  // numa entrega, precisa ver o estado novo.
+  const revalidate = opts.fresh ? undefined : 60;
 
   const found = await jira<SearchResult>("/rest/api/3/search/jql", {
     method: "POST",
-    revalidate: 60,
+    revalidate,
     body: JSON.stringify({
       jql: `parent = ${epicKey} AND labels = "${CLIENT_LABEL}" ORDER BY duedate ASC, created ASC`,
       fields: ["summary", "status", "duedate", "resolutiondate"],
@@ -130,7 +134,7 @@ export async function getClientDeliveries(
     found.issues.map(async (i) => {
       const remote =
         (await jira<RemoteLink[]>(`/rest/api/3/issue/${i.key}/remotelink`, {
-          revalidate: 60,
+          revalidate,
         })) ?? [];
       const links = remote
         .map((r) => ({ title: r.object?.title ?? "", url: r.object?.url ?? "" }))
@@ -359,4 +363,111 @@ export async function fetchChatAttachment(
     cache: "no-store",
   });
   return res.ok ? res : null;
+}
+
+/* ---------------------------------------------------------------------
+ * Gestão das entregas pelo admin (/admin/entregas)
+ * ------------------------------------------------------------------- */
+
+/** Id do tipo de tarefa (ou epic) do projeto — pelo id, nunca pelo nome. */
+async function issueTypeId(project: string, level: 0 | 1): Promise<string | null> {
+  const meta = await jira<{ issueTypes: { id: string; hierarchyLevel: number; subtask?: boolean }[] }>(
+    `/rest/api/3/project/${project}`,
+    { revalidate: 3600 }
+  );
+  return meta?.issueTypes.find((t) => t.hierarchyLevel === level && !t.subtask)?.id ?? null;
+}
+
+function paragraphs(lines: string[]) {
+  return {
+    type: "doc",
+    version: 1,
+    content: lines.map((text) => ({ type: "paragraph", content: [{ type: "text", text }] })),
+  };
+}
+
+/** Epic novo de cliente no PROD. Devolve a chave. */
+export async function createClientEpic(clientName: string, plan: string, notes: string[]): Promise<string | null> {
+  const type = await issueTypeId("PROD", 1);
+  if (!type) return null;
+  const created = await jira<{ key: string }>("/rest/api/3/issue", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        project: { key: "PROD" },
+        issuetype: { id: type },
+        summary: `Cliente · ${clientName} — Plano ${plan}`,
+        labels: ["cliente"],
+        description: paragraphs([
+          ...notes,
+          "Tarefas filhas com a label entrega-cliente aparecem para o cliente no portal, com status, data e os links da web anexados. Tarefa sem essa label é interna.",
+        ]),
+      },
+    }),
+  });
+  return created?.key ?? null;
+}
+
+export async function createDelivery(
+  epicKey: string,
+  title: string,
+  dueDate: string | null
+): Promise<string | null> {
+  if (!EPIC_KEY.test(epicKey)) return null;
+  const type = await issueTypeId(epicKey.split("-")[0], 0);
+  if (!type) return null;
+  const created = await jira<{ key: string }>("/rest/api/3/issue", {
+    method: "POST",
+    body: JSON.stringify({
+      fields: {
+        project: { key: epicKey.split("-")[0] },
+        issuetype: { id: type },
+        parent: { key: epicKey },
+        summary: title,
+        labels: [CLIENT_LABEL],
+        ...(dueDate ? { duedate: dueDate } : {}),
+      },
+    }),
+  });
+  return created?.key ?? null;
+}
+
+export async function addDeliveryLink(issueKey: string, url: string, title: string): Promise<boolean> {
+  if (!EPIC_KEY.test(issueKey) || !/^https?:\/\//i.test(url)) return false;
+  const res = await jira(`/rest/api/3/issue/${issueKey}/remotelink`, {
+    method: "POST",
+    body: JSON.stringify({ object: { url, title: title || url } }),
+  });
+  return res !== null;
+}
+
+/** Move para a primeira transição cuja categoria de destino seja a pedida. */
+export async function transitionTo(
+  issueKey: string,
+  category: "done" | "new"
+): Promise<boolean> {
+  if (!EPIC_KEY.test(issueKey)) return false;
+  const list = await jira<{ transitions: { id: string; to: { statusCategory: { key: string } } }[] }>(
+    `/rest/api/3/issue/${issueKey}/transitions`
+  );
+  const t = list?.transitions.find((x) => x.to.statusCategory.key === category);
+  if (!t) return false;
+  const res = await jira(`/rest/api/3/issue/${issueKey}/transitions`, {
+    method: "POST",
+    body: JSON.stringify({ transition: { id: t.id } }),
+  });
+  return res !== null;
+}
+
+/** A conversa tem mensagem do cliente sem resposta (label responder-cliente)? */
+export async function chatAwaitingReply(chatKey: string): Promise<boolean> {
+  if (!EPIC_KEY.test(chatKey)) return false;
+  const res = await jira<{ fields: { labels?: string[] } }>(
+    `/rest/api/3/issue/${chatKey}?fields=labels`
+  );
+  return res?.fields.labels?.includes(REPLY_LABEL) ?? false;
+}
+
+export function jiraBrowseUrl(key: string): string {
+  return `${SITE_URL}/browse/${key}`;
 }

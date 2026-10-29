@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import {
   getPartnerByPanelToken,
   getPartnerLeads,
@@ -9,7 +8,8 @@ import {
 import { labelFor, TEMPERATURE_LABEL } from "@/lib/lead-triage";
 import { imovelLeadChips, isImovelLead } from "@/lib/lead-triage-imoveis";
 import { buildPartnerTheme, withAlpha } from "@/lib/brandkit";
-import { site } from "@/lib/config";
+import { site, whatsapp } from "@/lib/config";
+import { getPartnerBySlug } from "@/lib/partners";
 import type { LeadTemperature, PartnerLead } from "@/lib/types";
 import {
   getPanelExtras,
@@ -87,7 +87,13 @@ export default async function PartnerPanelPage({
   const partner = await getPartnerByPanelToken(token);
 
   // Token inválido ou de outro parceiro: 404, sem pistas.
-  if (!partner || partner.slug !== params.slug) notFound();
+  // Link sem token, antigo (token trocado) ou de outro parceiro: em vez de
+  // 404, uma saída para pedir o link novo. Não revela nada além do nome que
+  // a página pública do parceiro já mostra.
+  if (!partner || partner.slug !== params.slug) {
+    const known = await getPartnerBySlug(params.slug);
+    return <LostLink partnerName={known?.name ?? null} />;
+  }
 
   const [leads, clicks, extras] = await Promise.all([
     getPartnerLeads(partner.id),
@@ -610,6 +616,34 @@ export default async function PartnerPanelPage({
           Precisa de um novo link ou quer incluir alguém da sua equipe? Fale com
           o time do {site.brand}.
         </p>
+      </div>
+    </main>
+  );
+}
+
+function LostLink({ partnerName }: { partnerName: string | null }) {
+  const msg = partnerName
+    ? `Olá! Sou da ${partnerName} e perdi o link da minha área de cliente no ${site.brand}. Pode me mandar de novo?`
+    : `Olá! Perdi o link da minha área de cliente no ${site.brand}. Pode me mandar de novo?`;
+  return (
+    <main className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center px-4">
+      <div className="max-w-md w-full text-center bg-[#111] border border-[#222] rounded-2xl p-8">
+        <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold-500">
+          Área do cliente · {site.brand}
+        </span>
+        <h1 className="text-2xl font-bold mt-3">Este link não abre mais</h1>
+        <p className="text-white/55 text-sm leading-relaxed mt-3">
+          O endereço da área do cliente é pessoal. Se você perdeu o link ou ele
+          foi trocado, a gente manda um novo pelo WhatsApp.
+        </p>
+        <a
+          href={whatsapp(msg)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-primary inline-block mt-6 px-6 py-3.5 rounded-xl font-bold"
+        >
+          Pedir meu link no WhatsApp
+        </a>
       </div>
     </main>
   );

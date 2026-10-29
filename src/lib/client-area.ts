@@ -269,3 +269,103 @@ export async function signedDownloadUrl(file: ClientFile): Promise<string | null
     .createSignedUrl(file.storage_path, 300, { download: file.file_name });
   return data?.signedUrl ?? null;
 }
+
+/* ---------------------------------------------------------------------
+ * Admin: patrocinadores com área do cliente (/admin/entregas)
+ * ------------------------------------------------------------------- */
+
+export type ClientAccount = {
+  partnerId: string;
+  name: string;
+  slug: string;
+  whatsapp: string | null;
+  active: boolean;
+  token: string;
+  jiraEpic: string | null;
+  jiraChat: string | null;
+  contract: ClientContract;
+  acceptedAt: string | null;
+  acceptedBy: string | null;
+};
+
+type PanelRow = {
+  partner_id: string;
+  token: string;
+  jira_epic: string | null;
+  jira_chat: string | null;
+  contract: ClientContract | null;
+  partners: { name: string; slug: string; whatsapp: string | null; active: boolean } | null;
+};
+
+export async function getClientAccounts(): Promise<ClientAccount[]> {
+  const admin = createAdminSupabase();
+  if (!admin) return [];
+  const { data } = await admin
+    .from("partner_panels")
+    .select("partner_id, token, jira_epic, jira_chat, contract, partners(name, slug, whatsapp, active)")
+    .not("contract", "is", null);
+  const rows = ((data ?? []) as unknown as PanelRow[]).filter((r) => r.contract && r.partners);
+
+  const accounts = await Promise.all(
+    rows.map(async (r) => {
+      const acc = await getTermsAcceptance(r.partner_id, r.contract!.terms_version);
+      return {
+        partnerId: r.partner_id,
+        name: r.partners!.name,
+        slug: r.partners!.slug,
+        whatsapp: r.partners!.whatsapp,
+        active: r.partners!.active,
+        token: r.token,
+        jiraEpic: r.jira_epic,
+        jiraChat: r.jira_chat,
+        contract: r.contract!,
+        acceptedAt: acc?.accepted_at ?? null,
+        acceptedBy: acc?.accepted_name ?? null,
+      };
+    })
+  );
+  return accounts.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+}
+
+/** Parceiros cadastrados que ainda não têm área do cliente. */
+export async function getPartnersWithoutContract(): Promise<{ id: string; name: string }[]> {
+  const admin = createAdminSupabase();
+  if (!admin) return [];
+  const [{ data: partners }, { data: panels }] = await Promise.all([
+    admin.from("partners").select("id, name").order("name"),
+    admin.from("partner_panels").select("partner_id, contract"),
+  ]);
+  const withContract = new Set(
+    ((panels ?? []) as { partner_id: string; contract: unknown }[])
+      .filter((p) => p.contract)
+      .map((p) => p.partner_id)
+  );
+  return ((partners ?? []) as { id: string; name: string }[]).filter((p) => !withContract.has(p.id));
+}
+
+export async function setClientContract(
+  partnerId: string,
+  jiraEpic: string,
+  contract: ClientContract
+): Promise<boolean> {
+  const admin = createAdminSupabase();
+  if (!admin) return false;
+  // Garante a linha do painel (token) antes de gravar o contrato.
+  await admin.from("partner_panels").upsert({ partner_id: partnerId }, { onConflict: "partner_id" });
+  const { error } = await admin
+    .from("partner_panels")
+    .update({ jira_epic: jiraEpic, contract })
+    .eq("partner_id", partnerId);
+  return !error;
+}
+
+/** Troca o token: o link antigo para de funcionar na hora. */
+export async function rotatePanelToken(partnerId: string): Promise<boolean> {
+  const admin = createAdminSupabase();
+  if (!admin) return false;
+  const { error } = await admin
+    .from("partner_panels")
+    .update({ token: crypto.randomUUID() })
+    .eq("partner_id", partnerId);
+  return !error;
+}
