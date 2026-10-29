@@ -79,7 +79,6 @@ const contract = {
 const content = {
   eyebrow: "Imóveis de alto padrão · Mogi Guaçu e região",
   highlights: [
-    "Imóveis a partir de R$ 500 mil",
     "No mercado desde 2009",
     "CRECI 21.184-J",
   ],
@@ -93,7 +92,7 @@ const content = {
     title: "Seleção sob medida",
     subtitle: "Diga o que procura e receba só os imóveis que fazem sentido para você",
     bullets: [
-      "Imóveis de alto padrão, a partir de R$ 500 mil",
+      "Imóveis de alto padrão em Mogi Guaçu e região",
       "Opções filtradas pelo seu perfil, orçamento e prazo",
       "Atendimento direto com o consultor da Real, no seu WhatsApp",
     ],
