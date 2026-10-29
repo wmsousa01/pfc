@@ -63,6 +63,13 @@ export default async function PartnerPage({
   const triageOn = triage?.enabled !== false && Boolean(partner.whatsapp);
 
   const waHref = whatsappHref(partner, content);
+  // Sem triagem e com o CTA principal apontando para o WhatsApp, o hero
+  // mostrava dois botões de WhatsApp — e o principal ia sem a mensagem
+  // "vim pelo Fora da Caixa", que é o que diz ao parceiro de onde veio o
+  // contato. Nesse caso fica um botão só, com a mensagem.
+  const ctaIsWhatsapp = /(^|\/\/)(wa\.me|api\.whatsapp\.com)\//.test(partner.cta_url ?? "");
+  const primaryCtaUrl = ctaIsWhatsapp && waHref ? waHref : partner.cta_url;
+  const showWaButton = Boolean(waHref) && !(ctaIsWhatsapp && !triageOn);
 
   // Botões do bloco de contato: a lista editada em /admin ou, na falta dela,
   // os três derivados do cadastro (WhatsApp, Instagram, site).
@@ -222,9 +229,9 @@ export default async function PartnerPage({
                   <ArrowRight className="w-4 h-4" />
                 </a>
               ) : (
-                partner.cta_url && (
+                primaryCtaUrl && (
                   <a
-                    href={partner.cta_url}
+                    href={primaryCtaUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="px-8 py-4 text-base font-bold flex items-center gap-3 transition-transform hover:-translate-y-0.5"
@@ -241,7 +248,7 @@ export default async function PartnerPage({
                 )
               )}
 
-              {waHref && (
+              {showWaButton && waHref && (
                 <a
                   href={waHref}
                   target="_blank"
