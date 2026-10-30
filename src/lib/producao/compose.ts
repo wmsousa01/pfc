@@ -104,10 +104,15 @@ export async function preparePeople(m: Matte) {
 
   // Do peito para cima: acima da faixa do texto aparece ~55% da altura delas.
   const s = Math.min(1240 / bw, (H * 0.8) / (bh * 0.55), 2.2);
+  const top = 18;
   const pw = Math.round(bw * s);
-  const ph = Math.round(bh * s);
-  const people = await sharp(cut)
-    .resize(pw, ph)
+  const scaled = await sharp(cut).resize(pw, Math.round(bh * s)).png().toBuffer();
+  // Ampliadas para o peito-para-cima, elas passam da altura da thumb; o que
+  // sobra embaixo ficaria atrás da faixa do texto, e o composite do sharp
+  // recusa camada maior que o fundo.
+  const ph = Math.min(Math.round(bh * s), H - top);
+  const people = await sharp(scaled)
+    .extract({ left: 0, top: 0, width: pw, height: ph })
     .linear(1.12, -12)
     .modulate({ saturation: 1.08, brightness: 1.03 })
     .png()
@@ -120,7 +125,7 @@ export async function preparePeople(m: Matte) {
     .png()
     .toBuffer();
 
-  return { people, glow, left: Math.round((W - pw) / 2), top: 18 };
+  return { people, glow, left: Math.round((W - pw) / 2), top };
 }
 
 /** Thumb final: JPEG 1280×720 abaixo de 2 MB (limite do thumbnails.set). */
