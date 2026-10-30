@@ -37,7 +37,7 @@ export async function syncAction(): Promise<void> {
 export async function triggerLiveAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   const role = await requireAdmin();
   try {
-    await triggerLiveCuts(str(form, "id"), actorOf(role));
+    await triggerLiveCuts(str(form, "id"), actorOf(role), { force: str(form, "force") === "1" });
     refresh();
     return { ok: true, error: null };
   } catch (e) {

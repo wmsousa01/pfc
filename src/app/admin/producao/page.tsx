@@ -15,7 +15,7 @@ import {
 } from "@/lib/producao/store";
 import { connectedChannel } from "@/lib/producao/youtube-api";
 import { MODES, contentaJobUrl, isContentaConfigured } from "@/lib/producao/contenta";
-import { CONTENTA_ERROR, type LiveStatus, type ProducaoLive } from "@/lib/producao/lives";
+import { CONTENTA_ERROR, refreshCuttingLives, type LiveStatus, type ProducaoLive } from "@/lib/producao/lives";
 import {
   approveAction,
   generateAction,
@@ -88,6 +88,8 @@ export default async function ProducaoPage() {
   const videos = (rows ?? []) as ProducaoVideo[];
   const ids = videos.map((v) => v.id);
 
+  // Job pronto no Contenta aparece assim que alguém abre o painel.
+  if (isContentaConfigured()) await refreshCuttingLives().catch(() => null);
   const { data: liveRows } = await db()
     .from("producao_lives")
     .select("*")
@@ -303,10 +305,16 @@ export default async function ProducaoPage() {
                 <div className="flex flex-wrap items-start gap-2">
                   <ProducaoForm
                     action={triggerLiveAction}
-                    label={l.status === "erro" ? "Tentar de novo" : "Gerar cortes"}
+                    label={l.status === "erro" ? "Tentar de novo" : l.status === "ja_cortada" ? "Cortar de novo" : "Gerar cortes"}
                     pending="Enviando..."
+                    buttonClassName={
+                      l.status === "ja_cortada"
+                        ? "px-3 py-2 rounded-lg text-sm text-white/50 hover:text-white border border-[#2a2a2a]"
+                        : undefined
+                    }
                   >
                     <input type="hidden" name="id" value={l.id} />
+                    {l.status === "ja_cortada" && <input type="hidden" name="force" value="1" />}
                   </ProducaoForm>
                   {l.status === "detectada" && (
                     <>

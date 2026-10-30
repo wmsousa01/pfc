@@ -61,9 +61,14 @@ async function autoSince(): Promise<Date> {
   return now;
 }
 
-/** Live já cortada no Contenta por fora do hub (pela URL do vídeo). */
-function cutElsewhere(youtubeId: string, jobs: ContentaJob[]): boolean {
-  return jobs.some((j) => j.videoSource?.includes(youtubeId));
+/**
+ * Job do Contenta que já cortou esta live, sem contar os que o próprio hub
+ * disparou. Casa pelo id do vídeo em qualquer formato de link
+ * (watch?v=, /live/, youtu.be/).
+ */
+function cutElsewhere(youtubeId: string, jobs: ContentaJob[], own: LiveJob[] = []): ContentaJob | null {
+  const mine = new Set(own.map((j) => j.jobId));
+  return jobs.find((j) => !mine.has(j.jobId) && j.videoSource?.includes(youtubeId)) ?? null;
 }
 
 /** Atualiza o andamento dos jobs de uma live a partir da lista do Contenta. */
@@ -81,6 +86,22 @@ function refreshJobs(live: ProducaoLive, byId: Map<string, ContentaJob>): { jobs
       ? "erro"
       : "cortando";
   return { jobs, status };
+}
+
+/**
+ * Atualiza o andamento das lives que estão sendo cortadas. O painel chama ao
+ * abrir: sem isso, um job pronto no Contenta só aparecia depois de alguém
+ * clicar em "Buscar no canal" ou da rodada diária.
+ */
+export async function refreshCuttingLives(): Promise<void> {
+  const { data } = await db().from("producao_lives").select("*").in("status", ["cortando", "erro"]);
+  const lives = ((data ?? []) as ProducaoLive[]).filter((l) => l.jobs.length > 0);
+  if (lives.length === 0) return;
+  const byId = new Map((await listContentaJobs()).map((j) => [j.jobId, j]));
+  for (const live of lives) {
+    const r = refreshJobs(live, byId);
+    if (r.status !== live.status || JSON.stringify(r.jobs) !== JSON.stringify(live.jobs)) await patch(live.id, r);
+  }
 }
 
 /**
@@ -134,7 +155,7 @@ export async function syncLives(): Promise<{ novas: number; prontas: ProducaoLiv
       novas++;
     } else {
       await patch(live.id, { title: v.title, privacy: v.privacy, thumb_url: v.thumbUrl });
-      if (live.status === "detectada" && cutElsewhere(v.id, contenta)) {
+      if (live.status === "detectada" && cutElsewhere(v.id, contenta, live.jobs)) {
         await patch(live.id, { status: "ja_cortada" });
         continue;
       }
@@ -175,7 +196,25 @@ async function claim(id: string): Promise<ProducaoLive | null> {
  * (num retry, só os que falharam). O jobId é gravado ANTES da chamada, para
  * que repetir caia no mesmo run do Contenta em vez de criar outro.
  */
-export async function triggerLiveCuts(liveId: string, actor: string): Promise<void> {
+export async function triggerLiveCuts(liveId: string, actor: string, opts: { force?: boolean } = {}): Promise<void> {
+  // Antes de cortar, confere no Contenta se a live já tem cortes feitos por
+  // fora do hub. Sem essa trava, uma live cortada à mão foi cortada de novo
+  // (30/10: a dos cães da guarda, já com dois jobs, ganhou um terceiro).
+  // Contenta fora do ar = erro, nunca disparo às cegas. `force` é o
+  // "Cortar de novo" explícito da equipe.
+  if (!opts.force) {
+    const { data } = await db().from("producao_lives").select("*").eq("id", liveId).maybeSingle();
+    const current = data as ProducaoLive | null;
+    if (!current) return;
+    const dup = cutElsewhere(current.youtube_id, await listContentaJobs(), current.jobs);
+    if (dup) {
+      await patch(current.id, { status: "ja_cortada", error: null });
+      throw new Error(
+        `Essa live já tem cortes no Contenta (${dup.jobId}, ${dup.totalCuts} cortes). Para cortar de novo, use "Cortar de novo".`
+      );
+    }
+  }
+
   const live = await claim(liveId);
   if (!live) return;
 
