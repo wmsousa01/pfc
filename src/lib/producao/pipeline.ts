@@ -1,8 +1,9 @@
 import "server-only";
-import sharp from "sharp";
 import { randomUUID } from "crypto";
-import { IMAGE_MODEL, renderThumb, suggestHeadlines } from "./gemini";
-import { DEFAULT_PROMPT, fillPrompt } from "./prompt";
+import { composeThumb, prepareLogo, preparePeople } from "./compose";
+import { IMAGE_MODEL, pickBestFrame, renderPlate, suggestHeadlines } from "./gemini";
+import { matte } from "./matte";
+import { DEFAULT_PLATE_PROMPT } from "./prompt";
 import {
   LOGO_PATH,
   db,
@@ -90,25 +91,36 @@ async function claim(id: string): Promise<boolean> {
   return (data?.length ?? 0) > 0;
 }
 
-async function frameFor(v: ProducaoVideo): Promise<Buffer> {
+/**
+ * Frame de onde saem as pessoas. O enviado à mão manda. Senão, entre a
+ * miniatura automática e os três frames que o próprio YouTube extrai do
+ * vídeo (maxres1..3, em 1280×720), o Gemini escolhe o de rosto de frente e
+ * olhos abertos — a miniatura padrão costuma pegar olho fechado e perfil.
+ */
+async function chooseFrame(v: ProducaoVideo): Promise<{ frame: Buffer; note: string }> {
   if (v.frame_path) {
     const f = await download(v.frame_path);
-    if (f) return f;
+    if (f) return { frame: f, note: "frame enviado à mão" };
   }
-  if (v.yt_thumb_url) {
-    const res = await fetch(v.yt_thumb_url, { cache: "no-store" });
-    if (res.ok) return Buffer.from(await res.arrayBuffer());
+  const urls = [
+    v.yt_thumb_url,
+    ...[1, 2, 3].map((n) => `https://i.ytimg.com/vi/${v.youtube_id}/maxres${n}.jpg`),
+  ].filter((u): u is string => !!u);
+  const got = await Promise.all(
+    urls.map(async (u) => {
+      const res = await fetch(u, { cache: "no-store" }).catch(() => null);
+      return res?.ok ? Buffer.from(await res.arrayBuffer()) : null;
+    })
+  );
+  const frames = got.filter((f): f is NonNullable<typeof f> => !!f);
+  if (frames.length === 0) {
+    throw new Error("Sem frame: as miniaturas do YouTube não abriram. Envie um frame do corte no cartão.");
   }
-  throw new Error("Sem frame: a miniatura do YouTube não abriu. Envie um frame do corte no cartão.");
-}
-
-/** JPEG 1280×720 abaixo de 2 MB, o que o thumbnails.set aceita. */
-async function toYouTubeJpeg(img: Buffer): Promise<Buffer> {
-  for (const quality of [88, 80, 70]) {
-    const out = await sharp(img).resize(1280, 720, { fit: "cover" }).jpeg({ quality, mozjpeg: true }).toBuffer();
-    if (out.length < 2_000_000) return out;
-  }
-  throw new Error("Thumb acima de 2 MB mesmo comprimida.");
+  const pick = await pickBestFrame(frames).catch(() => ({ index: 0, reason: "" }));
+  return {
+    frame: frames[pick.index],
+    note: `frame ${pick.index + 1} de ${frames.length}${pick.reason ? ` (${pick.reason})` : ""}`,
+  };
 }
 
 /**
@@ -132,26 +144,28 @@ export async function generateFor(
     }
 
     let headlines: Headline[];
-    let conceito = v.title;
     if (opts.headline) {
       headlines = [opts.headline];
     } else {
       const s = await suggestHeadlines(v.title, transcript, 3);
-      conceito = s.conceito;
       headlines = s.options.slice(0, opts.count ?? 2);
       await updateVideo(v.id, { headline_options: s.options });
     }
 
-    const [frame, logo, template] = await Promise.all([
-      frameFor(v),
+    // Fundo no Gemini em paralelo com a escolha do frame e o recorte.
+    const [{ frame, note }, plate, logoRaw] = await Promise.all([
+      chooseFrame(v),
+      getConfig("plate_prompt").then((p) => renderPlate(p || DEFAULT_PLATE_PROMPT)),
       download(LOGO_PATH),
-      getConfig("prompt_template"),
+    ]);
+    const [people, logo] = await Promise.all([
+      matte(frame).then(preparePeople),
+      logoRaw ? prepareLogo(logoRaw) : Promise.resolve(null),
     ]);
 
     const made = await Promise.allSettled(
       headlines.map(async (h) => {
-        const raw = await renderThumb(fillPrompt(template || DEFAULT_PROMPT, h, conceito, !!logo), frame, logo);
-        const jpeg = await toYouTubeJpeg(raw);
+        const jpeg = await composeThumb(plate, people, logo, h);
         const path = `thumbs/${v.id}/${randomUUID()}.jpg`;
         await upload(path, jpeg, "image/jpeg");
         await db().from("producao_thumbs").insert({
@@ -159,7 +173,7 @@ export async function generateFor(
           storage_path: path,
           l1: h.l1,
           l2: h.l2,
-          model: IMAGE_MODEL,
+          model: `composição + ${IMAGE_MODEL}`,
           created_by: actor === AUTOMACAO ? null : actor,
         });
       })
@@ -174,7 +188,7 @@ export async function generateFor(
       v.id,
       actor,
       "gerou thumbs",
-      `${ok} opção(ões)${transcript ? "" : " — sem legenda, headline só pelo título"}`
+      `${ok} opção(ões) · ${note}${transcript ? "" : " · sem legenda, headline só pelo título"}`
     );
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

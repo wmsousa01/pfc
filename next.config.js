@@ -3,6 +3,13 @@ const nextConfig = {
   experimental: {
     // Uploads de logo/capa passam pela server action.
     serverActions: { bodySizeLimit: "6mb" },
+    // Recorte das pessoas (MODNet) roda num binário nativo: fica fora do bundle.
+    serverComponentsExternalPackages: ["onnxruntime-node"],
+    // A headline é vetorizada da fonte Anton lida em runtime.
+    outputFileTracingIncludes: {
+      "/admin/producao": ["./assets/fonts/**"],
+      "/api/cron/producao": ["./assets/fonts/**"],
+    },
   },
   images: {
     remotePatterns: [

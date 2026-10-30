@@ -2,7 +2,7 @@ import AdminHeader from "@/components/admin/AdminHeader";
 import ProducaoForm from "@/components/admin/ProducaoForm";
 import { requireAdmin } from "@/lib/auth";
 import { IMAGE_MODEL, isGeminiConfigured } from "@/lib/producao/gemini";
-import { DEFAULT_PROMPT } from "@/lib/producao/prompt";
+import { DEFAULT_PLATE_PROMPT } from "@/lib/producao/prompt";
 import { LOGO_PATH, getConfig, signedUrls } from "@/lib/producao/store";
 import { connectedChannel, isYouTubeOAuthConfigured } from "@/lib/producao/youtube-api";
 import { disconnectAction, savePromptAction, uploadLogoAction } from "../actions";
@@ -17,7 +17,7 @@ export default async function ProducaoConfigPage({
   await requireAdmin();
   const [channel, prompt, logo] = await Promise.all([
     connectedChannel(),
-    getConfig("prompt_template"),
+    getConfig("plate_prompt"),
     signedUrls([LOGO_PATH]).then((m) => m.get(LOGO_PATH) ?? null),
   ]);
 
@@ -69,7 +69,10 @@ export default async function ProducaoConfigPage({
 
         <section className={card}>
           <h2 className="text-white font-bold">2. Logo oficial do PFC</h2>
-          <p className="text-white/40 text-sm mt-1">PNG com fundo transparente. Vai junto em toda thumb gerada.</p>
+          <p className="text-white/40 text-sm mt-1">
+            Vai como está, no canto da thumb. Use o PNG com <strong>fundo transparente e letras brancas</strong>: com
+            fundo branco, o sistema tira o branco e clareia as letras sozinho, mas o resultado é melhor com o arquivo certo.
+          </p>
           <div className="flex flex-wrap items-center gap-5 mt-4">
             {logo && (
               // eslint-disable-next-line @next/next/no-img-element
@@ -88,18 +91,18 @@ export default async function ProducaoConfigPage({
         </section>
 
         <section className={card}>
-          <h2 className="text-white font-bold">3. Prompt da thumb</h2>
+          <h2 className="text-white font-bold">3. Prompt do fundo</h2>
           <p className="text-white/40 text-sm mt-1">
             Modelo: <code className="text-gold-400">{IMAGE_MODEL}</code>
-            {!isGeminiConfigured() && <span className="text-yellow-300"> — GOOGLE_AI_API_KEY ausente</span>}. Use{" "}
-            <code className="text-gold-400">{"{{L1}}"}</code>, <code className="text-gold-400">{"{{L2}}"}</code> e{" "}
-            <code className="text-gold-400">{"{{CONCEITO}}"}</code>. Apague tudo e salve para voltar ao padrão.
+            {!isGeminiConfigured() && <span className="text-yellow-300"> — GOOGLE_AI_API_KEY ausente</span>}. O Gemini
+            gera só o estúdio vazio: as pessoas reais (recortadas do frame), a headline e o logo entram por cima. Não
+            peça pessoas nem texto aqui. Apague tudo e salve para voltar ao padrão.
           </p>
           <ProducaoForm action={savePromptAction} label="Salvar prompt" pending="Salvando..." okMessage="Prompt salvo." className="mt-4">
             <textarea
               name="prompt"
-              defaultValue={prompt ?? DEFAULT_PROMPT}
-              rows={22}
+              defaultValue={prompt ?? DEFAULT_PLATE_PROMPT}
+              rows={9}
               className="w-full mb-3 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg px-3 py-2.5 text-xs font-mono text-white focus:outline-none focus:border-gold-500/50"
             />
           </ProducaoForm>

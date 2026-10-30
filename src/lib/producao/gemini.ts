@@ -31,14 +31,13 @@ async function generate(model: string, body: unknown): Promise<any> {
 
 /**
  * Headlines de duas linhas a partir da transcrição: linha 1 curta (gancho),
- * linha 2 a virada/pergunta. Mais o conceito central, que vai para o prompt
- * da imagem.
+ * linha 2 a virada/pergunta.
  */
 export async function suggestHeadlines(
   title: string,
   transcript: string | null,
   count = 3
-): Promise<{ conceito: string; options: Headline[] }> {
+): Promise<{ options: Headline[] }> {
   const prompt = `Você cria headlines de thumbnail de YouTube para o podcast "Papo Fora da Caixa" (Mogi Guaçu, SP).
 Título do corte: ${title}
 Transcrição do corte (pode estar vazia ou com erros de reconhecimento):
@@ -47,8 +46,7 @@ Transcrição do corte (pode estar vazia ou com erros de reconhecimento):
 Gere ${count} headlines diferentes em português do Brasil, em MAIÚSCULAS, cada uma em duas linhas:
 - l1: até 3 palavras, gancho (ex.: "VOCÊ ESQUECEU")
 - l2: até 4 palavras, a virada ou pergunta (ex.: "POR QUE COMEÇOU?")
-Regras: fiel ao que é dito no corte, provoca curiosidade, sem clickbait mentiroso, sem nomes de pessoas, sem emojis, ortografia e acentos perfeitos.
-Também escreva "conceito": uma frase com a ideia central do corte.`;
+Regras: fiel ao que é dito no corte, provoca curiosidade, sem clickbait mentiroso, sem nomes de pessoas, sem emojis, ortografia e acentos perfeitos.`;
 
   const json = await generate(TEXT_MODEL, {
     contents: [{ parts: [{ text: prompt }] }],
@@ -57,7 +55,6 @@ Também escreva "conceito": uma frase com a ideia central do corte.`;
       responseSchema: {
         type: "OBJECT",
         properties: {
-          conceito: { type: "STRING" },
           options: {
             type: "ARRAY",
             items: {
@@ -67,33 +64,31 @@ Também escreva "conceito": uma frase com a ideia central do corte.`;
             },
           },
         },
-        required: ["conceito", "options"],
+        required: ["options"],
       },
     },
   });
   const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-  const parsed = JSON.parse(text) as { conceito?: string; options?: Headline[] };
+  const parsed = JSON.parse(text) as { options?: Headline[] };
   const options = (parsed.options ?? [])
     .map((o) => ({ l1: o.l1.trim().toUpperCase(), l2: o.l2.trim().toUpperCase() }))
     .filter((o) => o.l1 && o.l2)
     .slice(0, count);
   if (options.length === 0) throw new Error("O Gemini não devolveu headline.");
-  return { conceito: parsed.conceito?.trim() || title, options };
+  return { options };
 }
 
-/** Gera a thumb 16:9 a partir do frame (+ logo). Devolve a imagem crua. */
-export async function renderThumb(prompt: string, frame: Buffer, logo: Buffer | null): Promise<Buffer> {
-  const parts: unknown[] = [
-    { text: prompt },
-    { inlineData: { mimeType: "image/jpeg", data: frame.toString("base64") } },
-  ];
-  if (logo) parts.push({ inlineData: { mimeType: "image/png", data: logo.toString("base64") } });
-
+/**
+ * Só o fundo da thumb: estúdio vazio, sem gente, texto nem logo. As pessoas
+ * reais, a headline e o logo entram por cima, na composição — pedir ao
+ * modelo para mantê-las fazia ele redesenhar os rostos.
+ */
+export async function renderPlate(prompt: string): Promise<Buffer> {
   const json = await generate(IMAGE_MODEL, {
-    contents: [{ parts }],
+    contents: [{ parts: [{ text: prompt }] }],
     generationConfig: {
       responseModalities: ["IMAGE"],
-      imageConfig: { aspectRatio: "16:9", imageSize: "2K" },
+      imageConfig: { aspectRatio: "16:9", imageSize: "1K" },
     },
   });
   const img = (json.candidates?.[0]?.content?.parts ?? []).find((p: any) => p.inlineData)?.inlineData;
@@ -102,4 +97,35 @@ export async function renderThumb(prompt: string, frame: Buffer, logo: Buffer | 
     throw new Error(`Gemini não gerou a imagem (${reason}).`);
   }
   return Buffer.from(img.data, "base64");
+}
+
+/**
+ * Entre frames candidatos do mesmo corte, o melhor para a thumb: rostos de
+ * frente ou três-quartos, olhos abertos, expressão viva, sem desfoque. Uma
+ * chamada só, com todos os frames. Devolve o índice e o motivo.
+ */
+export async function pickBestFrame(frames: Buffer[]): Promise<{ index: number; reason: string }> {
+  if (frames.length <= 1) return { index: 0, reason: "único frame disponível" };
+  const parts: unknown[] = [
+    {
+      text: `Estes são ${frames.length} frames (numerados de 0 a ${frames.length - 1}, na ordem) do mesmo corte de podcast.
+Escolha o melhor para virar thumbnail do YouTube: pessoas com o rosto visível (de frente ou três-quartos), olhos abertos, expressão viva ou emocional, sem desfoque de movimento, sem boca torta no meio de uma palavra.
+Penalize olhos fechados, rosto de perfil ou virado para baixo, mão cobrindo o rosto e frames escuros.`,
+    },
+    ...frames.map((f) => ({ inlineData: { mimeType: "image/jpeg", data: f.toString("base64") } })),
+  ];
+  const json = await generate(TEXT_MODEL, {
+    contents: [{ parts }],
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: "OBJECT",
+        properties: { index: { type: "INTEGER" }, reason: { type: "STRING" } },
+        required: ["index", "reason"],
+      },
+    },
+  });
+  const parsed = JSON.parse(json.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}") as { index?: number; reason?: string };
+  const index = Number.isInteger(parsed.index) && parsed.index! >= 0 && parsed.index! < frames.length ? parsed.index! : 0;
+  return { index, reason: parsed.reason?.trim() || "" };
 }

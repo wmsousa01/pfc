@@ -126,12 +126,9 @@ export async function uploadFrameAction(_prev: ActionState, form: FormData): Pro
 export async function savePromptAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   await requireAdmin();
   const prompt = str(form, "prompt");
-  if (prompt && (!prompt.includes("{{L1}}") || !prompt.includes("{{L2}}"))) {
-    return { ok: false, error: "O prompt precisa ter {{L1}} e {{L2}}." };
-  }
   try {
-    if (prompt) await setConfig("prompt_template", prompt);
-    else await db().from("producao_config").delete().eq("key", "prompt_template");
+    if (prompt) await setConfig("plate_prompt", prompt);
+    else await db().from("producao_config").delete().eq("key", "plate_prompt");
     refresh();
     return { ok: true, error: null };
   } catch (e) {
