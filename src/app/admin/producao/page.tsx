@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth";
 import { isGeminiConfigured } from "@/lib/producao/gemini";
 import {
   LOGO_PATH,
+  getConfig,
   db,
   download,
   signedUrls,
@@ -14,7 +15,7 @@ import {
 } from "@/lib/producao/store";
 import { connectedChannel } from "@/lib/producao/youtube-api";
 import { MODES, contentaJobUrl, isContentaConfigured } from "@/lib/producao/contenta";
-import type { LiveStatus, ProducaoLive } from "@/lib/producao/lives";
+import { CONTENTA_ERROR, type LiveStatus, type ProducaoLive } from "@/lib/producao/lives";
 import {
   approveAction,
   generateAction,
@@ -75,7 +76,7 @@ function quem(actor: string): string {
 
 export default async function ProducaoPage() {
   await requireAdmin();
-  const channel = await connectedChannel();
+  const [channel, contentaError] = await Promise.all([connectedChannel(), getConfig(CONTENTA_ERROR)]);
 
   const since = new Date(Date.now() - 14 * 86_400_000).toISOString();
   const { data: rows } = await db()
@@ -217,6 +218,13 @@ export default async function ProducaoPage() {
             )}
           </div>
         </div>
+
+        {contentaError && (
+          <div className="mt-6 p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 text-sm">
+            O Contenta recusou a última leitura — as lives aparecem, mas nada é cortado sozinho até isso
+            ser resolvido: {contentaError}
+          </div>
+        )}
 
         {(!channel || !isGeminiConfigured() || !hasLogo || !isContentaConfigured()) && (
           <div className="mt-6 p-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-yellow-200 text-sm space-y-1">

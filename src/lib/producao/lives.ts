@@ -1,6 +1,9 @@
 import "server-only";
 import { jobFailed, listContentaJobs, startCuts, type ContentaJob, type CutMode } from "./contenta";
-import { db, getConfig, setConfig } from "./store";
+import { clearConfig, db, getConfig, setConfig } from "./store";
+
+/** Última recusa do Contenta, mostrada no painel até a próxima leitura dar certo. */
+export const CONTENTA_ERROR = "contenta_erro";
 import { listRecentUploads } from "./youtube-api";
 
 export type LiveStatus = "detectada" | "cortando" | "cortada" | "ja_cortada" | "ignorada" | "erro";
@@ -85,7 +88,20 @@ function refreshJobs(live: ProducaoLive, byId: Map<string, ContentaJob>): { jobs
  * que a automação pode cortar agora.
  */
 export async function syncLives(): Promise<{ novas: number; prontas: ProducaoLive[] }> {
-  const [videos, contenta, since] = await Promise.all([listRecentUploads(50), listContentaJobs(), autoSince()]);
+  const [videos, since] = await Promise.all([listRecentUploads(50), autoSince()]);
+
+  // O Contenta fora do ar (ou recusando) não pode esconder as lives: elas
+  // entram no painel do mesmo jeito. Só o cruzamento e o disparo automático
+  // esperam, porque sem a lista de jobs não dá para saber o que já foi cortado.
+  let contenta: ContentaJob[] = [];
+  let contentaOk = true;
+  try {
+    contenta = await listContentaJobs();
+    await clearConfig(CONTENTA_ERROR);
+  } catch (e) {
+    contentaOk = false;
+    await setConfig(CONTENTA_ERROR, e instanceof Error ? e.message : String(e));
+  }
   const byId = new Map(contenta.map((j) => [j.jobId, j]));
 
   const ended = videos.filter((v) => v.liveEndedAt);
@@ -122,7 +138,7 @@ export async function syncLives(): Promise<{ novas: number; prontas: ProducaoLiv
         await patch(live.id, { status: "ja_cortada" });
         continue;
       }
-      if (live.jobs.length > 0 && (live.status === "cortando" || live.status === "erro")) {
+      if (contentaOk && live.jobs.length > 0 && (live.status === "cortando" || live.status === "erro")) {
         const r = refreshJobs(live, byId);
         await patch(live.id, r);
         continue;
@@ -131,6 +147,7 @@ export async function syncLives(): Promise<{ novas: number; prontas: ProducaoLiv
 
     const endedAt = new Date(v.liveEndedAt!).getTime();
     if (
+      contentaOk &&
       live.status === "detectada" &&
       endedAt >= since.getTime() &&
       Date.now() - endedAt >= VOD_GRACE_MS &&

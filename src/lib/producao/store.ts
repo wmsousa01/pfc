@@ -75,6 +75,10 @@ export async function setConfig(key: string, value: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+export async function clearConfig(key: string): Promise<void> {
+  await db().from("producao_config").delete().eq("key", key);
+}
+
 export async function logEvent(videoId: string, actor: string, action: string, detail?: string) {
   await db().from("producao_eventos").insert({ video_id: videoId, actor, action, detail: detail ?? null });
 }
