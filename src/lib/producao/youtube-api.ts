@@ -104,6 +104,10 @@ export type ChannelVideo = {
   durationSec: number;
   thumbUrl: string | null;
   uploadedAt: string;
+  /** "live" | "upcoming" enquanto a transmissão não acabou; "none" depois. */
+  liveState: string;
+  /** Fim da transmissão, só para vídeo que foi live. */
+  liveEndedAt: string | null;
 };
 
 /** "PT4M13S" → 253 */
@@ -128,7 +132,7 @@ export async function listRecentUploads(max = 50): Promise<ChannelVideo[]> {
   if (ids.length === 0) return [];
 
   const vids = await ytFetch<{ items?: any[] }>(
-    `/videos?part=snippet,status,contentDetails&id=${ids.join(",")}`
+    `/videos?part=snippet,status,contentDetails,liveStreamingDetails&id=${ids.join(",")}`
   );
   return (vids.items ?? []).map((v) => {
     const t = v.snippet.thumbnails ?? {};
@@ -140,6 +144,8 @@ export async function listRecentUploads(max = 50): Promise<ChannelVideo[]> {
       durationSec: isoDuration(v.contentDetails.duration ?? ""),
       thumbUrl: (t.maxres ?? t.standard ?? t.high ?? t.medium)?.url ?? null,
       uploadedAt: v.snippet.publishedAt,
+      liveState: v.snippet.liveBroadcastContent ?? "none",
+      liveEndedAt: v.liveStreamingDetails?.actualEndTime ?? null,
     };
   });
 }

@@ -43,6 +43,8 @@ export async function syncChannel(actor: string): Promise<{ novos: number; publi
   let novos = 0;
   let publicados = 0;
   for (const v of videos) {
+    // Live (em andamento ou já encerrada) não é corte: segue por syncLives().
+    if (v.liveEndedAt || v.liveState !== "none") continue;
     const row = byYt.get(v.id);
     if (!row) {
       if (v.privacy === "public" || v.durationSec < MIN_DURATION_SEC) continue;

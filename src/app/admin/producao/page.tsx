@@ -13,7 +13,17 @@ import {
   type ProducaoVideo,
 } from "@/lib/producao/store";
 import { connectedChannel } from "@/lib/producao/youtube-api";
-import { approveAction, generateAction, setStatusAction, syncAction, uploadFrameAction } from "./actions";
+import { MODES, contentaJobUrl, isContentaConfigured } from "@/lib/producao/contenta";
+import type { LiveStatus, ProducaoLive } from "@/lib/producao/lives";
+import {
+  approveAction,
+  generateAction,
+  liveStatusAction,
+  setStatusAction,
+  syncAction,
+  triggerLiveAction,
+  uploadFrameAction,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 // Gerar thumb roda dentro da server action desta página.
@@ -28,6 +38,17 @@ const STATUS: Record<ProducaoStatus, { label: string; cls: string }> = {
   ignorado: { label: "Ignorado", cls: "bg-white/5 border-white/10 text-white/30" },
   erro: { label: "Erro", cls: "bg-red-500/10 border-red-500/30 text-red-400" },
 };
+
+const LIVE_STATUS: Record<LiveStatus, { label: string; cls: string }> = {
+  detectada: { label: "Sem cortes", cls: "bg-gold-500/15 border-gold-500/40 text-gold-400" },
+  cortando: { label: "Cortando no Contenta", cls: "bg-sky-500/10 border-sky-500/30 text-sky-400" },
+  cortada: { label: "Cortada", cls: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" },
+  ja_cortada: { label: "Já cortada", cls: "bg-white/5 border-white/15 text-white/50" },
+  ignorada: { label: "Ignorada", cls: "bg-white/5 border-white/10 text-white/30" },
+  erro: { label: "Erro", cls: "bg-red-500/10 border-red-500/30 text-red-400" },
+};
+
+const JOB_STATUS = { processing: "processando", done: "pronto", failed: "falhou" } as const;
 
 const input =
   "bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-white/25 focus:outline-none focus:border-gold-500/50";
@@ -65,6 +86,15 @@ export default async function ProducaoPage() {
     .limit(150);
   const videos = (rows ?? []) as ProducaoVideo[];
   const ids = videos.map((v) => v.id);
+
+  const { data: liveRows } = await db()
+    .from("producao_lives")
+    .select("*")
+    .or(`status.not.in.(ignorada,ja_cortada,cortada),updated_at.gte.${since}`)
+    .order("ended_at", { ascending: false })
+    .limit(30);
+  const lives = ((liveRows ?? []) as ProducaoLive[]).filter((l) => l.status !== "ignorada");
+  const livesSemCorte = lives.filter((l) => l.status === "detectada" || l.status === "erro").length;
 
   const [{ data: thumbRows }, { data: eventRows }, hasLogo] = await Promise.all([
     ids.length
@@ -168,8 +198,9 @@ export default async function ProducaoPage() {
           <div>
             <h1 className="text-2xl font-bold text-white">Produção de cortes</h1>
             <p className="text-white/40 text-sm mt-1 max-w-2xl">
-              O corte sobe privado pelo Contenta e entra aqui sozinho. A IA lê a legenda, sugere a headline e
-              gera as thumbs; alguém da equipe aprova uma, e o vídeo é publicado ou agendado com ela.
+              Live encerrada vai sozinha para o Contenta (shorts e longos). O corte sobe privado e entra aqui; a
+              IA lê a legenda, sugere a headline e gera as thumbs; alguém da equipe aprova uma, e o vídeo é
+              publicado ou agendado com ela.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -181,22 +212,24 @@ export default async function ProducaoPage() {
             </a>
             {channel && (
               <form action={syncAction}>
-                <button className="btn-primary px-4 py-2 rounded-lg text-sm font-bold">Buscar cortes novos</button>
+                <button className="btn-primary px-4 py-2 rounded-lg text-sm font-bold">Buscar no canal</button>
               </form>
             )}
           </div>
         </div>
 
-        {(!channel || !isGeminiConfigured() || !hasLogo) && (
+        {(!channel || !isGeminiConfigured() || !hasLogo || !isContentaConfigured()) && (
           <div className="mt-6 p-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-yellow-200 text-sm space-y-1">
             {!channel && <p>Canal do YouTube não conectado — conecte em Configurar.</p>}
             {!isGeminiConfigured() && <p>GOOGLE_AI_API_KEY não configurada na Vercel: as thumbs não são geradas.</p>}
             {!hasLogo && <p>Logo oficial do PFC não enviado: as thumbs saem sem logo.</p>}
+            {!isContentaConfigured() && <p>CONTENTA_HUB_SECRET não configurado: as lives não vão para o Contenta.</p>}
           </div>
         )}
 
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mt-6">
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mt-6">
           {[
+            { v: livesSemCorte, l: "Lives sem cortes", c: livesSemCorte ? "text-gold-500" : "text-white" },
             { v: revisar.length, l: "Para revisar", c: revisar.length ? "text-gold-500" : "text-white" },
             { v: fila.filter((x) => x.status !== "erro").length, l: "Na fila / gerando", c: "text-white" },
             { v: fila.filter((x) => x.status === "erro").length, l: "Com erro", c: fila.some((x) => x.status === "erro") ? "text-red-400" : "text-white" },
@@ -206,6 +239,87 @@ export default async function ProducaoPage() {
             <div key={k.l} className="bg-[#111] border border-[#222] rounded-xl p-5">
               <div className={`text-3xl font-black ${k.c}`}>{k.v}</div>
               <div className="text-white/50 text-sm mt-1">{k.l}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Lives */}
+        <h2 className="text-xl font-bold text-white mt-12 mb-1">Lives do canal</h2>
+        <p className="text-white/40 text-sm mb-4">
+          Live nova é cortada sozinha na rodada diária, 30 min depois do fim. As anteriores ao recurso
+          esperam um clique.
+        </p>
+        {lives.length === 0 && <p className="text-white/40 text-sm">Nenhuma live encerrada encontrada.</p>}
+        <div className="space-y-3">
+          {lives.map((l) => (
+            <div key={l.id} className="bg-[#111] border border-[#222] rounded-2xl p-4 flex flex-wrap gap-4 items-start justify-between">
+              <div className="flex gap-3 min-w-0">
+                {l.thumb_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={l.thumb_url} alt="" className="w-28 aspect-video object-cover rounded-md shrink-0 bg-black" />
+                )}
+                <div className="min-w-0">
+                  <a href={`https://youtu.be/${l.youtube_id}`} target="_blank" className="text-white font-semibold text-sm hover:text-gold-400 line-clamp-2">
+                    {l.title} ↗
+                  </a>
+                  <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${LIVE_STATUS[l.status].cls}`}>
+                      {LIVE_STATUS[l.status].label}
+                    </span>
+                    <span className="text-white/35 text-xs">
+                      {minutos(l.duration_sec)} · terminou {quando(l.ended_at)}
+                      {l.privacy && l.privacy !== "public" && ` · ${l.privacy}`}
+                    </span>
+                  </div>
+                  {l.jobs.length > 0 && (
+                    <ul className="mt-2 space-y-0.5 text-xs">
+                      {l.jobs.map((j) => (
+                        <li key={j.jobId}>
+                          <a href={contentaJobUrl(j.jobId)} target="_blank" className="text-white/60 hover:text-gold-400">
+                            {MODES[j.mode].label} — {JOB_STATUS[j.status]}
+                            {j.status === "done" && ` · ${j.totalCuts} cortes`} ↗
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {l.error && <p className="text-red-400 text-xs mt-2 break-words">{l.error}</p>}
+                  {l.triggered_at && (
+                    <p className="text-[11px] text-white/30 mt-1">
+                      disparada por {quem(l.triggered_by ?? "")} · {quando(l.triggered_at)}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {(l.status === "detectada" || l.status === "erro" || l.status === "ja_cortada") && (
+                <div className="flex flex-wrap items-start gap-2">
+                  <ProducaoForm
+                    action={triggerLiveAction}
+                    label={l.status === "erro" ? "Tentar de novo" : "Gerar cortes"}
+                    pending="Enviando..."
+                  >
+                    <input type="hidden" name="id" value={l.id} />
+                  </ProducaoForm>
+                  {l.status === "detectada" && (
+                    <>
+                      <form action={liveStatusAction}>
+                        <input type="hidden" name="id" value={l.id} />
+                        <input type="hidden" name="status" value="ja_cortada" />
+                        <button className="px-3 py-2 rounded-lg text-sm text-white/50 hover:text-white border border-[#2a2a2a]">
+                          Já cortei
+                        </button>
+                      </form>
+                      <form action={liveStatusAction}>
+                        <input type="hidden" name="id" value={l.id} />
+                        <input type="hidden" name="status" value="ignorada" />
+                        <button className="px-3 py-2 rounded-lg text-sm text-white/50 hover:text-white border border-[#2a2a2a]">
+                          Ignorar
+                        </button>
+                      </form>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>

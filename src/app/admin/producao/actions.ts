@@ -3,6 +3,8 @@
 import sharp from "sharp";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
+import { isContentaConfigured } from "@/lib/producao/contenta";
+import { setLiveStatus, syncLives, triggerLiveCuts } from "@/lib/producao/lives";
 import { approveThumb, generateFor, syncChannel } from "@/lib/producao/pipeline";
 import { LOGO_PATH, getVideo, logEvent, setConfig, updateVideo, upload, db } from "@/lib/producao/store";
 
@@ -26,6 +28,28 @@ function fail(e: unknown): ActionState {
 export async function syncAction(): Promise<void> {
   const role = await requireAdmin();
   await syncChannel(actorOf(role));
+  // Lê as lives e o andamento dos jobs, sem disparar nada: o disparo
+  // automático é do cron, o manual é o botão de cada live.
+  if (isContentaConfigured()) await syncLives().catch(() => null);
+  refresh();
+}
+
+export async function triggerLiveAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const role = await requireAdmin();
+  try {
+    await triggerLiveCuts(str(form, "id"), actorOf(role));
+    refresh();
+    return { ok: true, error: null };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function liveStatusAction(form: FormData): Promise<void> {
+  await requireAdmin();
+  const status = str(form, "status");
+  if (status !== "ignorada" && status !== "detectada" && status !== "ja_cortada") return;
+  await setLiveStatus(str(form, "id"), status);
   refresh();
 }
 
