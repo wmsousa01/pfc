@@ -14,10 +14,12 @@ import { connectedChannel } from "@/lib/producao/youtube-api";
 import { defaultCaption } from "@/lib/social/caption";
 import { isCryptoConfigured } from "@/lib/social/crypto";
 import { isMetaConfigured } from "@/lib/social/meta";
+import { IG_DAILY_MAX } from "@/lib/social/publisher";
 import { PLATFORMS, listConnections, type Platform, type PostStatus, type SocialPost } from "@/lib/social/store";
 import {
   cancelPostAction,
   disconnectMetaAction,
+  graduatePostAction,
   retryPostAction,
   runQueueAction,
   scheduleCutAction,
@@ -61,6 +63,15 @@ function minutos(sec: number | null): string {
 function amanha18h(): string {
   const d = new Date(Date.now() - 3 * 3_600_000 + 86_400_000);
   return `${d.toISOString().slice(0, 10)}T18:00`;
+}
+
+function num(n: number | undefined): string {
+  if (n === undefined) return "—";
+  return n >= 1000 ? `${(n / 1000).toFixed(1).replace(".", ",")} mil` : String(n);
+}
+
+function horasDesde(iso: string | null): number {
+  return iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 3_600_000) : 0;
 }
 
 function quem(actor: string | null): string {
@@ -123,6 +134,23 @@ export default async function MarketingPage({
   const fila = posts.filter((p) => p.status !== "publicado" && p.status !== "cancelado");
   const publicados = posts.filter((p) => p.status === "publicado").reverse();
   const postsOfCut = (file: string) => posts.filter((p) => p.contenta_job_id === jobId && p.cut_file === file);
+  // Mais views primeiro; empate decide quem foi mais compartilhado e salvo.
+  const testes = posts
+    .filter((p) => p.platform === "instagram" && p.trial && p.status === "publicado" && !p.graduated_at)
+    .sort(
+      (a, b) =>
+        (b.metrics?.views ?? -1) - (a.metrics?.views ?? -1) ||
+        (b.metrics?.shares ?? 0) + (b.metrics?.saved ?? 0) - ((a.metrics?.shares ?? 0) + (a.metrics?.saved ?? 0))
+    );
+  const metricsErro = testes.find((p) => p.metrics?.erro)?.metrics?.erro;
+
+  const TrialBox = () =>
+    connected.instagram ? (
+      <label className="flex items-center gap-1.5 text-xs text-white/80">
+        <input type="checkbox" name="trial" defaultChecked className="accent-gold-500" />
+        Instagram como Reel de teste (só não seguidores)
+      </label>
+    ) : null;
 
   const Badge = ({ s }: { s: PostStatus }) => (
     <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${STATUS[s].cls}`}>
@@ -159,6 +187,11 @@ export default async function MarketingPage({
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-white text-sm font-semibold line-clamp-1">{p.title}</span>
           <Badge s={p.status} />
+          {p.trial && (
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border border-gold-500/30 bg-gold-500/10 text-gold-400">
+              {p.graduated_at ? "Teste promovido" : "Teste"}
+            </span>
+          )}
         </div>
         <p className="text-white/40 text-xs mt-0.5">
           {PLATFORMS[p.platform].label} · {p.status === "publicado" ? quando(p.published_at) : quando(p.scheduled_at)} ·{" "}
@@ -303,6 +336,90 @@ export default async function MarketingPage({
           </div>
         </section>
 
+        {/* Ranking dos Reels de teste */}
+        {testes.length > 0 && (
+          <section>
+            <h2 className="text-lg font-bold text-white mb-1">
+              Reels de teste <span className="text-white/30 font-normal text-sm">({testes.length} aguardando decisão)</span>
+            </h2>
+            <p className="text-white/40 text-xs mb-3">
+              Só não seguidores viram estes Reels. Compare depois de 24–72 h e promova os melhores no app do Instagram
+              (Reel → ⋯ → Compartilhar com seguidores); depois marque aqui. Métricas atualizam a cada hora por 7 dias.
+            </p>
+            {metricsErro && (
+              <p className="text-yellow-300 text-xs mb-3 break-words">
+                A Meta não liberou as métricas ({metricsErro}). Adicione <code>instagram_manage_insights</code> na
+                configuração do Login for Business e clique em Reconectar.
+              </p>
+            )}
+            <div className={`${card} overflow-x-auto`}>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-white/40 text-left">
+                    <th className="font-normal pb-2 pr-3">#</th>
+                    <th className="font-normal pb-2 pr-3">Corte</th>
+                    <th className="font-normal pb-2 pr-3 text-right">Views</th>
+                    <th className="font-normal pb-2 pr-3 text-right">Alcance</th>
+                    <th className="font-normal pb-2 pr-3 text-right">Assistido</th>
+                    <th className="font-normal pb-2 pr-3 text-right">Compart.</th>
+                    <th className="font-normal pb-2 pr-3 text-right">Salvos</th>
+                    <th className="font-normal pb-2 pr-3 text-right">Curtidas</th>
+                    <th className="font-normal pb-2 pr-3 text-right">Coment.</th>
+                    <th className="pb-2" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {testes.map((p, i) => {
+                    const m = p.metrics ?? {};
+                    const h = horasDesde(p.published_at);
+                    return (
+                      <tr key={p.id} className="border-t border-[#1c1c1c] text-white/80">
+                        <td className="py-2.5 pr-3 text-white/40">{i + 1}</td>
+                        <td className="py-2.5 pr-3 min-w-[220px]">
+                          <div className="flex items-center gap-2.5">
+                            {p.thumb_url && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={p.thumb_url} alt="" className="w-8 aspect-[9/16] object-cover rounded shrink-0 bg-black" />
+                            )}
+                            <div className="min-w-0">
+                              <p className="text-white font-semibold line-clamp-1">{p.title}</p>
+                              <p className="text-white/40">
+                                há {h < 48 ? `${h} h` : `${Math.floor(h / 24)} dias`}
+                                {h < 24 && " · cedo para comparar"}
+                                {!p.metrics_at && " · sem métricas ainda"}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-2.5 pr-3 text-right font-semibold text-white">{num(m.views)}</td>
+                        <td className="py-2.5 pr-3 text-right">{num(m.reach)}</td>
+                        <td className="py-2.5 pr-3 text-right">
+                          {m.ig_reels_avg_watch_time !== undefined ? `${(m.ig_reels_avg_watch_time / 1000).toFixed(1)} s` : "—"}
+                        </td>
+                        <td className="py-2.5 pr-3 text-right">{num(m.shares)}</td>
+                        <td className="py-2.5 pr-3 text-right">{num(m.saved)}</td>
+                        <td className="py-2.5 pr-3 text-right">{num(m.likes)}</td>
+                        <td className="py-2.5 pr-3 text-right">{num(m.comments)}</td>
+                        <td className="py-2.5 text-right whitespace-nowrap">
+                          {p.post_url && (
+                            <a href={p.post_url} target="_blank" className="text-gold-500 hover:text-gold-400 mr-3">
+                              Abrir ↗
+                            </a>
+                          )}
+                          <form action={graduatePostAction} className="inline">
+                            <input type="hidden" name="id" value={p.id} />
+                            <button className="text-white/60 hover:text-emerald-400">Já promovi</button>
+                          </form>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
         {/* Programar */}
         <section>
           <h2 className="text-lg font-bold text-white mb-3">Programar cortes do Contenta</h2>
@@ -343,6 +460,7 @@ export default async function MarketingPage({
                   </div>
                   <p className="text-white/40 text-xs mt-1">
                     Um corte por horário, nas redes marcadas, com a legenda padrão. Corte que já está numa rede é pulado.
+                    Com o Instagram, no máximo {IG_DAILY_MAX} Reels por dia (intervalo mínimo de {24 / IG_DAILY_MAX} h).
                   </p>
                   <ProducaoForm
                     action={scheduleJobAction}
@@ -352,14 +470,17 @@ export default async function MarketingPage({
                     className="mt-4 flex flex-wrap items-end gap-4"
                   >
                     <input type="hidden" name="job" value={jobId} />
-                    <PlatformBoxes prefix="job" />
+                    <div className="space-y-1.5">
+                      <PlatformBoxes prefix="job" />
+                      <TrialBox />
+                    </div>
                     <label className="text-xs text-white/50">
                       Primeiro post
                       <input type="datetime-local" name="start" defaultValue={amanha18h()} required className={`${input} block mt-1`} />
                     </label>
                     <label className="text-xs text-white/50">
                       A cada (horas)
-                      <input type="number" name="interval" defaultValue={24} min={1} max={168} className={`${input} block mt-1 w-24`} />
+                      <input type="number" name="interval" defaultValue={6} min={1} max={168} className={`${input} block mt-1 w-24`} />
                     </label>
                   </ProducaoForm>
                 </div>
@@ -406,6 +527,7 @@ export default async function MarketingPage({
                             className={`${input} w-full resize-y`}
                           />
                           <PlatformBoxes prefix={c.file} />
+                          <TrialBox />
                           <label className="text-xs text-white/50 block">
                             Quando (em branco = agora)
                             <input type="datetime-local" name="publish_at" className={`${input} block mt-1`} />

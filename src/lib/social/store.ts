@@ -43,8 +43,27 @@ export type SocialPost = {
   error: string | null;
   created_by: string | null;
   published_at: string | null;
+  /** Reel de teste: o Instagram mostra só para não seguidores. */
+  trial: boolean;
+  metrics: ReelMetrics | null;
+  metrics_at: string | null;
+  /** A equipe promoveu o teste para os seguidores (no app). */
+  graduated_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+/** Insights do Reel; `erro` quando a Meta recusou a leitura. */
+export type ReelMetrics = {
+  views?: number;
+  reach?: number;
+  likes?: number;
+  comments?: number;
+  shares?: number;
+  saved?: number;
+  /** Em milissegundos. */
+  ig_reels_avg_watch_time?: number;
+  erro?: string;
 };
 
 export async function listConnections(): Promise<SafeConnection[]> {

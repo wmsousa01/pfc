@@ -18,6 +18,7 @@ const SCOPES = [
   "pages_manage_posts",
   "instagram_basic",
   "instagram_content_publish",
+  "instagram_manage_insights",
   "business_management",
 ].join(",");
 
@@ -119,13 +120,48 @@ export async function connectMeta(code: string, redirectUri: string): Promise<st
 
 // ---- Instagram Reels: container → processamento → media_publish ----
 
-export async function igCreateReel(igId: string, token: string, videoUrl: string, caption: string): Promise<string> {
+/**
+ * `trial` = Reel de teste: só não seguidores veem. MANUAL porque a API não
+ * promove — a equipe escolhe pelo ranking e promove no app.
+ */
+export async function igCreateReel(
+  igId: string,
+  token: string,
+  videoUrl: string,
+  caption: string,
+  trial = false
+): Promise<string> {
   const r = await graph<{ id: string }>(
     `/${igId}/media`,
-    { media_type: "REELS", video_url: videoUrl, caption: caption.slice(0, 2200), share_to_feed: "true", access_token: token },
+    {
+      media_type: "REELS",
+      video_url: videoUrl,
+      caption: caption.slice(0, 2200),
+      ...(trial ? { trial_params: JSON.stringify({ graduation_strategy: "MANUAL" }) } : { share_to_feed: "true" }),
+      access_token: token,
+    },
     "POST"
   );
   return r.id;
+}
+
+/** Quantos posts a conta publicou pela API nas últimas 24h (o teto da Meta é 100). */
+export async function igPublishingUsage(igId: string, token: string): Promise<number> {
+  const r = await graph<{ data?: { quota_usage?: number }[] }>(`/${igId}/content_publishing_limit`, {
+    fields: "quota_usage",
+    access_token: token,
+  });
+  return r.data?.[0]?.quota_usage ?? 0;
+}
+
+const REEL_METRICS = "views,reach,likes,comments,shares,saved,ig_reels_avg_watch_time";
+
+export async function igReelInsights(mediaId: string, token: string): Promise<Record<string, number>> {
+  const r = await graph<{ data: { name: string; values?: { value: number }[]; total_value?: { value: number } }[] }>(
+    `/${mediaId}/insights`,
+    { metric: REEL_METRICS, access_token: token }
+  );
+  return Object.fromEntries(r.data.map((m) => [m.name, m.total_value?.value ?? m.values?.[0]?.value ?? 0]));
 }
 
 /** FINISHED | IN_PROGRESS | ERROR | EXPIRED | PUBLISHED */
