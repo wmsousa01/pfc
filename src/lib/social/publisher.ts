@@ -1,7 +1,15 @@
 import "server-only";
 import { db } from "@/lib/producao/store";
 import { connectedChannel, uploadVideo } from "@/lib/producao/youtube-api";
-import { MetaError, fbPublishVideo, igContainerStatus, igCreateReel, igPublish } from "./meta";
+import {
+  MetaError,
+  fbPublishVideo,
+  igContainerStatus,
+  igCreateReel,
+  igPublish,
+  igPublishingUsage,
+  igReelInsights,
+} from "./meta";
 import { activeConnection, revokeConnection, updatePost, type SocialPost } from "./store";
 
 /** Um "publicando" mais velho que isso morreu no meio (timeout da função). */
@@ -12,6 +20,21 @@ const MAX_ATTEMPTS = 3;
 const RETRY_MS = 10 * 60_000;
 /** Depois disso a rodada não pega post novo: o upload do YouTube leva ~1 min. */
 const BUDGET_MS = 150_000;
+
+/**
+ * Ritmo do Instagram, bem abaixo do teto da API (100/24h) para a conta não
+ * parecer robô: no máximo 4 por 24h, 2h30 entre um e outro, horário com folga
+ * aleatória. Vale para todo Reel, de teste ou não.
+ */
+export const IG_DAILY_MAX = 4;
+const IG_GAP_MS = 150 * 60_000;
+const IG_JITTER_MS = 20 * 60_000;
+/** Uso da API (inclui outras ferramentas) a partir do qual a fila para. */
+const IG_API_STOP = 25;
+
+/** Métricas: até 7 dias depois de publicar, no máximo uma leitura por hora. */
+const METRICS_DAYS = 7;
+const METRICS_EVERY_MS = 60 * 60_000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e)).slice(0, 500);
@@ -67,7 +90,7 @@ async function publishOne(p: SocialPost): Promise<void> {
     }
     case "instagram": {
       const c = await meta("instagram");
-      const containerId = await igCreateReel(c.accountId, c.token, p.video_url, p.caption);
+      const containerId = await igCreateReel(c.accountId, c.token, p.video_url, p.caption, p.trial);
       await updatePost(p.id, { status: "processando", container_id: containerId, connection_id: c.id });
       await finishReel({ ...p, container_id: containerId }, 60_000);
       return;
@@ -100,6 +123,57 @@ async function failed(p: SocialPost, e: unknown): Promise<void> {
   });
 }
 
+/** null = o Instagram pode receber um Reel agora; senão, o próximo horário permitido. */
+async function igNextSlot(): Promise<Date | null> {
+  const day = 86_400_000;
+  const { data } = await db()
+    .from("social_posts")
+    .select("published_at, updated_at")
+    .eq("platform", "instagram")
+    .or(`status.eq.processando,and(status.eq.publicado,published_at.gte.${new Date(Date.now() - day).toISOString()})`);
+  const times = (data ?? []).map((r) => new Date(r.published_at ?? r.updated_at).getTime()).sort((a, b) => a - b);
+
+  let next = 0;
+  if (times.length >= IG_DAILY_MAX) next = times[times.length - IG_DAILY_MAX] + day;
+  if (times.length > 0) next = Math.max(next, times[times.length - 1] + IG_GAP_MS);
+  if (next <= Date.now()) {
+    const c = await activeConnection("instagram");
+    const usage = c ? await igPublishingUsage(c.accountId, c.token).catch(() => 0) : 0;
+    if (usage < IG_API_STOP) return null;
+    next = Date.now() + 3 * 3_600_000;
+  }
+  return new Date(next + Math.random() * IG_JITTER_MS);
+}
+
+/** Atualiza os insights dos Reels de teste recentes, que alimentam o ranking. */
+async function refreshTrialMetrics(started: number): Promise<number> {
+  const c = await activeConnection("instagram");
+  if (!c) return 0;
+  const { data } = await db()
+    .from("social_posts")
+    .select("id, external_id, metrics_at")
+    .eq("platform", "instagram")
+    .eq("trial", true)
+    .eq("status", "publicado")
+    .is("graduated_at", null)
+    .gte("published_at", new Date(Date.now() - METRICS_DAYS * 86_400_000).toISOString())
+    .or(`metrics_at.is.null,metrics_at.lt.${new Date(Date.now() - METRICS_EVERY_MS).toISOString()}`)
+    .order("metrics_at", { ascending: true, nullsFirst: true })
+    .limit(10);
+  let n = 0;
+  for (const p of data ?? []) {
+    if (!p.external_id || Date.now() - started > BUDGET_MS + 60_000) break;
+    try {
+      const metrics = await igReelInsights(p.external_id, c.token);
+      await updatePost(p.id, { metrics, metrics_at: new Date().toISOString() });
+      n++;
+    } catch (e) {
+      await updatePost(p.id, { metrics: { erro: msg(e) }, metrics_at: new Date().toISOString() });
+    }
+  }
+  return n;
+}
+
 /** Marca "publicando" só se ninguém pegou antes — cron e botão não duplicam. */
 async function claim(id: string): Promise<SocialPost | null> {
   const { data } = await db()
@@ -119,7 +193,7 @@ async function claim(id: string): Promise<SocialPost | null> {
 export async function runSocialQueue(limit = 4) {
   const started = Date.now();
   const now = new Date().toISOString();
-  const out = { publicados: 0, processando: 0, erros: 0, travados: 0 };
+  const out = { publicados: 0, processando: 0, erros: 0, travados: 0, adiados: 0, metricas: 0 };
 
   // Não dá para saber se o upload chegou na rede: erro, sem tentar sozinho.
   const { data: stale } = await db()
@@ -145,13 +219,25 @@ export async function runSocialQueue(limit = 4) {
 
   const { data: due } = await db()
     .from("social_posts")
-    .select("id")
+    .select("id, platform")
     .eq("status", "agendado")
     .lte("scheduled_at", now)
     .order("scheduled_at", { ascending: true })
     .limit(limit);
   for (const row of due ?? []) {
     if (Date.now() - started > BUDGET_MS) break;
+    if (row.platform === "instagram") {
+      const slot = await igNextSlot();
+      if (slot) {
+        await db()
+          .from("social_posts")
+          .update({ scheduled_at: slot.toISOString(), updated_at: new Date().toISOString() })
+          .eq("id", row.id)
+          .eq("status", "agendado");
+        out.adiados++;
+        continue;
+      }
+    }
     const p = await claim(row.id);
     if (!p) continue;
     try {
@@ -164,5 +250,7 @@ export async function runSocialQueue(limit = 4) {
       out.erros++;
     }
   }
+
+  out.metricas = await refreshTrialMetrics(started).catch(() => 0);
   return out;
 }

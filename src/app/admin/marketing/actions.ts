@@ -6,7 +6,7 @@ import type { ActionState } from "@/app/admin/producao/actions";
 import { listJobCuts, type ContentaCut } from "@/lib/producao/contenta";
 import { db } from "@/lib/producao/store";
 import { defaultCaption } from "@/lib/social/caption";
-import { runSocialQueue } from "@/lib/social/publisher";
+import { IG_DAILY_MAX, runSocialQueue } from "@/lib/social/publisher";
 import { PLATFORMS, deleteConnections, type Platform } from "@/lib/social/store";
 
 const PATH = "/admin/marketing";
@@ -52,7 +52,14 @@ type NewPost = {
   caption: string;
   at: Date;
   actor: string;
+  trial: boolean;
 };
+
+/** Folga aleatória de até 20 min: horários redondos repetidos parecem robô. */
+const jitter = (d: Date) => new Date(d.getTime() + Math.floor(Math.random() * 20 * 60_000));
+
+/** Com o Instagram no lote, o intervalo respeita o teto de Reels por dia. */
+const IG_MIN_INTERVAL_H = 24 / IG_DAILY_MAX;
 
 /** Insere os posts. O índice único barra corte repetido na mesma rede: devolve quantos pularam. */
 async function insertPosts(posts: NewPost[]): Promise<{ criados: number; repetidos: number }> {
@@ -69,6 +76,7 @@ async function insertPosts(posts: NewPost[]): Promise<{ criados: number; repetid
       caption: p.caption,
       scheduled_at: p.at.toISOString(),
       created_by: p.actor,
+      trial: p.platform === "instagram" && p.trial,
     });
     if (!error) criados++;
     else if (error.code === "23505") repetidos++;
@@ -94,13 +102,18 @@ export async function scheduleCutAction(_prev: ActionState, form: FormData): Pro
     }
     const title = str(form, "title") || cut.title || cut.file;
     const caption = str(form, "caption") || defaultCaption(cut);
+    const trial = form.get("trial") === "on";
     const r = await insertPosts(
-      platforms.map((platform) => ({ platform, cut, jobId, title, caption, at, actor: actorOf(role) }))
+      platforms.map((platform) => ({ platform, cut, jobId, title, caption, at, actor: actorOf(role), trial }))
     );
-    if (!when && r.criados > 0) await runSocialQueue(r.criados);
+    const q = !when && r.criados > 0 ? await runSocialQueue(r.criados) : null;
     refresh();
     if (r.criados === 0) return { ok: false, error: "Esse corte já está programado nessas redes." };
-    return { ok: true, error: r.repetidos ? `${r.repetidos} rede(s) já tinham esse corte e foram puladas.` : null };
+    const notes = [
+      r.repetidos && `${r.repetidos} rede(s) já tinham esse corte e foram puladas.`,
+      q?.adiados && "O Instagram está no limite de ritmo: o Reel foi para o próximo horário livre (veja a fila).",
+    ].filter(Boolean);
+    return { ok: true, error: notes.length ? notes.join(" ") : null };
   } catch (e) {
     refresh();
     return fail(e);
@@ -121,6 +134,13 @@ export async function scheduleJobAction(_prev: ActionState, form: FormData): Pro
     const start = brasilia(str(form, "start"));
     if (start.getTime() < Date.now() + 5 * 60_000) return { ok: false, error: "O primeiro horário precisa ser no futuro." };
     const interval = Math.min(168, Math.max(1, Number(str(form, "interval")) || 24));
+    if (platforms.includes("instagram") && interval < IG_MIN_INTERVAL_H) {
+      return {
+        ok: false,
+        error: `Com o Instagram no lote, o intervalo mínimo é de ${IG_MIN_INTERVAL_H} h (até ${IG_DAILY_MAX} Reels por dia).`,
+      };
+    }
+    const trial = form.get("trial") === "on";
 
     const cuts = await cutsOf(jobId);
     const { data: taken } = await db()
@@ -135,10 +155,10 @@ export async function scheduleJobAction(_prev: ActionState, form: FormData): Pro
     for (const cut of cuts) {
       const free = platforms.filter((p) => !has.has(`${p}|${cut.file}`));
       if (free.length === 0) continue;
-      const at = new Date(start.getTime() + slot * interval * 3_600_000);
+      const at = jitter(new Date(start.getTime() + slot * interval * 3_600_000));
       const caption = defaultCaption(cut);
       for (const platform of free) {
-        posts.push({ platform, cut, jobId, title: cut.title || cut.file, caption, at, actor: actorOf(role) });
+        posts.push({ platform, cut, jobId, title: cut.title || cut.file, caption, at, actor: actorOf(role), trial });
       }
       slot++;
     }
@@ -182,6 +202,17 @@ export async function runQueueAction(_prev: ActionState): Promise<ActionState> {
   } catch (e) {
     return fail(e);
   }
+}
+
+/** A equipe promoveu o Reel de teste no app: sai do ranking. */
+export async function graduatePostAction(form: FormData): Promise<void> {
+  await requireAdmin();
+  await db()
+    .from("social_posts")
+    .update({ graduated_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("id", str(form, "id"))
+    .eq("trial", true);
+  refresh();
 }
 
 export async function disconnectMetaAction(): Promise<void> {
