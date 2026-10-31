@@ -38,8 +38,8 @@ export function contentaJobUrl(jobId: string): string {
   return `${BASE}/cuts?jobId=${jobId}`;
 }
 
-async function call<T>(init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${BASE}/api/internal/hub`, {
+async function call<T>(init: RequestInit = {}, query = ""): Promise<T> {
+  const res = await fetch(`${BASE}/api/internal/hub${query}`, {
     ...init,
     headers: {
       "x-internal-secret": process.env.CONTENTA_HUB_SECRET ?? "",
@@ -55,6 +55,21 @@ async function call<T>(init: RequestInit = {}): Promise<T> {
 
 export async function listContentaJobs(): Promise<ContentaJob[]> {
   return (await call<{ items: ContentaJob[] }>()).items;
+}
+
+export type ContentaCut = {
+  file: string;
+  /** MP4 público no R2 — é a URL que Instagram e Facebook baixam. */
+  url: string;
+  title: string | null;
+  description: string | null;
+  thumbUrl: string | null;
+  durationSec: number | null;
+};
+
+/** Cortes de um job pronto, com a URL pública de cada um. */
+export async function listJobCuts(jobId: string): Promise<{ outputFormat: string | null; items: ContentaCut[] }> {
+  return call({}, `?jobId=${encodeURIComponent(jobId)}`);
 }
 
 /** Enfileira um job. Repetir com o mesmo jobId devolve o mesmo run. */
