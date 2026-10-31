@@ -144,13 +144,17 @@ export default async function MarketingPage({
     );
   const metricsErro = testes.find((p) => p.metrics?.erro)?.metrics?.erro;
 
-  const TrialBox = () =>
-    connected.instagram ? (
-      <label className="flex items-center gap-1.5 text-xs text-white/80">
-        <input type="checkbox" name="trial" defaultChecked className="accent-gold-500" />
-        Instagram como Reel de teste (só não seguidores)
-      </label>
-    ) : null;
+  // Um seletor só: "Reel de teste" sem o Instagram marcado não existe.
+  const InstagramMode = () => (
+    <label className={`flex items-center gap-1.5 text-xs ${connected.instagram ? "text-white/80" : "text-white/30"}`}>
+      Instagram
+      <select name="ig" defaultValue={connected.instagram ? "teste" : "off"} disabled={!connected.instagram} className={input}>
+        <option value="teste">Reel de teste (só não seguidores)</option>
+        <option value="normal">Reel normal</option>
+        <option value="off">Não publicar</option>
+      </select>
+    </label>
+  );
 
   const Badge = ({ s }: { s: PostStatus }) => (
     <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${STATUS[s].cls}`}>
@@ -160,7 +164,7 @@ export default async function MarketingPage({
 
   const PlatformBoxes = ({ prefix }: { prefix: string }) => (
     <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-      {ready.map((p) => (
+      {ready.filter((p) => p !== "instagram").map((p) => (
         <label key={p} className={`flex items-center gap-1.5 text-xs ${connected[p] ? "text-white/80" : "text-white/30"}`}>
           <input
             type="checkbox"
@@ -472,7 +476,7 @@ export default async function MarketingPage({
                     <input type="hidden" name="job" value={jobId} />
                     <div className="space-y-1.5">
                       <PlatformBoxes prefix="job" />
-                      <TrialBox />
+                      <InstagramMode />
                     </div>
                     <label className="text-xs text-white/50">
                       Primeiro post
@@ -527,7 +531,7 @@ export default async function MarketingPage({
                             className={`${input} w-full resize-y`}
                           />
                           <PlatformBoxes prefix={c.file} />
-                          <TrialBox />
+                          <InstagramMode />
                           <label className="text-xs text-white/50 block">
                             Quando (em branco = agora)
                             <input type="datetime-local" name="publish_at" className={`${input} block mt-1`} />

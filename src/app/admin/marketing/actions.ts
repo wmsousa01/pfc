@@ -24,12 +24,17 @@ function fail(e: unknown): ActionState {
   return { ok: false, error: e instanceof Error ? e.message : String(e) };
 }
 
+/** O Instagram vem do seletor `ig` (off | teste | normal); as outras redes, das caixas. */
 function platformsOf(form: FormData): Platform[] {
-  return form
+  const boxes = form
     .getAll("platforms")
     .map(String)
-    .filter((p): p is Platform => p in PLATFORMS && PLATFORMS[p as Platform].ready);
+    .filter((p): p is Platform => p in PLATFORMS && PLATFORMS[p as Platform].ready && p !== "instagram");
+  const ig = str(form, "ig");
+  return ig === "teste" || ig === "normal" ? [...boxes, "instagram"] : boxes;
 }
+
+const isTrial = (form: FormData) => str(form, "ig") === "teste";
 
 /** `when` vem do datetime-local, no horário de Brasília (sem horário de verão). */
 function brasilia(when: string): Date {
@@ -102,7 +107,7 @@ export async function scheduleCutAction(_prev: ActionState, form: FormData): Pro
     }
     const title = str(form, "title") || cut.title || cut.file;
     const caption = str(form, "caption") || defaultCaption(cut);
-    const trial = form.get("trial") === "on";
+    const trial = isTrial(form);
     const r = await insertPosts(
       platforms.map((platform) => ({ platform, cut, jobId, title, caption, at, actor: actorOf(role), trial }))
     );
@@ -140,7 +145,7 @@ export async function scheduleJobAction(_prev: ActionState, form: FormData): Pro
         error: `Com o Instagram no lote, o intervalo mínimo é de ${IG_MIN_INTERVAL_H} h (até ${IG_DAILY_MAX} Reels por dia).`,
       };
     }
-    const trial = form.get("trial") === "on";
+    const trial = isTrial(form);
 
     const cuts = await cutsOf(jobId);
     const { data: taken } = await db()
