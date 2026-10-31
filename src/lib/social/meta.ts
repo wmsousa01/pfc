@@ -35,13 +35,19 @@ export function isMetaConfigured(): boolean {
   return !!(process.env.META_APP_ID && process.env.META_APP_SECRET);
 }
 
+/**
+ * App do tipo Business usa o Facebook Login for Business: as permissões vêm
+ * da configuração (META_LOGIN_CONFIG_ID) e o `scope` é ignorado. Sem ela,
+ * cai no login clássico com a lista de escopos.
+ */
 export function metaAuthUrl(redirectUri: string, state: string): string {
+  const configId = process.env.META_LOGIN_CONFIG_ID;
   const params = new URLSearchParams({
     client_id: process.env.META_APP_ID ?? "",
     redirect_uri: redirectUri,
     state,
-    scope: SCOPES,
     response_type: "code",
+    ...(configId ? { config_id: configId, override_default_response_type: "true" } : { scope: SCOPES }),
   });
   return `https://www.facebook.com/${V}/dialog/oauth?${params}`;
 }
