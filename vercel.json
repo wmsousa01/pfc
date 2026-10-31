@@ -1,3 +1,3 @@
 {
-  "crons": [{ "path": "/api/cron/producao", "schedule": "0 12 * * *" }]
+  "crons": [{ "path": "/api/cron/producao", "schedule": "0 12 * * 2-6" }]
 }
