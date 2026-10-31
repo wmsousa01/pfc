@@ -183,6 +183,54 @@ export async function setThumbnail(videoId: string, jpeg: Buffer): Promise<void>
 }
 
 /**
+ * Sobe um vídeo novo, já público (Shorts do Contenta). Upload resumable em uma
+ * requisição só: o corte cabe na memória da função. Custa 1.600 de cota —
+ * com a cota padrão (10.000/dia) são ~6 uploads por dia no projeto.
+ */
+export async function uploadVideo(
+  video: Buffer,
+  meta: { title: string; description: string; tags?: string[] }
+): Promise<string> {
+  const token = await accessToken();
+  const init = await fetch(
+    "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json; charset=UTF-8",
+        "X-Upload-Content-Type": "video/mp4",
+        "X-Upload-Content-Length": String(video.length),
+      },
+      body: JSON.stringify({
+        snippet: {
+          title: meta.title.slice(0, 100),
+          description: meta.description.slice(0, 5000),
+          tags: meta.tags,
+          categoryId: "22",
+        },
+        status: { privacyStatus: "public", selfDeclaredMadeForKids: false },
+      }),
+      cache: "no-store",
+    }
+  );
+  const session = init.headers.get("location");
+  if (!init.ok || !session) {
+    throw new Error(`YouTube ${init.status}: ${(await init.text().catch(() => "")).slice(0, 300)}`);
+  }
+  const res = await fetch(session, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "video/mp4" },
+    body: new Uint8Array(video),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`YouTube upload ${res.status}: ${(await res.text().catch(() => "")).slice(0, 300)}`);
+  const json = (await res.json()) as { id?: string };
+  if (!json.id) throw new Error("O YouTube não devolveu o id do vídeo.");
+  return json.id;
+}
+
+/**
  * Publica agora (publishAt null) ou agenda. O videos.update troca o objeto
  * `status` inteiro, então os demais campos vêm do estado atual — sem isso o
  * vídeo perderia, por exemplo, a marcação de "não é para crianças".
