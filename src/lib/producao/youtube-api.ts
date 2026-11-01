@@ -252,3 +252,51 @@ export async function publishVideo(videoId: string, publishAt: Date | null): Pro
     body: JSON.stringify({ id: videoId, status: next }),
   });
 }
+
+// ---- Playlists: playlistItems.insert custa 50 de cota; listar custa 1 ----
+
+export type ChannelPlaylist = { id: string; title: string };
+
+export async function listPlaylists(): Promise<ChannelPlaylist[]> {
+  const out: ChannelPlaylist[] = [];
+  let page = "";
+  do {
+    const r = await ytFetch<{ items?: { id: string; snippet: { title: string } }[]; nextPageToken?: string }>(
+      `/playlists?part=snippet&mine=true&maxResults=50${page ? `&pageToken=${page}` : ""}`
+    );
+    for (const p of r.items ?? []) out.push({ id: p.id, title: p.snippet.title });
+    page = r.nextPageToken ?? "";
+  } while (page);
+  return out;
+}
+
+/** Ids dos vídeos de uma playlist, todas as páginas. */
+export async function listPlaylistVideoIds(playlistId: string): Promise<string[]> {
+  const out: string[] = [];
+  let page = "";
+  do {
+    const r = await ytFetch<{ items?: { contentDetails: { videoId: string } }[]; nextPageToken?: string }>(
+      `/playlistItems?part=contentDetails&maxResults=50&playlistId=${playlistId}${page ? `&pageToken=${page}` : ""}`
+    );
+    for (const i of r.items ?? []) out.push(i.contentDetails.videoId);
+    page = r.nextPageToken ?? "";
+  } while (page);
+  return out;
+}
+
+export async function createPlaylist(title: string): Promise<string> {
+  const r = await ytFetch<{ id: string }>(`/playlists?part=snippet,status`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ snippet: { title }, status: { privacyStatus: "public" } }),
+  });
+  return r.id;
+}
+
+export async function addToPlaylist(playlistId: string, videoId: string): Promise<void> {
+  await ytFetch(`/playlistItems?part=snippet`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ snippet: { playlistId, resourceId: { kind: "youtube#video", videoId } } }),
+  });
+}

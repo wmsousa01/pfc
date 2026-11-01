@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/auth";
 import { isContentaConfigured } from "@/lib/producao/contenta";
 import { setLiveStatus, syncLives, triggerLiveCuts } from "@/lib/producao/lives";
 import { approveThumb, generateFor, syncChannel } from "@/lib/producao/pipeline";
+import { runPlaylists } from "@/lib/producao/playlists";
 import { LOGO_PATH, getVideo, logEvent, setConfig, updateVideo, upload, db } from "@/lib/producao/store";
 
 const PATH = "/admin/producao";
@@ -39,6 +40,18 @@ export async function triggerLiveAction(_prev: ActionState, form: FormData): Pro
   try {
     await triggerLiveCuts(str(form, "id"), actorOf(role), { force: str(form, "force") === "1" });
     refresh();
+    return { ok: true, error: null };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function playlistsAction(_prev: ActionState): Promise<ActionState> {
+  await requireAdmin();
+  try {
+    const r = await runPlaylists();
+    refresh();
+    if (r.erro) return { ok: false, error: r.erro };
     return { ok: true, error: null };
   } catch (e) {
     return fail(e);
