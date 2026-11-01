@@ -46,27 +46,30 @@ export const QUADROS: Record<QuadroId, QuadroTheme> = {
     name: "Lado A Lado B",
     episodes: "Lado A Lado B",
     cuts: "Cortes Lado A Lado B",
-    accent: ["#ff9a9a", "#ff3b3b", "#c81e1e"],
-    split: ["#ff3b3b", "#2f8cff"],
-    stroke: "#0d0018",
-    glow: "#8b5cf6",
-    rim: "#ff4d5e",
-    selo: { bg: "#ff3b3b", bg2: "#2f8cff", text: "#ffffff" },
+    // Logo: disco azul-marinho (#051a2d) × laranja (#f7941d). O marinho do logo some no
+    // fundo escuro, então a metade azul da headline é ele clareado.
+    accent: ["#ffc06a", "#f7941d", "#e66d01"],
+    split: ["#5b9bdc", "#f7941d"],
+    stroke: "#04121f",
+    glow: "#f7941d",
+    rim: "#ff8a1c",
+    selo: { bg: "#0b2a48", bg2: "#f7941d", text: "#ffffff" },
     light:
-      "a tall vertical red light strip near the left edge and a tall vertical electric-blue light strip near the right edge, red bokeh on the left half and blue bokeh on the right half",
+      "a tall vertical deep navy-blue light strip near the left edge and a tall vertical warm orange light strip near the right edge, navy-blue bokeh on the left half and orange bokeh on the right half",
   },
   "pfc-news": {
     id: "pfc-news",
     name: "PFC News",
     episodes: "PFC News",
     cuts: "Cortes PFC News",
-    accent: ["#ff8a80", "#e53935", "#b71c1c"],
-    stroke: "#250000",
-    glow: "#e53935",
-    rim: "#ff5252",
-    selo: { bg: "#e53935", text: "#ffffff" },
+    // Logo: quadrado amarelo→laranja (#fcc43e → #fd9429) com microfone e letras pretas.
+    accent: ["#ffe08a", "#fcc43e", "#fd9429"],
+    stroke: "#111111",
+    glow: "#fcb030",
+    rim: "#ffc43e",
+    selo: { bg: "#fcc43e", text: "#111111" },
     light:
-      "a broadcast newsroom look: cool white key light, thin horizontal red LED accent lines, out-of-focus news screens glowing red and white in the background",
+      "a broadcast newsroom look: cool white key light, thin horizontal amber-yellow LED accent lines, out-of-focus news screens glowing amber and white in the background",
   },
   "pfc-visita": {
     id: "pfc-visita",
