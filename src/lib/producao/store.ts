@@ -13,7 +13,10 @@ export type ProducaoStatus =
   | "ignorado"
   | "erro";
 
-export type Headline = { l1: string; l2: string };
+/** l3 é opcional: com ela a thumb sai em três linhas (gancho / destaque / complemento). */
+export type Headline = { l1: string; l2: string; l3?: string };
+
+export const headlineText = (h: { l1: string; l2: string; l3?: string | null }) => [h.l1, h.l2, h.l3].filter(Boolean).join(" / ");
 
 export type ProducaoVideo = {
   id: string;
@@ -43,6 +46,7 @@ export type ProducaoThumb = {
   storage_path: string;
   l1: string;
   l2: string;
+  l3: string | null;
   model: string;
   created_by: string | null;
   created_at: string;

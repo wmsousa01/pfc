@@ -30,8 +30,9 @@ async function generate(model: string, body: unknown): Promise<any> {
 }
 
 /**
- * Headlines de duas linhas a partir da transcrição: linha 1 curta (gancho),
- * linha 2 a virada/pergunta.
+ * Headlines a partir da transcrição, como nas thumbs da equipe: linha 1 curta
+ * (gancho, menor), linha 2 o destaque na cor do quadro e, de preferência,
+ * linha 3 que completa a frase.
  */
 export async function suggestHeadlines(
   title: string,
@@ -43,9 +44,11 @@ Título do corte: ${title}
 Transcrição do corte (pode estar vazia ou com erros de reconhecimento):
 """${(transcript ?? "").slice(0, 12000)}"""
 
-Gere ${count} headlines diferentes em português do Brasil, em MAIÚSCULAS, cada uma em duas linhas:
-- l1: até 3 palavras, gancho (ex.: "VOCÊ ESQUECEU")
-- l2: até 4 palavras, a virada ou pergunta (ex.: "POR QUE COMEÇOU?")
+Gere ${count} headlines diferentes em português do Brasil, em MAIÚSCULAS. Cada uma é uma frase só, quebrada em linhas:
+- l1: até 4 palavras, o gancho, sai menor (ex.: "DISCIPLINA QUE TRANSFORMA")
+- l2: até 2 palavras, o destaque, sai grande e colorido (ex.: "UMA PARCERIA")
+- l3: até 2 palavras, completa a frase, sai grande (ex.: "DE CONFIANÇA"); deixe vazio só se a frase ficar melhor em duas linhas
+Prefira três linhas; a l2 e a l3 têm que caber curtas porque saem enormes.
 Regras: fiel ao que é dito no corte, provoca curiosidade, sem clickbait mentiroso, sem nomes de pessoas, sem emojis, ortografia e acentos perfeitos.`;
 
   const json = await generate(TEXT_MODEL, {
@@ -59,7 +62,7 @@ Regras: fiel ao que é dito no corte, provoca curiosidade, sem clickbait mentiro
             type: "ARRAY",
             items: {
               type: "OBJECT",
-              properties: { l1: { type: "STRING" }, l2: { type: "STRING" } },
+              properties: { l1: { type: "STRING" }, l2: { type: "STRING" }, l3: { type: "STRING" } },
               required: ["l1", "l2"],
             },
           },
@@ -71,7 +74,11 @@ Regras: fiel ao que é dito no corte, provoca curiosidade, sem clickbait mentiro
   const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
   const parsed = JSON.parse(text) as { options?: Headline[] };
   const options = (parsed.options ?? [])
-    .map((o) => ({ l1: o.l1.trim().toUpperCase(), l2: o.l2.trim().toUpperCase() }))
+    .map((o) => ({
+      l1: o.l1.trim().toUpperCase(),
+      l2: o.l2.trim().toUpperCase(),
+      ...(o.l3?.trim() ? { l3: o.l3.trim().toUpperCase() } : {}),
+    }))
     .filter((o) => o.l1 && o.l2)
     .slice(0, count);
   if (options.length === 0) throw new Error("O Gemini não devolveu headline.");

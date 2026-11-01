@@ -67,14 +67,15 @@ export async function liveStatusAction(form: FormData): Promise<void> {
   refresh();
 }
 
-/** Gera (ou regenera) thumbs. Com l1/l2 preenchidos, usa a headline da equipe. */
+/** Gera (ou regenera) thumbs. Com l1/l2 (e l3, opcional) preenchidos, usa a headline da equipe. */
 export async function generateAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   const role = await requireAdmin();
   const id = str(form, "id");
   const l1 = str(form, "l1").toUpperCase().slice(0, 40);
   const l2 = str(form, "l2").toUpperCase().slice(0, 40);
+  const l3 = str(form, "l3").toUpperCase().slice(0, 40);
   try {
-    await generateFor(id, actorOf(role), l1 && l2 ? { headline: { l1, l2 } } : {});
+    await generateFor(id, actorOf(role), l1 && l2 ? { headline: { l1, l2, ...(l3 ? { l3 } : {}) } } : {});
     const v = await getVideo(id);
     refresh();
     return v?.status === "erro" ? { ok: false, error: v.error } : { ok: true, error: null };

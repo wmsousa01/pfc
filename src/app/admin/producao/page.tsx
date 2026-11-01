@@ -7,6 +7,7 @@ import {
   getConfig,
   db,
   download,
+  headlineText,
   signedUrls,
   type ProducaoEvento,
   type ProducaoStatus,
@@ -199,6 +200,7 @@ export default async function ProducaoPage() {
           {v.headline_options.map((h, i) => (
             <li key={i}>
               <span className="text-white/80">{h.l1}</span> / <span className="text-gold-400">{h.l2}</span>
+              {h.l3 && <span className="text-white/80"> / {h.l3}</span>}
             </li>
           ))}
         </ul>
@@ -212,7 +214,8 @@ export default async function ProducaoPage() {
       >
         <input type="hidden" name="id" value={v.id} />
         <input name="l1" placeholder="Linha 1 (vazio = IA sugere)" className={`${input} w-48`} />
-        <input name="l2" placeholder="Linha 2" className={`${input} w-48`} />
+        <input name="l2" placeholder="Linha 2 (destaque)" className={`${input} w-48`} />
+        <input name="l3" placeholder="Linha 3 (opcional)" className={`${input} w-48`} />
       </ProducaoForm>
     </details>
   );
@@ -421,11 +424,12 @@ export default async function ProducaoPage() {
                   <div key={t.id} className="bg-[#0a0a0a] border border-[#222] rounded-xl overflow-hidden">
                     <a href={urls.get(t.storage_path)} target="_blank">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={urls.get(t.storage_path)} alt={`${t.l1} ${t.l2}`} className="w-full aspect-video object-cover" />
+                      <img src={urls.get(t.storage_path)} alt={headlineText(t)} className="w-full aspect-video object-cover" />
                     </a>
                     <div className="p-3">
                       <div className="text-xs">
                         <span className="text-white/80">{t.l1}</span> / <span className="text-gold-400">{t.l2}</span>
+                        {t.l3 && <span className="text-white/80"> / {t.l3}</span>}
                       </div>
                       <div className="text-[11px] text-white/30 mt-0.5">
                         {quando(t.created_at)}

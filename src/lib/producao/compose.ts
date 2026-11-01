@@ -58,13 +58,20 @@ function lineSvg(id: string, d: string, fill: string, extrude: string, depth: nu
 function headlineSvg(h: Headline, t: QuadroTheme): string {
   const [r, g, b] = rgb01(t.glow).split(" ");
   const f = anton();
-  // Linha 1 menor (o gancho), linha 2 bem maior — a hierarquia das thumbs da equipe.
-  const f1 = fit(h.l1, 1080, 100);
-  const f2 = fit(h.l2, 1170, 196);
-  const base2 = H - 44;
+  // Linha 1 menor (o gancho), linha 2 bem maior na cor do quadro e, quando
+  // há, linha 3 do mesmo tamanho em prata — a hierarquia das thumbs da equipe.
+  const three = !!h.l3;
+  const big = three ? 164 : 196;
+  const f1 = fit(h.l1, 1080, three ? 84 : 100);
+  const f2 = fit(h.l2, 1170, big);
+  const f3 = three ? fit(h.l3!, 1170, big) : null;
+  const base3 = H - 44;
+  const base2 = f3 ? base3 - f3.size * CAP - 22 : base3;
   const base1 = base2 - f2.size * CAP - 26;
+  const last = f3 ? base3 : base2;
   const p1 = f.getPath(h.l1, (W - f1.width) / 2, base1, f1.size).toPathData(2);
   const p2 = f.getPath(h.l2, (W - f2.width) / 2, base2, f2.size).toPathData(2);
+  const p3 = f3 ? f.getPath(h.l3!, (W - f3.width) / 2, base3, f3.size).toPathData(2) : null;
   // Itálico (PFC News): inclina cada linha a partir da própria base, sem sair do centro.
   const skew = (base: number) => (t.italic ? ` transform="translate(${W / 2} ${base}) skewX(-9) translate(${-W / 2} ${-base})"` : "");
   const accent = t.split
@@ -77,8 +84,8 @@ function headlineSvg(h: Headline, t: QuadroTheme): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}">
 <defs>
   <linearGradient id="band" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0.44" stop-color="#03060f" stop-opacity="0"/>
-    <stop offset="0.60" stop-color="#03060f" stop-opacity="0.92"/>
+    <stop offset="${three ? 0.34 : 0.44}" stop-color="#03060f" stop-opacity="0"/>
+    <stop offset="${three ? 0.52 : 0.6}" stop-color="#03060f" stop-opacity="0.92"/>
     <stop offset="1" stop-color="#000000" stop-opacity="1"/>
   </linearGradient>
   <linearGradient id="silver" x1="0" y1="0" x2="0" y2="1">
@@ -105,10 +112,11 @@ function headlineSvg(h: Headline, t: QuadroTheme): string {
   <filter id="streak" x="-20%" y="-400%" width="140%" height="900%"><feGaussianBlur stdDeviation="7 3"/></filter>
 </defs>
 <rect width="${W}" height="${H}" fill="url(#band)"/>
-<ellipse cx="${W / 2}" cy="${base2 + 22}" rx="560" ry="7" fill="${t.glow}" opacity="0.9" filter="url(#streak)"/>
-<ellipse cx="${W / 2}" cy="${base2 + 22}" rx="320" ry="2" fill="#fff" opacity="0.9" filter="url(#streak)"/>
+<ellipse cx="${W / 2}" cy="${last + 22}" rx="560" ry="7" fill="${t.glow}" opacity="0.9" filter="url(#streak)"/>
+<ellipse cx="${W / 2}" cy="${last + 22}" rx="320" ry="2" fill="#fff" opacity="0.9" filter="url(#streak)"/>
 <g${skew(base1)}>${lineSvg("l1", p1, "url(#silver)", "#2a2a2a", 6, 2)}</g>
 <g filter="url(#glow)"><g${skew(base2)}>${lineSvg("l2", p2, "url(#accent)", t.stroke, 11, 3.5)}</g></g>
+${p3 ? `<g${skew(base3)}>${lineSvg("l3", p3, "url(#silver)", "#2a2a2a", 11, 3.5)}</g>` : ""}
 </svg>`;
 }
 
