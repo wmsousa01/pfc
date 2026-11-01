@@ -33,16 +33,48 @@ function rgb01(hex: string): string {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => (c / 255).toFixed(3)).join(" ");
 }
 
+/** Altura das maiúsculas da Anton, em fração do tamanho da fonte. */
+const CAP = 0.86;
+
+/**
+ * Uma linha da headline no acabamento das thumbs da equipe: volume 3D
+ * (cópias escuras empilhadas para baixo), contorno grosso, letra engrossada
+ * (a Anton pura fica fina e espaçada perto da arte da equipe), preenchimento
+ * metálico, brilho no topo e textura de metal arranhado. O path fica sem
+ * estilo nos defs: atributo no path original não deixa o <use> trocar a cor.
+ */
+function lineSvg(id: string, d: string, fill: string, extrude: string, depth: number, bold: number): string {
+  const outline = bold * 2 + 9;
+  const shape = (paint: string) => `fill="${paint}" stroke="${paint}" stroke-width="${bold * 2}" stroke-linejoin="round"`;
+  const layers = Array.from({ length: depth }, (_, i) => `<use xlink:href="#${id}" y="${i + 1}"/>`).join("");
+  return `<defs><path id="${id}" d="${d}"/></defs>
+<g filter="url(#shadow)"><g fill="${extrude}" stroke="${extrude}" stroke-width="${outline}" stroke-linejoin="round">${layers}</g></g>
+<use xlink:href="#${id}" fill="#050505" stroke="#050505" stroke-width="${outline}" stroke-linejoin="round"/>
+<use xlink:href="#${id}" ${shape(fill)}/>
+<use xlink:href="#${id}" ${shape("url(#sheen)")}/>
+<use xlink:href="#${id}" ${shape("#000")} filter="url(#grunge)"/>`;
+}
+
 function headlineSvg(h: Headline, t: QuadroTheme): string {
   const [r, g, b] = rgb01(t.glow).split(" ");
   const f = anton();
-  const f1 = fit(h.l1, 1160, 118);
-  const f2 = fit(h.l2, 1180, 150);
-  const base2 = H - 34;
-  const base1 = base2 - f2.size * 0.98;
+  // Linha 1 menor (o gancho), linha 2 bem maior — a hierarquia das thumbs da equipe.
+  const f1 = fit(h.l1, 1080, 100);
+  const f2 = fit(h.l2, 1170, 196);
+  const base2 = H - 44;
+  const base1 = base2 - f2.size * CAP - 26;
   const p1 = f.getPath(h.l1, (W - f1.width) / 2, base1, f1.size).toPathData(2);
   const p2 = f.getPath(h.l2, (W - f2.width) / 2, base2, f2.size).toPathData(2);
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+  // Itálico (PFC News): inclina cada linha a partir da própria base, sem sair do centro.
+  const skew = (base: number) => (t.italic ? ` transform="translate(${W / 2} ${base}) skewX(-9) translate(${-W / 2} ${-base})"` : "");
+  const accent = t.split
+    ? `<linearGradient id="accent" gradientUnits="userSpaceOnUse" x1="${(W - f2.width) / 2}" y1="0" x2="${(W + f2.width) / 2}" y2="0">
+    <stop offset="0.46" stop-color="${t.split[0]}"/><stop offset="0.54" stop-color="${t.split[1]}"/>
+  </linearGradient>`
+    : `<linearGradient id="accent" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="${t.accent[0]}"/><stop offset="0.45" stop-color="${t.accent[1]}"/><stop offset="0.8" stop-color="${t.accent[2]}"/><stop offset="1" stop-color="${t.accent[1]}"/>
+  </linearGradient>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}">
 <defs>
   <linearGradient id="band" x1="0" y1="0" x2="0" y2="1">
     <stop offset="0.44" stop-color="#03060f" stop-opacity="0"/>
@@ -50,29 +82,33 @@ function headlineSvg(h: Headline, t: QuadroTheme): string {
     <stop offset="1" stop-color="#000000" stop-opacity="1"/>
   </linearGradient>
   <linearGradient id="silver" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0" stop-color="#ffffff"/><stop offset="0.55" stop-color="#f3ece2"/><stop offset="1" stop-color="#bdb5aa"/>
+    <stop offset="0" stop-color="#ffffff"/><stop offset="0.4" stop-color="#f1f1f1"/><stop offset="0.62" stop-color="#b9b9b9"/><stop offset="0.82" stop-color="#ececec"/><stop offset="1" stop-color="#a3a3a3"/>
   </linearGradient>
-  ${
-    t.split
-      ? `<linearGradient id="accent" gradientUnits="userSpaceOnUse" x1="${(W - f2.width) / 2}" y1="0" x2="${(W + f2.width) / 2}" y2="0">
-    <stop offset="0.46" stop-color="${t.split[0]}"/><stop offset="0.54" stop-color="${t.split[1]}"/>
-  </linearGradient>`
-      : `<linearGradient id="accent" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0" stop-color="${t.accent[0]}"/><stop offset="0.5" stop-color="${t.accent[1]}"/><stop offset="1" stop-color="${t.accent[2]}"/>
-  </linearGradient>`
-  }
+  ${accent}
+  <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#fff" stop-opacity="0.7"/><stop offset="0.3" stop-color="#fff" stop-opacity="0.12"/><stop offset="0.45" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.18"/>
+  </linearGradient>
+  <filter id="grunge" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.55 0.12" numOctaves="4" seed="7" result="n"/>
+    <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -3.2 0 0 0 1.55" result="spots"/>
+    <feComposite in="spots" in2="SourceAlpha" operator="in" result="s"/>
+    <feComponentTransfer in="s"><feFuncA type="linear" slope="0.2"/></feComponentTransfer>
+  </filter>
   <filter id="shadow" x="-10%" y="-20%" width="120%" height="160%">
-    <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000" flood-opacity="0.9"/>
+    <feDropShadow dx="0" dy="8" stdDeviation="7" flood-color="#000" flood-opacity="0.95"/>
   </filter>
   <filter id="glow" x="-10%" y="-30%" width="120%" height="180%">
-    <feGaussianBlur stdDeviation="10" result="b"/>
-    <feColorMatrix in="b" type="matrix" values="0 0 0 0 ${r}  0 0 0 0 ${g}  0 0 0 0 ${b}  0 0 0 0.55 0"/>
+    <feGaussianBlur stdDeviation="14" result="b"/>
+    <feColorMatrix in="b" type="matrix" values="0 0 0 0 ${r}  0 0 0 0 ${g}  0 0 0 0 ${b}  0 0 0 0.6 0"/>
     <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
   </filter>
+  <filter id="streak" x="-20%" y="-400%" width="140%" height="900%"><feGaussianBlur stdDeviation="7 3"/></filter>
 </defs>
 <rect width="${W}" height="${H}" fill="url(#band)"/>
-<g filter="url(#shadow)"><path d="${p1}" fill="url(#silver)" stroke="#0b0b0b" stroke-width="5" paint-order="stroke" stroke-linejoin="round"/></g>
-<g filter="url(#glow)"><g filter="url(#shadow)"><path d="${p2}" fill="url(#accent)" stroke="${t.stroke}" stroke-width="6" paint-order="stroke" stroke-linejoin="round"/></g></g>
+<ellipse cx="${W / 2}" cy="${base2 + 22}" rx="560" ry="7" fill="${t.glow}" opacity="0.9" filter="url(#streak)"/>
+<ellipse cx="${W / 2}" cy="${base2 + 22}" rx="320" ry="2" fill="#fff" opacity="0.9" filter="url(#streak)"/>
+<g${skew(base1)}>${lineSvg("l1", p1, "url(#silver)", "#2a2a2a", 6, 2)}</g>
+<g filter="url(#glow)"><g${skew(base2)}>${lineSvg("l2", p2, "url(#accent)", t.stroke, 11, 3.5)}</g></g>
 </svg>`;
 }
 
