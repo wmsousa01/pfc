@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isContentaConfigured } from "@/lib/producao/contenta";
 import { runLives } from "@/lib/producao/lives";
 import { AUTOMACAO, runQueue } from "@/lib/producao/pipeline";
+import { runPlaylists } from "@/lib/producao/playlists";
 import { connectedChannel } from "@/lib/producao/youtube-api";
 
 export const dynamic = "force-dynamic";
@@ -21,5 +22,10 @@ export async function GET(req: NextRequest) {
   const lives = isContentaConfigured()
     ? await runLives(AUTOMACAO).catch((e) => ({ lives_erro: e instanceof Error ? e.message : String(e) }))
     : { lives: "CONTENTA_HUB_SECRET ausente" };
-  return NextResponse.json({ ...lives, ...(await runQueue(2)) });
+  const thumbs = await runQueue(2);
+  // Cortes que subiram desde a última rodada vão para as playlists do quadro.
+  const playlists = isContentaConfigured()
+    ? await runPlaylists().catch((e) => ({ erro: e instanceof Error ? e.message : String(e) }))
+    : null;
+  return NextResponse.json({ ...lives, ...thumbs, playlists });
 }

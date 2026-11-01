@@ -16,10 +16,12 @@ import {
 import { connectedChannel } from "@/lib/producao/youtube-api";
 import { MODES, contentaJobUrl, isContentaConfigured } from "@/lib/producao/contenta";
 import { CONTENTA_ERROR, refreshCuttingLives, type LiveStatus, type ProducaoLive } from "@/lib/producao/lives";
+import { lastPlaylistsResult } from "@/lib/producao/playlists";
 import {
   approveAction,
   generateAction,
   liveStatusAction,
+  playlistsAction,
   setStatusAction,
   syncAction,
   triggerLiveAction,
@@ -76,7 +78,11 @@ function quem(actor: string): string {
 
 export default async function ProducaoPage() {
   await requireAdmin();
-  const [channel, contentaError] = await Promise.all([connectedChannel(), getConfig(CONTENTA_ERROR)]);
+  const [channel, contentaError, playlists] = await Promise.all([
+    connectedChannel(),
+    getConfig(CONTENTA_ERROR),
+    lastPlaylistsResult().catch(() => null),
+  ]);
 
   const since = new Date(Date.now() - 14 * 86_400_000).toISOString();
   const { data: rows } = await db()
@@ -252,6 +258,51 @@ export default async function ProducaoPage() {
             </div>
           ))}
         </div>
+
+        {/* Playlists dos cortes */}
+        {channel && isContentaConfigured() && (
+          <div className="mt-6 bg-[#111] border border-[#222] rounded-2xl p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-white font-semibold text-sm">Playlists dos cortes</p>
+                <p className="text-white/40 text-xs mt-0.5 max-w-2xl">
+                  Cada corte vai para &quot;Cortes &lt;quadro&gt;&quot; e, se for Short, também para &quot;Shorts&quot;. O quadro
+                  vem da live de origem: ponha a live na playlist do quadro e a rodada das 23h faz o resto.
+                </p>
+                {playlists && (
+                  <p className="text-white/50 text-xs mt-2">
+                    Última organização {quando(playlists.at)}: {playlists.adicionados} inclusão(ões)
+                    {playlists.criadas.length > 0 && ` · criou ${playlists.criadas.join(", ")}`}
+                  </p>
+                )}
+                {playlists?.erro && <p className="text-red-400 text-xs mt-1 break-words">{playlists.erro}</p>}
+              </div>
+              <ProducaoForm
+                action={playlistsAction}
+                label="Organizar agora"
+                pending="Organizando…"
+                okMessage="Playlists em dia."
+                buttonClassName="text-sm border border-[#2a2a2a] hover:border-gold-500/50 text-white/70 hover:text-white rounded-lg px-3 py-1.5"
+              />
+            </div>
+            {playlists && playlists.semOrigem.length > 0 && (
+              <div className="mt-3 text-xs">
+                <p className="text-yellow-300">
+                  Sem live de origem identificada — ponha na playlist à mão ou ponha a live na playlist do quadro:
+                </p>
+                <ul className="mt-1 space-y-0.5">
+                  {playlists.semOrigem.map((v) => (
+                    <li key={v.id}>
+                      <a href={`https://studio.youtube.com/video/${v.id}/edit`} target="_blank" className="text-white/60 hover:text-gold-400">
+                        {v.title} ↗
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Lives */}
         <h2 className="text-xl font-bold text-white mt-12 mb-1">Lives do canal</h2>
