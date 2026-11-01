@@ -17,8 +17,11 @@ export type QuadroTheme = {
   accent: [string, string, string];
   /** Com isto, a 2ª linha divide na horizontal (esquerda × direita) em vez do degradê vertical. */
   split?: [string, string];
+  /** Cor do volume 3D da 2ª linha (a 1ª é sempre grafite). */
   stroke: string;
   glow: string;
+  /** Headline inclinada, como nas thumbs do PFC News. */
+  italic?: boolean;
   /** Contorno de luz atrás das pessoas recortadas. */
   rim: string;
   /** Selo: com `bg2`, o fundo é um degradê (Lado A × Lado B). */
@@ -68,6 +71,7 @@ export const QUADROS: Record<QuadroId, QuadroTheme> = {
     glow: "#fcb030",
     rim: "#ffc43e",
     selo: { bg: "#fcc43e", text: "#111111" },
+    italic: true,
     light:
       "a broadcast newsroom look: cool white key light, thin horizontal amber-yellow LED accent lines, out-of-focus news screens glowing amber and white in the background",
   },
