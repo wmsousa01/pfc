@@ -44,6 +44,26 @@ export type PlaylistsResult = {
   erro?: string;
 };
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Inclusões seguidas na mesma playlist voltam 409 ABORTED / 5xx de vez em
+ * quando: espera e tenta de novo.
+ */
+async function addWithRetry(playlistId: string, videoId: string): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await addToPlaylist(playlistId, videoId);
+      await sleep(400);
+      return;
+    } catch (e) {
+      const transient = /YouTube (409|5\d\d)/.test(e instanceof Error ? e.message : "");
+      if (!transient || attempt >= 4) throw e;
+      await sleep(1500 * attempt);
+    }
+  }
+}
+
 const norm = (s: string | null | undefined) =>
   (s ?? "")
     .toLowerCase()
@@ -134,9 +154,15 @@ export async function runPlaylists(): Promise<PlaylistsResult> {
         const id = await playlistOf(t);
         if (members.get(id)!.has(v.id)) continue;
         if (result.adicionados >= MAX_INSERTS) throw new Error(`Limite de ${MAX_INSERTS} por rodada; o resto vai na próxima.`);
-        await addToPlaylist(id, v.id);
-        members.get(id)!.add(v.id);
-        result.adicionados++;
+        try {
+          await addWithRetry(id, v.id);
+          members.get(id)!.add(v.id);
+          result.adicionados++;
+        } catch (e) {
+          // Um vídeo que falhou não segura os outros; a próxima rodada tenta de novo.
+          if (/YouTube 403/.test(e instanceof Error ? e.message : "")) throw e;
+          result.erro = `"${v.title}" não entrou em ${t}: ${(e instanceof Error ? e.message : String(e)).slice(0, 200)}`;
+        }
       }
     }
   } catch (e) {
