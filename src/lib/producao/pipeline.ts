@@ -3,7 +3,9 @@ import { randomUUID } from "crypto";
 import { composeThumb, prepareLogo, preparePeople } from "./compose";
 import { IMAGE_MODEL, pickBestFrame, renderPlate, suggestHeadlines } from "./gemini";
 import { matte } from "./matte";
-import { DEFAULT_PLATE_PROMPT } from "./prompt";
+import { detectQuadro } from "./playlists";
+import { platePrompt } from "./prompt";
+import { isQuadroId, quadroLogoPath, themeOf } from "./quadros";
 import {
   LOGO_PATH,
   db,
@@ -152,20 +154,28 @@ export async function generateFor(
       await updateVideo(v.id, { headline_options: s.options });
     }
 
+    // Identidade do quadro: descoberto pela live de origem uma vez; a equipe pode trocar no cartão.
+    let quadro = isQuadroId(v.quadro) ? v.quadro : null;
+    if (!quadro) {
+      quadro = await detectQuadro(v.title).catch(() => null);
+      if (quadro) await updateVideo(v.id, { quadro });
+    }
+    const theme = themeOf(quadro);
+
     // Fundo no Gemini em paralelo com a escolha do frame e o recorte.
     const [{ frame, note }, plate, logoRaw] = await Promise.all([
       chooseFrame(v),
-      getConfig("plate_prompt").then((p) => renderPlate(p || DEFAULT_PLATE_PROMPT)),
-      download(LOGO_PATH),
+      getConfig("plate_prompt").then((p) => renderPlate(platePrompt(p, theme))),
+      download(quadroLogoPath(theme.id)).then((l) => l ?? download(LOGO_PATH)),
     ]);
     const [people, logo] = await Promise.all([
-      matte(frame).then(preparePeople),
+      matte(frame).then((m) => preparePeople(m, theme.rim)),
       logoRaw ? prepareLogo(logoRaw) : Promise.resolve(null),
     ]);
 
     const made = await Promise.allSettled(
       headlines.map(async (h) => {
-        const jpeg = await composeThumb(plate, people, logo, h);
+        const jpeg = await composeThumb(plate, people, logo, h, theme);
         const path = `thumbs/${v.id}/${randomUUID()}.jpg`;
         await upload(path, jpeg, "image/jpeg");
         await db().from("producao_thumbs").insert({
@@ -188,7 +198,7 @@ export async function generateFor(
       v.id,
       actor,
       "gerou thumbs",
-      `${ok} opção(ões) · ${note}${transcript ? "" : " · sem legenda, headline só pelo título"}`
+      `${ok} opção(ões) · ${theme.name}${quadro ? "" : " (quadro não identificado)"} · ${note}${transcript ? "" : " · sem legenda, headline só pelo título"}`
     );
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
