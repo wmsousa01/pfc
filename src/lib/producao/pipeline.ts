@@ -12,6 +12,7 @@ import {
   download,
   getConfig,
   getVideo,
+  headlineText,
   logEvent,
   updateVideo,
   upload,
@@ -183,6 +184,8 @@ export async function generateFor(
           storage_path: path,
           l1: h.l1,
           l2: h.l2,
+          // Só manda a coluna quando há 3ª linha: thumb de duas linhas segue igual.
+          ...(h.l3 ? { l3: h.l3 } : {}),
           model: `composição + ${IMAGE_MODEL}`,
           created_by: actor === AUTOMACAO ? null : actor,
         });
@@ -239,7 +242,7 @@ export async function approveThumb(thumbId: string, actor: string, publishAt: Da
     v.id,
     actor,
     publishAt ? "aprovou e agendou" : "aprovou e publicou",
-    `${thumb.l1} / ${thumb.l2}${publishAt ? ` — ${publishAt.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}` : ""}`
+    `${headlineText(thumb)}${publishAt ? ` — ${publishAt.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}` : ""}`
   );
 }
 
