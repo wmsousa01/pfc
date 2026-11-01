@@ -8,7 +8,8 @@ import type { Headline } from "./store";
 
 const W = 1280;
 const H = 720;
-const LOGO_W = 150;
+/** Caixa do logo: quadrado sai 120×120; largo (ícone + nome, como o do PFC) até 220 de largura. */
+const LOGO_BOX = { width: 220, height: 120, fit: "inside" } as const;
 
 let font: opentype.Font | null = null;
 function anton(): opentype.Font {
@@ -98,37 +99,84 @@ function seloSvg(t: QuadroTheme): { svg: string; w: number; h: number } {
 }
 
 /**
- * Logo pronto para fundo escuro. PNG com transparência entra como está. Sem
- * transparência (fundo branco chapado), o branco vira transparente e o
- * traço escuro que não está colado no amarelo (as letras) vira branco — o
- * microfone, dentro do quadrado amarelo, continua preto.
+ * Logo pronto para fundo escuro. PNG com fundo transparente entra como está.
+ * Com fundo branco chapado (mesmo em PNG com canal alfa), o branco vira
+ * transparente e o traço escuro fora do amarelo (as letras) vira branco — o
+ * microfone, dentro do quadrado amarelo, continua preto. Com fundo escuro
+ * chapado (logo do Lado A Lado B), só esse fundo some.
  */
 export async function prepareLogo(logo: Buffer): Promise<Buffer> {
-  const meta = await sharp(logo).metadata();
-  if (meta.hasAlpha) return sharp(logo).trim().resize({ width: LOGO_W }).png().toBuffer();
+  if (await transparentCorners(logo)) return sharp(logo).trim().resize(LOGO_BOX).png().toBuffer();
 
-  const { data, info } = await sharp(logo).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const { data, info } = await sharp(logo).flatten({ background: "#ffffff" }).raw().toBuffer({ resolveWithObject: true });
   const { width: w, height: h } = info;
-  const yellow = Buffer.alloc(w * h);
-  for (let i = 0; i < w * h; i++) {
-    const r = data[i * 3], g = data[i * 3 + 1], b = data[i * 3 + 2];
-    yellow[i] = r > 180 && g > 120 && b < 110 ? 255 : 0;
+  if (Math.max(data[0], data[1], data[2]) < 60) return removeDarkBackground(data, w, h);
+  // Escuro "dentro do amarelo" = tem amarelo à esquerda, à direita, em cima e
+  // embaixo (o microfone). As letras ao lado do quadrado — mesmo debaixo da
+  // seta do logo do PFC — não ficam cercadas.
+  const isYellow = (i: number) => data[i * 3] > 180 && data[i * 3 + 1] > 120 && data[i * 3 + 2] < 110;
+  const row = new Uint8Array(w * h);
+  const inside = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    let first = -1, last = -1;
+    for (let x = 0; x < w; x++) if (isYellow(y * w + x)) (first < 0 && (first = x), (last = x));
+    for (let x = first + 1; x < last; x++) row[y * w + x] = 1;
   }
-  // "Perto do amarelo" = amarelo dilatado ~3% da largura.
-  const near = await sharp(yellow, { raw: { width: w, height: h, channels: 1 } })
-    .blur(Math.max(2, w * 0.03))
-    .extractChannel(0)
-    .raw()
-    .toBuffer();
+  for (let x = 0; x < w; x++) {
+    let first = -1, last = -1;
+    for (let y = 0; y < h; y++) if (isYellow(y * w + x)) (first < 0 && (first = y), (last = y));
+    for (let y = first + 1; y < last; y++) inside[y * w + x] = row[y * w + x];
+  }
 
   const out = Buffer.alloc(w * h * 4);
   for (let i = 0; i < w * h; i++) {
     let r = data[i * 3], g = data[i * 3 + 1], b = data[i * 3 + 2];
     const a = 255 - Math.max(0, Math.min(255, (Math.min(r, g, b) - 200) * 5));
-    if (Math.max(r, g, b) < 90 && near[i] < 8) r = g = b = 245;
+    if (Math.max(r, g, b) < 90 && !inside[i]) r = g = b = 245;
     out.set([r, g, b, a], i * 4);
   }
-  return sharp(out, { raw: { width: w, height: h, channels: 4 } }).trim().resize({ width: LOGO_W }).png().toBuffer();
+  return sharp(out, { raw: { width: w, height: h, channels: 4 } }).trim().resize(LOGO_BOX).png().toBuffer();
+}
+
+/**
+ * Fundo escuro: apaga a partir das bordas o que for parecido com a cor do
+ * canto (quase exata: os sulcos do disco do Lado A Lado B são quase do mesmo
+ * tom). Só o que está ligado à borda some, então o escuro de dentro do logo fica.
+ */
+async function removeDarkBackground(data: Buffer, w: number, h: number): Promise<Buffer> {
+  const [br, bg, bb] = [data[0], data[1], data[2]];
+  const isBg = (i: number) =>
+    Math.abs(data[i * 3] - br) + Math.abs(data[i * 3 + 1] - bg) + Math.abs(data[i * 3 + 2] - bb) < 8;
+  const mask = Buffer.alloc(w * h, 255);
+  const stack: number[] = [];
+  for (let x = 0; x < w; x++) stack.push(x, (h - 1) * w + x);
+  for (let y = 0; y < h; y++) stack.push(y * w, y * w + w - 1);
+  while (stack.length) {
+    const i = stack.pop()!;
+    if (mask[i] === 0 || !isBg(i)) continue;
+    mask[i] = 0;
+    const x = i % w;
+    if (x > 0) stack.push(i - 1);
+    if (x < w - 1) stack.push(i + 1);
+    if (i >= w) stack.push(i - w);
+    if (i < w * (h - 1)) stack.push(i + w);
+  }
+  // Borda suave, sem serrilhado.
+  const alpha = await sharp(mask, { raw: { width: w, height: h, channels: 1 } }).blur(0.8).extractChannel(0).raw().toBuffer();
+  // Em dois passos: no mesmo pipeline o sharp corta (trim) antes de juntar o alfa.
+  const rgba = await sharp(data, { raw: { width: w, height: h, channels: 3 } })
+    .joinChannel(alpha, { raw: { width: w, height: h, channels: 1 } })
+    .png()
+    .toBuffer();
+  return sharp(rgba).trim().resize(LOGO_BOX).png().toBuffer();
+}
+
+async function transparentCorners(logo: Buffer): Promise<boolean> {
+  const meta = await sharp(logo).metadata();
+  if (!meta.hasAlpha) return false;
+  const { data, info } = await sharp(logo).ensureAlpha().extractChannel(3).raw().toBuffer({ resolveWithObject: true });
+  const { width: w, height: h } = info;
+  return [0, w - 1, (h - 1) * w, h * w - 1].every((i) => data[i] < 20);
 }
 
 /** As pessoas recortadas, já tratadas e na escala da thumb. */
@@ -179,7 +227,10 @@ export async function composeThumb(
     { input: Buffer.from(headlineSvg(h, theme)), left: 0, top: 0 },
     { input: Buffer.from(selo.svg), left: 26, top: 24 },
   ];
-  if (logo) layers.push({ input: logo, left: W - LOGO_W - 26, top: 22 });
+  if (logo) {
+    const { width = 0 } = await sharp(logo).metadata();
+    layers.push({ input: logo, left: W - width - 26, top: 22 });
+  }
 
   const flat = await sharp(plate).resize(W, H, { fit: "cover" }).composite(layers).png().toBuffer();
   for (const quality of [90, 82, 72]) {
