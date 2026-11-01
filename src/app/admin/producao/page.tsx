@@ -17,11 +17,13 @@ import { connectedChannel } from "@/lib/producao/youtube-api";
 import { MODES, contentaJobUrl, isContentaConfigured } from "@/lib/producao/contenta";
 import { CONTENTA_ERROR, refreshCuttingLives, type LiveStatus, type ProducaoLive } from "@/lib/producao/lives";
 import { lastPlaylistsResult } from "@/lib/producao/playlists";
+import { QUADROS, QUADRO_IDS, isQuadroId } from "@/lib/producao/quadros";
 import {
   approveAction,
   generateAction,
   liveStatusAction,
   playlistsAction,
+  setQuadroAction,
   setStatusAction,
   syncAction,
   triggerLiveAction,
@@ -152,6 +154,22 @@ export default async function ProducaoPage() {
             {minutos(v.duration_sec)} · subiu {quando(v.uploaded_at)}
           </span>
         </div>
+        <form action={setQuadroAction} className="flex items-center gap-1.5 mt-1.5">
+          <input type="hidden" name="id" value={v.id} />
+          <span
+            className="w-2.5 h-2.5 rounded-full shrink-0"
+            style={{ background: isQuadroId(v.quadro) ? QUADROS[v.quadro].accent[1] : "#555" }}
+          />
+          <select name="quadro" defaultValue={isQuadroId(v.quadro) ? v.quadro : ""} className={input}>
+            {!isQuadroId(v.quadro) && <option value="">Quadro: será identificado</option>}
+            {QUADRO_IDS.map((q) => (
+              <option key={q} value={q}>
+                {QUADROS[q].name}
+              </option>
+            ))}
+          </select>
+          <button className="text-[11px] text-white/40 hover:text-white">Salvar</button>
+        </form>
       </div>
     </div>
   );

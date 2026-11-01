@@ -7,6 +7,7 @@ import { isContentaConfigured } from "@/lib/producao/contenta";
 import { setLiveStatus, syncLives, triggerLiveCuts } from "@/lib/producao/lives";
 import { approveThumb, generateFor, syncChannel } from "@/lib/producao/pipeline";
 import { runPlaylists } from "@/lib/producao/playlists";
+import { QUADROS, isQuadroId, quadroLogoPath } from "@/lib/producao/quadros";
 import { LOGO_PATH, getVideo, logEvent, setConfig, updateVideo, upload, db } from "@/lib/producao/store";
 
 const PATH = "/admin/producao";
@@ -104,6 +105,17 @@ export async function approveAction(_prev: ActionState, form: FormData): Promise
   }
 }
 
+/** A equipe corrige o quadro do corte; a próxima geração usa a identidade dele. */
+export async function setQuadroAction(form: FormData): Promise<void> {
+  const role = await requireAdmin();
+  const id = str(form, "id");
+  const quadro = str(form, "quadro");
+  if (!isQuadroId(quadro)) return;
+  await updateVideo(id, { quadro });
+  await logEvent(id, actorOf(role), "trocou o quadro", QUADROS[quadro].name);
+  refresh();
+}
+
 export async function setStatusAction(form: FormData): Promise<void> {
   const role = await requireAdmin();
   const id = str(form, "id");
@@ -153,12 +165,14 @@ export async function uploadLogoAction(_prev: ActionState, form: FormData): Prom
   await requireAdmin();
   const file = form.get("logo");
   if (!(file instanceof File) || file.size === 0) return { ok: false, error: "Escolha o arquivo do logo." };
+  // Sem `quadro`, é o logo do PFC (padrão de todas as thumbs).
+  const quadro = str(form, "quadro");
   try {
     const png = await sharp(Buffer.from(await file.arrayBuffer()))
       .resize(1024, 1024, { fit: "inside", withoutEnlargement: true })
       .png()
       .toBuffer();
-    await upload(LOGO_PATH, png, "image/png");
+    await upload(isQuadroId(quadro) ? quadroLogoPath(quadro) : LOGO_PATH, png, "image/png");
     refresh();
     return { ok: true, error: null };
   } catch (e) {

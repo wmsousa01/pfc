@@ -1,6 +1,7 @@
 import "server-only";
 import { listContentaJobs, listJobCuts } from "./contenta";
-import { getConfig, setConfig } from "./store";
+import { QUADROS, QUADRO_IDS, type QuadroId } from "./quadros";
+import { db, getConfig, setConfig } from "./store";
 import {
   addToPlaylist,
   createPlaylist,
@@ -9,18 +10,11 @@ import {
   listRecentUploads,
 } from "./youtube-api";
 
-/**
+/*
  * Cada quadro tem a playlist dos episódios (a equipe já põe a live nela) e a
- * dos cortes. O quadro do corte vem da live de origem: o job do Contenta guarda
- * a URL da live, e a live está na playlist de episódios do quadro.
+ * dos cortes (quadros.ts). O quadro do corte vem da live de origem: o job do
+ * Contenta guarda a URL da live, e a live está na playlist de episódios.
  */
-const QUADROS = [
-  { episodes: "Fora da Caixa", cuts: "Cortes Fora da Caixa" },
-  { episodes: "Lado A Lado B", cuts: "Cortes Lado A Lado B" },
-  { episodes: "PFC News", cuts: "Cortes PFC News" },
-  { episodes: "PFC Visita", cuts: "Cortes PFC Visita" },
-  { episodes: "Tateios Escolares", cuts: "Cortes Tateios Escolares" },
-];
 /** Short também entra aqui, além da playlist de cortes do quadro. */
 const SHORTS = "Shorts";
 /** Mesmo limite do pipeline: até 3 min é Short. */
@@ -79,15 +73,15 @@ function youtubeIdOf(source: string | null): string | null {
 }
 
 /** Título do corte → de onde ele veio (id da live ou o quadro, no caso do PFC Visita). */
-async function cutOrigins(): Promise<Map<string, { liveId: string | null; quadro: string | null }>> {
+async function cutOrigins(): Promise<Map<string, { liveId: string | null; quadro: QuadroId | null }>> {
   const jobs = (await listContentaJobs())
     .filter((j) => j.status === "done" && j.totalCuts > 0)
     .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""))
     .slice(0, JOBS_PER_RUN);
-  const out = new Map<string, { liveId: string | null; quadro: string | null }>();
+  const out = new Map<string, { liveId: string | null; quadro: QuadroId | null }>();
   for (const j of jobs) {
     const liveId = youtubeIdOf(j.videoSource);
-    const quadro = !liveId && VISITA_FILE.test(j.videoSource ?? "") ? "PFC Visita" : null;
+    const quadro = !liveId && VISITA_FILE.test(j.videoSource ?? "") ? ("pfc-visita" as const) : null;
     if (!liveId && !quadro) continue;
     const cuts = await listJobCuts(j.jobId).catch(() => null);
     for (const c of cuts?.items ?? []) {
@@ -98,20 +92,39 @@ async function cutOrigins(): Promise<Map<string, { liveId: string | null; quadro
   return out;
 }
 
+/** Título do corte → quadro, ou null quando não dá para saber a origem. */
+async function quadroResolver(byTitle: Map<string, string>): Promise<(title: string) => QuadroId | null> {
+  // Live → quadro, pela playlist de episódios em que a equipe pôs a live.
+  const liveQuadro = new Map<string, QuadroId>();
+  for (const q of QUADRO_IDS) {
+    const id = byTitle.get(norm(QUADROS[q].episodes));
+    if (!id) continue;
+    for (const v of await listPlaylistVideoIds(id)) if (!liveQuadro.has(v)) liveQuadro.set(v, q);
+  }
+  const origins = await cutOrigins();
+  return (title) => {
+    const o = origins.get(norm(title));
+    return o?.quadro ?? (o?.liveId ? liveQuadro.get(o.liveId) ?? null : null);
+  };
+}
+
+let cachedResolver: { at: number; fn: (title: string) => QuadroId | null } | null = null;
+
+/** Quadro de um corte pelo título. Guarda a leitura por 10 min: a rodada gera thumbs em sequência. */
+export async function detectQuadro(title: string): Promise<QuadroId | null> {
+  if (!cachedResolver || Date.now() - cachedResolver.at > 10 * 60_000) {
+    const byTitle = new Map((await listPlaylists()).map((p) => [norm(p.title), p.id]));
+    cachedResolver = { at: Date.now(), fn: await quadroResolver(byTitle) };
+  }
+  return cachedResolver.fn(title);
+}
+
 /** Põe os cortes recentes do canal nas playlists do quadro (e Shorts). Idempotente. */
 export async function runPlaylists(): Promise<PlaylistsResult> {
   const result: PlaylistsResult = { at: new Date().toISOString(), adicionados: 0, criadas: [], semOrigem: [] };
   const byTitle = new Map((await listPlaylists()).map((p) => [norm(p.title), p.id]));
-
-  // Live → quadro, pela playlist de episódios em que a equipe pôs a live.
-  const liveQuadro = new Map<string, string>();
-  for (const q of QUADROS) {
-    const id = byTitle.get(norm(q.episodes));
-    if (!id) continue;
-    for (const v of await listPlaylistVideoIds(id)) if (!liveQuadro.has(v)) liveQuadro.set(v, q.episodes);
-  }
-
-  const origins = await cutOrigins();
+  const quadroOf = await quadroResolver(byTitle);
+  cachedResolver = { at: Date.now(), fn: quadroOf };
   const members = new Map<string, Set<string>>();
   const playlistOf = async (title: string): Promise<string> => {
     let id = byTitle.get(norm(title));
@@ -126,9 +139,9 @@ export async function runPlaylists(): Promise<PlaylistsResult> {
   };
 
   const inSomeCutPlaylist = async (videoId: string): Promise<boolean> => {
-    for (const q of QUADROS) {
-      if (!byTitle.has(norm(q.cuts))) continue;
-      const id = await playlistOf(q.cuts);
+    for (const q of QUADRO_IDS) {
+      if (!byTitle.has(norm(QUADROS[q].cuts))) continue;
+      const id = await playlistOf(QUADROS[q].cuts);
       if (members.get(id)!.has(videoId)) return true;
     }
     return false;
@@ -138,17 +151,19 @@ export async function runPlaylists(): Promise<PlaylistsResult> {
     (v) => !v.liveEndedAt && v.liveState === "none" && v.durationSec > 0 && v.durationSec < 3600
   );
 
+  // O quadro também vai para o cartão do corte na Produção (identidade da thumb).
+  const found = new Map<QuadroId, string[]>();
   try {
     for (const v of uploads) {
-      const o = origins.get(norm(v.title));
-      const quadro = o?.quadro ?? (o?.liveId ? liveQuadro.get(o.liveId) : undefined);
+      const quadro = quadroOf(v.title);
+      if (quadro) found.set(quadro, [...(found.get(quadro) ?? []), v.id]);
       if (!quadro) {
         if (new Date(v.uploadedAt).getTime() < recentCut) continue;
         // Já posto à mão numa playlist de cortes não é órfão.
         if (!(await inSomeCutPlaylist(v.id))) result.semOrigem.push({ id: v.id, title: v.title });
         continue;
       }
-      const targets = [QUADROS.find((q) => q.episodes === quadro)!.cuts];
+      const targets = [QUADROS[quadro].cuts];
       if (v.durationSec <= SHORT_MAX_SEC) targets.push(SHORTS);
       for (const t of targets) {
         const id = await playlistOf(t);
@@ -169,6 +184,9 @@ export async function runPlaylists(): Promise<PlaylistsResult> {
     result.erro = e instanceof Error ? e.message : String(e);
   }
 
+  for (const [quadro, ids] of Array.from(found)) {
+    await db().from("producao_videos").update({ quadro }).in("youtube_id", ids).is("quadro", null);
+  }
   await setConfig(PLAYLISTS_RESULT, JSON.stringify(result));
   return result;
 }

@@ -3,6 +3,7 @@ import path from "path";
 import sharp, { type OverlayOptions } from "sharp";
 import opentype from "opentype.js";
 import type { Matte } from "./matte";
+import type { QuadroTheme } from "./quadros";
 import type { Headline } from "./store";
 
 const W = 1280;
@@ -25,7 +26,14 @@ function fit(text: string, maxW: number, max: number) {
   return { size, width: f.getAdvanceWidth(text, size) };
 }
 
-function headlineSvg(h: Headline): string {
+/** "#ffb300" → "1 0.702 0" (canais 0–1 para a matriz de cor do SVG). */
+function rgb01(hex: string): string {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => (c / 255).toFixed(3)).join(" ");
+}
+
+function headlineSvg(h: Headline, t: QuadroTheme): string {
+  const [r, g, b] = rgb01(t.glow).split(" ");
   const f = anton();
   const f1 = fit(h.l1, 1160, 118);
   const f2 = fit(h.l2, 1180, 150);
@@ -43,22 +51,50 @@ function headlineSvg(h: Headline): string {
   <linearGradient id="silver" x1="0" y1="0" x2="0" y2="1">
     <stop offset="0" stop-color="#ffffff"/><stop offset="0.55" stop-color="#f3ece2"/><stop offset="1" stop-color="#bdb5aa"/>
   </linearGradient>
-  <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0" stop-color="#ffe27a"/><stop offset="0.5" stop-color="#ffb300"/><stop offset="1" stop-color="#d97a00"/>
-  </linearGradient>
+  ${
+    t.split
+      ? `<linearGradient id="accent" gradientUnits="userSpaceOnUse" x1="${(W - f2.width) / 2}" y1="0" x2="${(W + f2.width) / 2}" y2="0">
+    <stop offset="0.46" stop-color="${t.split[0]}"/><stop offset="0.54" stop-color="${t.split[1]}"/>
+  </linearGradient>`
+      : `<linearGradient id="accent" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="${t.accent[0]}"/><stop offset="0.5" stop-color="${t.accent[1]}"/><stop offset="1" stop-color="${t.accent[2]}"/>
+  </linearGradient>`
+  }
   <filter id="shadow" x="-10%" y="-20%" width="120%" height="160%">
     <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000" flood-opacity="0.9"/>
   </filter>
-  <filter id="goldglow" x="-10%" y="-30%" width="120%" height="180%">
+  <filter id="glow" x="-10%" y="-30%" width="120%" height="180%">
     <feGaussianBlur stdDeviation="10" result="b"/>
-    <feColorMatrix in="b" type="matrix" values="0 0 0 0 1  0 0 0 0 0.65  0 0 0 0 0  0 0 0 0.55 0"/>
+    <feColorMatrix in="b" type="matrix" values="0 0 0 0 ${r}  0 0 0 0 ${g}  0 0 0 0 ${b}  0 0 0 0.55 0"/>
     <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
   </filter>
 </defs>
 <rect width="${W}" height="${H}" fill="url(#band)"/>
 <g filter="url(#shadow)"><path d="${p1}" fill="url(#silver)" stroke="#0b0b0b" stroke-width="5" paint-order="stroke" stroke-linejoin="round"/></g>
-<g filter="url(#goldglow)"><g filter="url(#shadow)"><path d="${p2}" fill="url(#gold)" stroke="#2a1500" stroke-width="6" paint-order="stroke" stroke-linejoin="round"/></g></g>
+<g filter="url(#glow)"><g filter="url(#shadow)"><path d="${p2}" fill="url(#accent)" stroke="${t.stroke}" stroke-width="6" paint-order="stroke" stroke-linejoin="round"/></g></g>
 </svg>`;
+}
+
+/** Selo com o nome do quadro, no canto superior esquerdo (o logo fica no direito). */
+function seloSvg(t: QuadroTheme): { svg: string; w: number; h: number } {
+  const f = anton();
+  const size = 44;
+  const label = t.name.toUpperCase();
+  const tw = f.getAdvanceWidth(label, size);
+  const w = Math.ceil(tw + 52);
+  const h = 72;
+  const path = f.getPath(label, 26, 54, size).toPathData(2);
+  const fill = t.selo.bg2 ? "url(#selo)" : t.selo.bg;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
+<defs>
+  <linearGradient id="selo" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0.45" stop-color="${t.selo.bg}"/><stop offset="0.55" stop-color="${t.selo.bg2 ?? t.selo.bg}"/>
+  </linearGradient>
+</defs>
+<rect x="0" y="0" width="${w}" height="${h}" rx="12" fill="${fill}"/>
+<path d="${path}" fill="${t.selo.text}"/>
+</svg>`;
+  return { svg, w, h };
 }
 
 /**
@@ -96,7 +132,7 @@ export async function prepareLogo(logo: Buffer): Promise<Buffer> {
 }
 
 /** As pessoas recortadas, já tratadas e na escala da thumb. */
-export async function preparePeople(m: Matte) {
+export async function preparePeople(m: Matte, rim: string) {
   const { x0, y0, x1, y1 } = m.box;
   const bw = x1 - x0 + 1;
   const bh = y1 - y0 + 1;
@@ -118,9 +154,9 @@ export async function preparePeople(m: Matte) {
     .png()
     .toBuffer();
 
-  // Contorno de luz âmbar por baixo do recorte: separa do fundo e disfarça a borda.
+  // Contorno de luz na cor do quadro por baixo do recorte: separa do fundo e disfarça a borda.
   const glowA = await sharp(people).extractChannel(3).blur(5).linear(1.6, 0).toBuffer();
-  const glow = await sharp({ create: { width: pw, height: ph, channels: 3, background: "#ffa31a" } })
+  const glow = await sharp({ create: { width: pw, height: ph, channels: 3, background: rim } })
     .joinChannel(glowA)
     .png()
     .toBuffer();
@@ -133,12 +169,15 @@ export async function composeThumb(
   plate: Buffer,
   people: Awaited<ReturnType<typeof preparePeople>>,
   logo: Buffer | null,
-  h: Headline
+  h: Headline,
+  theme: QuadroTheme
 ): Promise<Buffer> {
+  const selo = seloSvg(theme);
   const layers: OverlayOptions[] = [
     { input: people.glow, left: people.left, top: people.top },
     { input: people.people, left: people.left, top: people.top },
-    { input: Buffer.from(headlineSvg(h)), left: 0, top: 0 },
+    { input: Buffer.from(headlineSvg(h, theme)), left: 0, top: 0 },
+    { input: Buffer.from(selo.svg), left: 26, top: 24 },
   ];
   if (logo) layers.push({ input: logo, left: W - LOGO_W - 26, top: 22 });
 
