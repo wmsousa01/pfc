@@ -145,6 +145,57 @@ export async function igCreateReel(
   return r.id;
 }
 
+/**
+ * Arte de divulgação: imagem no feed (com convite de collab para até 3
+ * perfis — o convidado aceita no app e o post aparece nos dois) ou Story
+ * (Story não aceita collab). A Meta baixa a imagem da URL.
+ */
+export async function igCreateImage(
+  igId: string,
+  token: string,
+  imageUrl: string,
+  opts: { story?: boolean; caption?: string; collaborators?: string[] }
+): Promise<string> {
+  const r = await graph<{ id: string }>(
+    `/${igId}/media`,
+    {
+      image_url: imageUrl,
+      ...(opts.story
+        ? { media_type: "STORIES" }
+        : {
+            caption: (opts.caption ?? "").slice(0, 2200),
+            ...(opts.collaborators?.length ? { collaborators: JSON.stringify(opts.collaborators.slice(0, 3)) } : {}),
+          }),
+      access_token: token,
+    },
+    "POST"
+  );
+  return r.id;
+}
+
+/**
+ * Perfil público de outra conta pelo Business Discovery: só funciona com
+ * conta Business ou Creator — perfil pessoal volta erro (código 110).
+ */
+export async function igBusinessDiscovery(
+  igId: string,
+  token: string,
+  username: string
+): Promise<{ username: string; name: string | null; biography: string | null; followers: number | null; picture: string | null }> {
+  const r = await graph<{ business_discovery?: any }>(`/${igId}`, {
+    fields: `business_discovery.username(${username}){username,name,biography,followers_count,profile_picture_url}`,
+    access_token: token,
+  });
+  const b = r.business_discovery ?? {};
+  return {
+    username: b.username ?? username,
+    name: b.name ?? null,
+    biography: b.biography ?? null,
+    followers: typeof b.followers_count === "number" ? b.followers_count : null,
+    picture: b.profile_picture_url ?? null,
+  };
+}
+
 /** Quantos posts a conta publicou pela API nas últimas 24h (o teto da Meta é 100). */
 export async function igPublishingUsage(igId: string, token: string): Promise<number> {
   const r = await graph<{ data?: { quota_usage?: number }[] }>(`/${igId}/content_publishing_limit`, {

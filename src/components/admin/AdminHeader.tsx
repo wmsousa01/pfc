@@ -4,6 +4,7 @@ import { MicIcon } from "@/components/icons";
 const NAV = [
   { href: "/admin", label: "Parceiros" },
   { href: "/admin/entregas", label: "Entregas" },
+  { href: "/admin/agenda", label: "Agenda" },
   { href: "/admin/producao", label: "Produção" },
   { href: "/admin/marketing", label: "Marketing" },
   { href: "/admin/pedidos", label: "Pedidos" },

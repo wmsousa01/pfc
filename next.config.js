@@ -9,6 +9,7 @@ const nextConfig = {
     outputFileTracingIncludes: {
       "/admin/producao": ["./assets/fonts/**"],
       "/api/cron/producao": ["./assets/fonts/**"],
+      "/admin/agenda/[id]": ["./assets/fonts/**"],
     },
   },
   images: {

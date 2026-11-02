@@ -6,8 +6,8 @@ import { getConfig, setConfig } from "./store";
  * jeito de enxergar vídeos PRIVADOS, baixar a legenda automática, trocar a
  * thumb e agendar a publicação.
  *
- * youtube.force-ssl cobre leitura, captions.download, thumbnails.set e
- * videos.update — um escopo só.
+ * youtube.force-ssl cobre leitura, captions.download, thumbnails.set,
+ * videos.update e as lives (liveBroadcasts/liveStreams) — um escopo só.
  */
 const SCOPE = "https://www.googleapis.com/auth/youtube.force-ssl";
 const API = "https://www.googleapis.com/youtube/v3";
@@ -31,7 +31,8 @@ export function authUrl(redirectUri: string, state: string): string {
   return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 }
 
-async function tokenRequest(body: Record<string, string>) {
+/** Também usado pela conexão do Google Calendar (mesmo client OAuth). */
+export async function tokenRequest(body: Record<string, string>) {
   const res = await fetch(TOKEN_ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -299,4 +300,64 @@ export async function addToPlaylist(playlistId: string, videoId: string): Promis
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ snippet: { playlistId, resourceId: { kind: "youtube#video", videoId } } }),
   });
+}
+
+// ---- Lives agendadas: liveBroadcasts.insert custa 50 de cota; bind, 50 ----
+
+export type LiveStream = { id: string; title: string; status: string; reusable: boolean };
+
+/** Streams do canal (a "chave" que o OBS/vMix usa). */
+export async function listLiveStreams(): Promise<LiveStream[]> {
+  const r = await ytFetch<{ items?: any[] }>(`/liveStreams?part=snippet,status,contentDetails&mine=true&maxResults=50`);
+  return (r.items ?? []).map((s) => ({
+    id: s.id,
+    title: s.snippet?.title ?? s.id,
+    status: s.status?.streamStatus ?? "",
+    reusable: s.contentDetails?.isReusable !== false,
+  }));
+}
+
+export type BroadcastInput = { title: string; description: string; start: Date; end: Date };
+
+function broadcastSnippet(b: BroadcastInput) {
+  return {
+    title: b.title.slice(0, 100),
+    description: b.description.slice(0, 5000),
+    scheduledStartTime: b.start.toISOString(),
+    scheduledEndTime: b.end.toISOString(),
+  };
+}
+
+/**
+ * Cria a live agendada, pública, e liga no stream fixo do estúdio: a equipe
+ * só abre o OBS na hora. Sem auto start: quem decide quando entra no ar é a
+ * equipe, no Studio.
+ */
+export async function createBroadcast(b: BroadcastInput, streamId: string | null): Promise<string> {
+  const r = await ytFetch<{ id: string }>(`/liveBroadcasts?part=snippet,status,contentDetails`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      snippet: broadcastSnippet(b),
+      status: { privacyStatus: "public", selfDeclaredMadeForKids: false },
+      contentDetails: { enableAutoStart: false, enableAutoStop: true, enableDvr: true, recordFromStart: true },
+    }),
+  });
+  if (streamId) {
+    await ytFetch(`/liveBroadcasts/bind?id=${r.id}&part=id&streamId=${streamId}`, { method: "POST" });
+  }
+  return r.id;
+}
+
+/** Atualiza título, descrição e horário (remarcação). */
+export async function updateBroadcast(id: string, b: BroadcastInput): Promise<void> {
+  await ytFetch(`/liveBroadcasts?part=snippet`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, snippet: broadcastSnippet(b) }),
+  });
+}
+
+export async function deleteBroadcast(id: string): Promise<void> {
+  await ytFetch(`/liveBroadcasts?id=${id}`, { method: "DELETE" });
 }

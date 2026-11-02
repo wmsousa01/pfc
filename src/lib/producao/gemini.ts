@@ -5,7 +5,7 @@ const API = "https://generativelanguage.googleapis.com/v1beta/models";
 
 /** Nano Banana Pro: o que melhor acerta acento e cedilha na headline. */
 export const IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || "gemini-3-pro-image";
-const TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || "gemini-3.5-flash";
+export const TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || "gemini-3.5-flash";
 
 function apiKey(): string {
   const k = process.env.GOOGLE_AI_API_KEY;
@@ -17,7 +17,7 @@ export function isGeminiConfigured(): boolean {
   return !!process.env.GOOGLE_AI_API_KEY;
 }
 
-async function generate(model: string, body: unknown): Promise<any> {
+export async function generate(model: string, body: unknown): Promise<any> {
   const res = await fetch(`${API}/${model}:generateContent`, {
     method: "POST",
     headers: { "x-goog-api-key": apiKey(), "Content-Type": "application/json" },
@@ -90,12 +90,12 @@ Regras: fiel ao que é dito no corte, provoca curiosidade, sem clickbait mentiro
  * reais, a headline e o logo entram por cima, na composição — pedir ao
  * modelo para mantê-las fazia ele redesenhar os rostos.
  */
-export async function renderPlate(prompt: string): Promise<Buffer> {
+export async function renderPlate(prompt: string, aspectRatio: "16:9" | "9:16" = "16:9"): Promise<Buffer> {
   const json = await generate(IMAGE_MODEL, {
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: {
       responseModalities: ["IMAGE"],
-      imageConfig: { aspectRatio: "16:9", imageSize: "1K" },
+      imageConfig: { aspectRatio, imageSize: "1K" },
     },
   });
   const img = (json.candidates?.[0]?.content?.parts ?? []).find((p: any) => p.inlineData)?.inlineData;
