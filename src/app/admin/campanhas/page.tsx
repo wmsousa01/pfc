@@ -147,15 +147,15 @@ export default async function CampanhasPage({ searchParams }: { searchParams: { 
             ) : (
               <p className="text-white/40 text-xs mt-2 leading-relaxed">
                 Só leitura nesta fase: o anúncio é montado no Google Ads e o id dele é colado na entrega para trazer as métricas.
-                Precisa de <code>GOOGLE_ADS_DEVELOPER_TOKEN</code> e do redirect{" "}
-                <code>/api/campanhas/google/oauth/callback</code> no client OAuth do Google.
+                Precisa da Google Ads API ativada (nível Explorer ou acima) no projeto do Google Cloud e do redirect{" "}
+                <code>/api/campanhas/google/oauth/callback</code> no client OAuth.
               </p>
             )}
             <div className="flex gap-2 mt-3">
               {isGoogleAdsConfigured() ? (
                 <a href="/api/campanhas/google/oauth" className={btnPri}>{googleAds ? "Reconectar" : "Conectar Google Ads"}</a>
               ) : (
-                <span className="text-xs text-white/30">GOOGLE_ADS_DEVELOPER_TOKEN ausente.</span>
+                <span className="text-xs text-white/30">GOOGLE_CLIENT_ID ausente.</span>
               )}
               {googleAds && (
                 <form action={desconectarAdsAction}>
