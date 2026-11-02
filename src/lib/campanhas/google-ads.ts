@@ -1,0 +1,175 @@
+import "server-only";
+import { tokenRequest } from "@/lib/producao/youtube-api";
+import { activeConnection, saveConnection } from "@/lib/social/store";
+import type { Metricas } from "./store";
+
+/**
+ * Google Ads API (REST), só leitura nesta fase: a criação de anúncio exige
+ * developer token com acesso Básico aprovado pelo Google, e anúncio de vídeo
+ * precisa do vídeo no YouTube. A equipe monta no gerenciador e cola o id do
+ * anúncio na entrega; daqui saem as métricas.
+ *
+ * Usa o mesmo client OAuth do YouTube (GOOGLE_CLIENT_ID), com escopo adwords.
+ * O refresh token fica cifrado em social_connections (google_ads).
+ */
+const SCOPE = "https://www.googleapis.com/auth/adwords";
+const V = process.env.GOOGLE_ADS_API_VERSION || "v26";
+const API = `https://googleads.googleapis.com/${V}`;
+
+export function isGoogleAdsConfigured(): boolean {
+  return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_ADS_DEVELOPER_TOKEN);
+}
+
+export function googleAdsAuthUrl(redirectUri: string, state: string): string {
+  const params = new URLSearchParams({
+    client_id: process.env.GOOGLE_CLIENT_ID ?? "",
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: SCOPE,
+    access_type: "offline",
+    prompt: "consent",
+    state,
+  });
+  return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+}
+
+const digits = (v: string) => v.replace(/\D/g, "");
+
+function headers(token: string): Record<string, string> {
+  const login = process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID;
+  return {
+    Authorization: `Bearer ${token}`,
+    "developer-token": process.env.GOOGLE_ADS_DEVELOPER_TOKEN ?? "",
+    "Content-Type": "application/json",
+    // Conta acessada por uma MCC: o id da MCC vai aqui.
+    ...(login ? { "login-customer-id": digits(login) } : {}),
+  };
+}
+
+async function gads<T>(path: string, token: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${API}${path}`, {
+    method: body ? "POST" : "GET",
+    headers: headers(token),
+    ...(body ? { body: JSON.stringify(body) } : {}),
+    cache: "no-store",
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const e = Array.isArray(json) ? json[0]?.error : json.error;
+    const detalhe = e?.details?.[0]?.errors?.[0]?.message ?? e?.message ?? "erro";
+    throw new Error(`Google Ads ${res.status}: ${detalhe}`);
+  }
+  return json as T;
+}
+
+/** Troca o code, escolhe a conta (GOOGLE_ADS_CUSTOMER_ID ou a única acessível) e grava. */
+export async function connectGoogleAds(code: string, redirectUri: string): Promise<string> {
+  const t = await tokenRequest({ code, redirect_uri: redirectUri, grant_type: "authorization_code" });
+  if (!t.refresh_token) throw new Error("O Google não devolveu refresh_token. Remova o acesso do app na conta Google e conecte de novo.");
+
+  let customer = process.env.GOOGLE_ADS_CUSTOMER_ID ? digits(process.env.GOOGLE_ADS_CUSTOMER_ID) : null;
+  if (!customer) {
+    const r = await gads<{ resourceNames?: string[] }>("/customers:listAccessibleCustomers", t.access_token);
+    const ids = (r.resourceNames ?? []).map((n) => n.split("/")[1]);
+    if (ids.length === 0) throw new Error("Essa conta Google não acessa nenhuma conta do Google Ads.");
+    if (ids.length > 1) throw new Error(`Várias contas do Google Ads (${ids.join(", ")}). Defina GOOGLE_ADS_CUSTOMER_ID na Vercel.`);
+    customer = ids[0];
+  }
+  const info = await gads<{ results?: { customer?: { descriptiveName?: string; currencyCode?: string } }[] }>(
+    `/customers/${customer}/googleAds:search`,
+    t.access_token,
+    { query: "SELECT customer.descriptive_name, customer.currency_code FROM customer LIMIT 1" }
+  );
+  const c = info.results?.[0]?.customer;
+  const nome = c?.descriptiveName ? `${c.descriptiveName} (${c.currencyCode ?? ""})` : customer;
+  await saveConnection({ platform: "google_ads", accountId: customer, accountName: nome, token: t.refresh_token, scopes: SCOPE });
+  return nome;
+}
+
+let cached: { token: string; exp: number } | null = null;
+
+async function conta(): Promise<{ customer: string; token: string }> {
+  const c = await activeConnection("google_ads");
+  if (!c) throw new Error("Google Ads não conectado.");
+  if (!cached || cached.exp < Date.now() + 60_000) {
+    const t = await tokenRequest({ refresh_token: c.token, grant_type: "refresh_token" });
+    cached = { token: t.access_token, exp: Date.now() + t.expires_in * 1000 };
+  }
+  return { customer: c.accountId, token: cached.token };
+}
+
+export async function isGoogleAdsConnected(): Promise<boolean> {
+  return !!(await activeConnection("google_ads").catch(() => null));
+}
+
+type Row = {
+  campaign?: { id?: string; name?: string; status?: string; advertisingChannelType?: string };
+  adGroupAd?: { ad?: { id?: string; name?: string } };
+  metrics?: Record<string, string | number | undefined>;
+};
+
+function metricas(m: Row["metrics"]): Metricas {
+  if (!m) return {};
+  const n = (v: unknown) => (v === undefined ? undefined : Number(v));
+  const micros = (v: unknown) => (v === undefined ? undefined : Number(v) / 1e6);
+  return {
+    gasto: micros(m.costMicros),
+    impressoes: n(m.impressions),
+    cliques: n(m.clicks),
+    // A API devolve CTR como fração; a Meta, em %.
+    ctr: m.ctr === undefined ? undefined : Number(m.ctr) * 100,
+    cpc: micros(m.averageCpc),
+    conversoes: n(m.conversions),
+  };
+}
+
+async function search(query: string): Promise<Row[]> {
+  const { customer, token } = await conta();
+  const out: Row[] = [];
+  let pageToken: string | undefined;
+  do {
+    const r = await gads<{ results?: Row[]; nextPageToken?: string }>(`/customers/${customer}/googleAds:search`, token, {
+      query,
+      ...(pageToken ? { pageToken } : {}),
+    });
+    out.push(...(r.results ?? []));
+    pageToken = r.nextPageToken;
+  } while (pageToken && out.length < 2000);
+  return out;
+}
+
+export type GoogleCampanha = { id: string; nome: string; status: string; tipo: string; m: Metricas };
+
+const METRICS = "metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.ctr, metrics.average_cpc, metrics.conversions";
+
+export async function googleCampanhas(): Promise<GoogleCampanha[]> {
+  const rows = await search(
+    `SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, ${METRICS}
+     FROM campaign WHERE campaign.status != 'REMOVED' AND segments.date DURING LAST_30_DAYS`
+  );
+  return rows.map((r) => ({
+    id: String(r.campaign?.id ?? ""),
+    nome: r.campaign?.name ?? "",
+    status: r.campaign?.status ?? "",
+    tipo: r.campaign?.advertisingChannelType ?? "",
+    m: metricas(r.metrics),
+  }));
+}
+
+/** Métricas dos últimos 90 dias de cada anúncio ligado a uma entrega. */
+export async function googleMetricasAnuncios(adIds: string[]): Promise<Map<string, Metricas>> {
+  const out = new Map<string, Metricas>();
+  const ids = adIds.map(digits).filter(Boolean);
+  if (ids.length === 0) return out;
+  // GAQL não tem LAST_90_DAYS: o intervalo vai explícito.
+  const desde = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
+  const rows = await search(
+    `SELECT ad_group_ad.ad.id, ${METRICS} FROM ad_group_ad
+     WHERE ad_group_ad.ad.id IN (${ids.join(",")}) AND segments.date >= '${desde}'`
+  );
+  for (const r of rows) {
+    const id = String(r.adGroupAd?.ad?.id ?? "");
+    if (id) out.set(id, metricas(r.metrics));
+  }
+  return out;
+}

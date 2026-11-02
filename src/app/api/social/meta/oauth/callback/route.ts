@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/auth";
+import { connectMetaAds } from "@/lib/campanhas/meta-ads";
 import { connectMeta } from "@/lib/social/meta";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const who = await connectMeta(code, `${req.nextUrl.origin}/api/social/meta/oauth/callback`);
+    const who = await connectMeta(code, `${req.nextUrl.origin}/api/social/meta/oauth/callback`, connectMetaAds);
     back.searchParams.set("ok", `Conectado: ${who}`);
   } catch (e) {
     back.searchParams.set("erro", e instanceof Error ? e.message : "Falha ao conectar.");
