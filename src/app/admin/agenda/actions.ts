@@ -18,19 +18,26 @@ import {
   programarInstagram,
   remarcar,
   salvarFoto,
+  salvarFotoApresentador,
   sincronizarAgenda,
   sincronizarLive,
 } from "@/lib/agenda/fluxo";
 import { disconnectCalendar } from "@/lib/agenda/gcal";
+import { pedirUpload, registrarMaterial, removerMaterial } from "@/lib/agenda/materiais";
+import { escolherArteSemana, gerarArteSemana, liberarSemana, programarSemana } from "@/lib/agenda/semana";
 import {
   brt,
   cleanInstagram,
   db,
   getEpisodio,
   logAgenda,
+  MATERIAL_TIPOS,
+  segundaDe,
+  updateConvidado,
   updateEpisodio,
   type Briefing,
   type IgFormato,
+  type MaterialTipo,
 } from "@/lib/agenda/store";
 import { normalizeWhatsapp } from "@/lib/lead-triage";
 import { isQuadroId } from "@/lib/producao/quadros";
@@ -84,6 +91,7 @@ function convidadoDe(form: FormData) {
     temas: opt(form, "temas"),
     divulgar: null,
     links: null,
+    cargo: opt(form, "cargo")?.toUpperCase().slice(0, 60) ?? null,
   };
 }
 
@@ -104,13 +112,16 @@ export async function novoEpisodioAction(_prev: ActionState, form: FormData): Pr
     const quadro = str(form, "quadro");
     if (!isQuadroId(quadro)) throw new Error("Escolha o quadro.");
     const inicio = inicioDe(form);
-    const c = await criarEpisodio(
+    // Sem nome, o episódio sai sem convidado (PFC News: só o apresentador e o tema).
+    const dados = str(form, "nome") ? convidadoDe(form) : null;
+    if (!dados && !opt(form, "tema")) throw new Error("Sem convidado, escreva o tema da semana.");
+    const r = await criarEpisodio(
       { quadro, inicio: inicio.toISOString(), duracao_min: Number(str(form, "duracao")) || 90, tema: opt(form, "tema") },
-      convidadoDe(form),
+      dados,
       actorOf(role)
     );
-    id = c.episodio_id;
-    await atualizarPerfilIg(c).catch(() => null);
+    id = r.episodioId;
+    if (r.convidado) await atualizarPerfilIg(r.convidado).catch(() => null);
     await sincronizarAgenda(id, actorOf(role));
   } catch (e) {
     return fail(e);
@@ -165,6 +176,20 @@ export async function removerConvidadoAction(form: FormData): Promise<void> {
   refresh();
 }
 
+export async function cargoConvidadoAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  return run(async () => updateConvidado(str(form, "convidado"), { cargo: opt(form, "cargo")?.toUpperCase().slice(0, 60) ?? null }));
+}
+
+/** Quais apresentadores do quadro entram neste episódio (nenhum marcado = todos). */
+export async function apresentadoresEpisodioAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  return run(async (a) => {
+    const id = str(form, "id");
+    const ids = form.getAll("apresentador").map(String).filter(Boolean);
+    await updateEpisodio(id, { apresentadores: ids.length ? ids : null });
+    await logAgenda(id, a, "escolheu os apresentadores");
+  });
+}
+
 export async function perfilIgAction(form: FormData): Promise<void> {
   await requireAdmin();
   const { data } = await db().from("agenda_convidados").select("*").eq("id", str(form, "convidado")).maybeSingle();
@@ -197,7 +222,14 @@ export async function salvarBriefingAction(_prev: ActionState, form: FormData): 
       titulo_live: str(form, "titulo_live").slice(0, 100),
       descricao_yt: str(form, "descricao_yt"),
       legenda_ig: str(form, "legenda_ig"),
-      arte: { l1: up("l1"), l2: up("l2"), ...(up("l3") ? { l3: up("l3") } : {}) },
+      arte: {
+        l1: up("l1"),
+        l2: up("l2"),
+        ...(up("l3") ? { l3: up("l3") } : {}),
+        ...(str(form, "topicos") ? { topicos: str(form, "topicos").toUpperCase().slice(0, 120) } : {}),
+        ...(str(form, "sub") ? { sub: str(form, "sub").toUpperCase().slice(0, 120) } : {}),
+        ...(str(form, "cena") ? { cena: str(form, "cena").slice(0, 500) } : {}),
+      },
     };
     await updateEpisodio(id, { briefing: b, ig_legenda: b.legenda_ig });
     await logAgenda(id, a, "editou o briefing");
@@ -209,7 +241,9 @@ export async function salvarBriefingAction(_prev: ActionState, form: FormData): 
 export async function gerarArteAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   const up = (k: string) => str(form, k).toUpperCase().slice(0, 40);
   const [l1, l2, l3] = [up("l1"), up("l2"), up("l3")];
-  return run((a) => gerarArtesPara(str(form, "id"), a, l1 && l2 ? { l1, l2, ...(l3 ? { l3 } : {}) } : null));
+  const modo = str(form, "modo") === "recorte" ? "recorte" : "ia";
+  const hoje = form.get("hoje") === "1";
+  return run((a) => gerarArtesPara(str(form, "id"), a, l1 && l2 ? { l1, l2, ...(l3 ? { l3 } : {}) } : null, { modo, hoje }));
 }
 
 export async function aprovarArteAction(form: FormData): Promise<void> {
@@ -331,4 +365,148 @@ export async function streamAction(_prev: ActionState, form: FormData): Promise<
 
 export async function agendaSyncAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   return run((a) => sincronizarAgenda(str(form, "id"), a));
+}
+
+// ---- Materiais do episódio ----
+
+type Upload = { ok: true; path: string; token: string } | { ok: false; error: string };
+
+export async function pedirUploadAction(episodioId: string, nome: string, mime: string, tamanho: number): Promise<Upload> {
+  await requireAdmin();
+  try {
+    return { ok: true, ...(await pedirUpload(episodioId, nome, mime, tamanho)) };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** `alvo`: "c:<id>" (convidado) ou "a:<id>" (apresentador), quem aparece no arquivo. */
+export async function registrarMaterialAction(
+  episodioId: string,
+  path: string,
+  nome: string,
+  mime: string,
+  tipo: string,
+  alvo: string | null
+): Promise<ActionState> {
+  const [k, id] = (alvo ?? "").split(":");
+  return run((a) =>
+    registrarMaterial({
+      episodio_id: episodioId,
+      convidado_id: k === "c" ? id : null,
+      apresentador_id: k === "a" && tipo === "apresentador" ? id : null,
+      tipo: tipo in MATERIAL_TIPOS ? (tipo as MaterialTipo) : "outro",
+      path,
+      nome,
+      mime,
+      enviado_por: a,
+    })
+  );
+}
+
+export async function materialAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  return run(async () => {
+    const tipo = str(form, "tipo");
+    if (!(tipo in MATERIAL_TIPOS)) throw new Error("Tipo inválido.");
+    const { error } = await db()
+      .from("agenda_materiais")
+      .update({
+        tipo,
+        usar_na_arte: form.get("usar") === "1",
+        apresentador_id: tipo === "apresentador" ? opt(form, "apresentador") : null,
+        convidado_id: opt(form, "convidado"),
+      })
+      .eq("id", str(form, "material"));
+    if (error) throw new Error(error.message);
+  });
+}
+
+export async function materialRemoverAction(form: FormData): Promise<void> {
+  const role = await requireAdmin();
+  await removerMaterial(str(form, "material"), actorOf(role));
+  refresh();
+}
+
+// ---- Apresentadores ----
+
+export async function apresentadorAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  return run(async () => {
+    const quadro = str(form, "quadro");
+    if (!isQuadroId(quadro)) throw new Error("Escolha o quadro.");
+    const nome = str(form, "nome").slice(0, 80);
+    if (!nome) throw new Error("Diga o nome.");
+    const { data, error } = await db()
+      .from("agenda_apresentadores")
+      .insert({ quadro, nome, papel: (opt(form, "papel") ?? "APRESENTADOR").toUpperCase().slice(0, 60) })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    const f = form.get("foto");
+    if (f instanceof File && f.size > 0) await salvarFotoApresentador(data.id, f);
+  });
+}
+
+export async function apresentadorEditarAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  return run(async () => {
+    const id = str(form, "apresentador");
+    const nome = str(form, "nome").slice(0, 80);
+    if (!nome) throw new Error("Diga o nome.");
+    const { error } = await db()
+      .from("agenda_apresentadores")
+      .update({ nome, papel: (opt(form, "papel") ?? "APRESENTADOR").toUpperCase().slice(0, 60) })
+      .eq("id", id);
+    if (error) throw new Error(error.message);
+    const f = form.get("foto");
+    if (f instanceof File && f.size > 0) await salvarFotoApresentador(id, f);
+  });
+}
+
+export async function apresentadorToggleAction(form: FormData): Promise<void> {
+  await requireAdmin();
+  await db().from("agenda_apresentadores").update({ ativo: str(form, "ativo") === "1" }).eq("id", str(form, "apresentador"));
+  refresh();
+}
+
+export async function apresentadorRemoverAction(form: FormData): Promise<void> {
+  await requireAdmin();
+  const { data } = await db().from("agenda_apresentadores").delete().eq("id", str(form, "apresentador")).select("foto_path").maybeSingle();
+  if (data?.foto_path) await db().storage.from("producao").remove([data.foto_path]);
+  refresh();
+}
+
+// ---- Agenda da semana ----
+
+function semanaDe(form: FormData): string {
+  const s = str(form, "semana");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) throw new Error("Semana inválida.");
+  return segundaDe(s);
+}
+
+export async function gerarSemanaAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  return run((a) => gerarArteSemana(semanaDe(form), form.get("hoje") === "1", a));
+}
+
+export async function escolherSemanaAction(form: FormData): Promise<void> {
+  await requireAdmin();
+  await escolherArteSemana(semanaDe(form), str(form, "arte"));
+  refresh();
+}
+
+export async function semanaInstagramAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  return run(async () => {
+    const when = str(form, "quando");
+    let quando: Date | null = null;
+    if (when) {
+      quando = new Date(`${when}:00-03:00`);
+      if (Number.isNaN(quando.getTime())) throw new Error("Data inválida.");
+      if (quando.getTime() < Date.now()) quando = null;
+    }
+    await programarSemana(semanaDe(form), { legenda: str(form, "legenda"), collab: form.get("collab") === "1", quando });
+  });
+}
+
+export async function semanaResetAction(form: FormData): Promise<void> {
+  await requireAdmin();
+  await liberarSemana(semanaDe(form));
+  refresh();
 }

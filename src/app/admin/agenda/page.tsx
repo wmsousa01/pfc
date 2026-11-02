@@ -28,9 +28,15 @@ const nomeDo = (q: string) => (isQuadroId(q) ? QUADROS[q].name : q);
 
 /** O que falta para o episódio estar pronto, na ordem do fluxo. */
 function etapas(ep: Episodio, cs: Convidado[], gcal: boolean) {
+  // Sem convidado (PFC News), não há briefing nem foto de convidado para esperar.
+  const doConvidado = cs.length
+    ? [
+        { label: "Briefing do convidado", ok: cs.every((c) => c.briefing_em) },
+        { label: "Foto", ok: cs.every((c) => c.foto_path || c.ig_perfil?.picture) },
+      ]
+    : [];
   return [
-    { label: "Briefing do convidado", ok: cs.length > 0 && cs.every((c) => c.briefing_em) },
-    { label: "Foto", ok: cs.length > 0 && cs.every((c) => c.foto_path || c.ig_perfil?.picture) },
+    ...doConvidado,
     { label: "Roteiro", ok: !!ep.briefing },
     { label: "Arte", ok: !!ep.arte_id },
     { label: "Instagram", ok: ep.ig_status === "publicado", warn: ep.ig_status === "erro", wait: ep.ig_status === "agendado" },
@@ -73,7 +79,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: { mes
     : { data: [] };
   const convidados = (crows ?? []) as Convidado[];
   const cs = (id: string) => convidados.filter((c) => c.episodio_id === id);
-  const nomes = (id: string) => cs(id).map((c) => c.nome).join(", ") || "sem convidado";
+  const nomes = (id: string) => cs(id).map((c) => c.nome).join(", ") || eps.find((e) => e.id === id)?.tema || "sem convidado";
 
   const pedidos = eps.filter((e) => e.status === "solicitado");
   const proximos = eps.filter((e) => e.status === "confirmado");
@@ -110,9 +116,14 @@ export default async function AgendaPage({ searchParams }: { searchParams: { mes
               <CopyButton value={linkPublico} />
             </div>
           </div>
-          <a href="/admin/agenda/config" className="text-white/50 hover:text-white text-sm border border-[#2a2a2a] rounded-lg px-3 py-2">
-            Configurar
-          </a>
+          <div className="flex gap-2">
+            <a href="/admin/agenda/semana" className="text-gold-400 hover:text-gold-300 text-sm border border-gold-500/40 rounded-lg px-3 py-2">
+              Agenda da semana
+            </a>
+            <a href="/admin/agenda/config" className="text-white/50 hover:text-white text-sm border border-[#2a2a2a] rounded-lg px-3 py-2">
+              Configurar
+            </a>
+          </div>
         </div>
 
         {pedidos.length > 0 && (
@@ -235,8 +246,9 @@ export default async function AgendaPage({ searchParams }: { searchParams: { mes
         <section className="bg-[#111] border border-[#222] rounded-2xl p-6">
           <h2 className="text-white font-bold">Novo episódio</h2>
           <p className="text-white/40 text-sm mt-1">
-            Para quadro sem horário fixo (PFC Visita) ou convidado que a equipe já combinou. Entra confirmado; o
-            convidado completa o briefing pelo link que aparece na página do episódio.
+            Para quadro sem horário fixo (PFC Visita), convidado que a equipe já combinou ou episódio sem convidado
+            (PFC News: deixe o nome vazio e escreva o tema da semana). Entra confirmado; o convidado completa o briefing
+            pelo link que aparece na página do episódio.
           </p>
           <ProducaoForm action={novoEpisodioAction} label="Criar episódio" pending="Criando..." className="mt-4 space-y-3">
             <div className="flex flex-wrap gap-2">
@@ -249,13 +261,14 @@ export default async function AgendaPage({ searchParams }: { searchParams: { mes
               <input type="date" name="data" required className={input} />
               <input type="time" name="hora" required defaultValue="19:00" className={input} />
               <input type="number" name="duracao" defaultValue={90} min={15} step={15} className={`${input} w-24`} title="Duração (min)" />
-              <input name="tema" placeholder="Tema (opcional)" className={`${input} w-64`} />
+              <input name="tema" placeholder="Tema (obrigatório sem convidado)" className={`${input} w-72`} />
             </div>
             <div className="flex flex-wrap gap-2">
-              <input name="nome" required placeholder="Nome do convidado" className={`${input} w-56`} />
+              <input name="nome" placeholder="Nome do convidado (vazio = sem convidado)" className={`${input} w-72`} />
               <input name="instagram" placeholder="@instagram" className={`${input} w-40`} />
               <input name="whatsapp" placeholder="WhatsApp" className={`${input} w-40`} />
               <input name="email" type="email" placeholder="E-mail (convite)" className={`${input} w-56`} />
+              <input name="cargo" placeholder="Cargo na arte" className={`${input} w-44`} />
             </div>
           </ProducaoForm>
         </section>

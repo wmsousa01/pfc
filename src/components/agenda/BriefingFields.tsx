@@ -19,6 +19,11 @@ export default function BriefingFields({ c }: { c?: Convidado | null }) {
           <input id="instagram" name="instagram" defaultValue={c?.instagram ? `@${c.instagram}` : ""} className={inputCls} placeholder="@seuperfil" />
           <p className={hint}>Vamos te marcar na arte e convidar para um post em collab.</p>
         </div>
+        <div className="sm:col-span-2">
+          <label className={label} htmlFor="cargo">Como você quer aparecer na arte</label>
+          <input id="cargo" name="cargo" maxLength={60} defaultValue={c?.cargo ?? ""} className={inputCls} placeholder="Ex.: EMPRESÁRIO · GCM CLASSE ESPECIAL | GOC · FUNDADORA DA MARCA X" />
+          <p className={hint}>Sai embaixo do seu nome na divulgação.</p>
+        </div>
         <div>
           <label className={label} htmlFor="whatsapp">WhatsApp *</label>
           <input id="whatsapp" name="whatsapp" required inputMode="tel" defaultValue={c?.whatsapp ?? ""} className={inputCls} placeholder="(19) 99999-9999" />
@@ -35,7 +40,7 @@ export default function BriefingFields({ c }: { c?: Convidado | null }) {
         <input id="foto" name="foto" type="file" accept="image/jpeg,image/png,image/webp" className="text-sm text-white/60" />
         <p className={hint}>
           Do peito para cima, de frente, com boa luz e fundo simples, até 6 MB. Ela vai para a arte de divulgação —
-          sem foto, usamos a do seu Instagram.
+          sem foto, usamos a do seu Instagram. Mais fotos, logo e outros materiais você manda na página do seu link.
         </p>
       </div>
 

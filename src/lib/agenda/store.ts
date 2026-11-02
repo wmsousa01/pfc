@@ -24,8 +24,12 @@ export type Briefing = {
   titulo_live: string;
   descricao_yt: string;
   legenda_ig: string;
-  /** Headline da arte de divulgação (mesmo formato das thumbs). */
-  arte: { l1: string; l2: string; l3?: string };
+  /**
+   * Headline da arte de divulgação (mesmo formato das thumbs), a linha de
+   * tópicos ("DISCIPLINA • TREINAMENTO • SEGURANÇA PÚBLICA"), uma frase de
+   * apoio opcional e o cenário temático que a IA desenha atrás das pessoas.
+   */
+  arte: { l1: string; l2: string; l3?: string; topicos?: string; sub?: string; cena?: string };
 };
 
 export type Slot = {
@@ -60,6 +64,8 @@ export type Episodio = {
   ig_status: IgStatus;
   ig_posts: { formato: IgFormato; id: string; url: string | null }[];
   ig_erro: string | null;
+  /** null = todos os apresentadores ativos do quadro. */
+  apresentadores: string[] | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -87,6 +93,8 @@ export type Convidado = {
   temas: string | null;
   divulgar: string | null;
   links: string | null;
+  /** Como aparece na arte, embaixo do nome ("EMPRESÁRIO"). */
+  cargo: string | null;
   foto_path: string | null;
   ig_perfil: IgPerfil | null;
   briefing_em: string | null;
@@ -103,8 +111,62 @@ export type Arte = {
   l1: string;
   l2: string;
   l3: string | null;
+  modo: ArteModo;
   created_by: string | null;
   created_at: string;
+};
+
+/** "ia": o Gemini compõe a cena com as fotos reais. "recorte": foto recortada + texto, rosto 100% fiel. */
+export type ArteModo = "ia" | "recorte";
+
+export type Apresentador = {
+  id: string;
+  quadro: string;
+  nome: string;
+  papel: string;
+  foto_path: string | null;
+  ordem: number;
+  ativo: boolean;
+  created_at: string;
+};
+
+export type MaterialTipo = "foto" | "apresentador" | "logo" | "referencia" | "outro";
+
+export const MATERIAL_TIPOS: Record<MaterialTipo, string> = {
+  foto: "Foto do convidado",
+  apresentador: "Foto do apresentador",
+  logo: "Logo",
+  referencia: "Referência para a arte",
+  outro: "Outro material",
+};
+
+export type Material = {
+  id: string;
+  episodio_id: string;
+  convidado_id: string | null;
+  apresentador_id: string | null;
+  tipo: MaterialTipo;
+  path: string;
+  nome: string;
+  mime: string;
+  tamanho: number;
+  usar_na_arte: boolean;
+  enviado_por: string;
+  created_at: string;
+};
+
+export type SemanaArte = { id: string; semana: string; path: string; created_by: string | null; created_at: string };
+
+export type Semana = {
+  semana: string;
+  arte_id: string | null;
+  ig_legenda: string | null;
+  ig_collab: boolean;
+  ig_publicar_em: string | null;
+  ig_status: IgStatus;
+  ig_post_url: string | null;
+  ig_erro: string | null;
+  updated_at: string;
 };
 
 export type Evento = {
@@ -146,13 +208,18 @@ function brtWeekday(date: string): number {
   return new Date(`${date}T12:00:00${OFFSET}`).getUTCDay();
 }
 
-function addDays(date: string, n: number): string {
+export function addDays(date: string, n: number): string {
   const d = new Date(`${date}T12:00:00${OFFSET}`);
   d.setUTCDate(d.getUTCDate() + n);
   return brtDate(d);
 }
 
 export const WEEKDAYS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+
+/** A segunda-feira da semana da data ("2026-11-05" → "2026-11-02"). */
+export function segundaDe(date: string): string {
+  return addDays(date, -((brtWeekday(date) + 6) % 7));
+}
 
 /** "quinta, 06/11 às 19h" */
 export function quandoLongo(iso: string): string {
@@ -254,6 +321,25 @@ export async function updateConvidado(id: string, patch: Partial<Convidado>) {
 export async function getArte(id: string): Promise<Arte | null> {
   const { data } = await db().from("agenda_artes").select("*").eq("id", id).maybeSingle();
   return (data as Arte) ?? null;
+}
+
+export async function apresentadoresDo(quadro: string, soAtivos = true): Promise<Apresentador[]> {
+  let q = db().from("agenda_apresentadores").select("*").eq("quadro", quadro).order("ordem").order("created_at");
+  if (soAtivos) q = q.eq("ativo", true);
+  const { data } = await q;
+  return (data ?? []) as Apresentador[];
+}
+
+/** Os apresentadores do episódio: os escolhidos nele ou, sem escolha, todos os ativos do quadro. */
+export async function apresentadoresDoEpisodio(ep: Episodio): Promise<Apresentador[]> {
+  const todos = await apresentadoresDo(ep.quadro, false);
+  if (ep.apresentadores) return todos.filter((a) => ep.apresentadores!.includes(a.id));
+  return todos.filter((a) => a.ativo);
+}
+
+export async function materiaisDe(episodioId: string): Promise<Material[]> {
+  const { data } = await db().from("agenda_materiais").select("*").eq("episodio_id", episodioId).order("created_at");
+  return (data ?? []) as Material[];
 }
 
 export async function logAgenda(episodioId: string, actor: string, action: string, detail?: string) {

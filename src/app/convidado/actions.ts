@@ -4,13 +4,16 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type { ActionState } from "@/app/admin/producao/actions";
 import { atualizarPerfilIg, agendar, salvarFoto, sincronizarAgenda, type NovoConvidado } from "@/lib/agenda/fluxo";
+import { pedirUpload, registrarMaterial, removerMaterial } from "@/lib/agenda/materiais";
 import {
   CONVIDADO,
   cleanInstagram,
   convidadoPorToken,
+  db,
   getEpisodio,
   logAgenda,
   updateConvidado,
+  type MaterialTipo,
 } from "@/lib/agenda/store";
 import { normalizeWhatsapp } from "@/lib/lead-triage";
 import { isQuadroId } from "@/lib/producao/quadros";
@@ -40,6 +43,7 @@ function dadosDe(form: FormData): NovoConvidado | string {
     temas: str(form, "temas"),
     divulgar: str(form, "divulgar"),
     links: str(form, "links", 500),
+    cargo: str(form, "cargo", 60)?.toUpperCase() ?? null,
   };
 }
 
@@ -98,4 +102,65 @@ export async function salvarBriefingAction(_prev: ActionState, form: FormData): 
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Não deu para salvar agora." };
   }
+}
+
+// ---- Materiais: fotos, logo e referências que o convidado manda pelo link ----
+
+type Upload = { ok: true; path: string; token: string } | { ok: false; error: string };
+
+/** O convidado só mexe no episódio dele, e enquanto ele não foi gravado nem cancelado. */
+async function convidadoAtivo(token: string) {
+  const c = await convidadoPorToken(token);
+  if (!c) throw new Error("Link inválido.");
+  const ep = await getEpisodio(c.episodio_id);
+  if (!ep || ep.status === "cancelado" || ep.status === "realizado") throw new Error("Esse episódio não recebe mais materiais.");
+  return c;
+}
+
+export async function pedirUploadConvidadoAction(token: string, nome: string, mime: string, tamanho: number): Promise<Upload> {
+  try {
+    const c = await convidadoAtivo(token);
+    const { count } = await db().from("agenda_materiais").select("id", { count: "exact", head: true }).eq("convidado_id", c.id);
+    if ((count ?? 0) >= 20) throw new Error("Limite de 20 arquivos. Apague algum para mandar outro.");
+    return { ok: true, ...(await pedirUpload(c.episodio_id, nome, mime, tamanho)) };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Não deu para enviar agora." };
+  }
+}
+
+export async function registrarMaterialConvidadoAction(
+  token: string,
+  path: string,
+  nome: string,
+  mime: string,
+  tipo: string
+): Promise<ActionState> {
+  try {
+    const c = await convidadoAtivo(token);
+    const t: MaterialTipo = tipo === "foto" || tipo === "logo" || tipo === "referencia" ? tipo : "outro";
+    await registrarMaterial({
+      episodio_id: c.episodio_id,
+      convidado_id: c.id,
+      apresentador_id: null,
+      tipo: t,
+      path,
+      nome,
+      mime,
+      enviado_por: CONVIDADO,
+    });
+    revalidatePath(`/convidado/b/${token}`);
+    return { ok: true, error: null };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Não deu para registrar o arquivo." };
+  }
+}
+
+export async function removerMaterialConvidadoAction(form: FormData): Promise<void> {
+  const token = String(form.get("token") ?? "");
+  const c = await convidadoPorToken(token);
+  if (!c) return;
+  const { data } = await db().from("agenda_materiais").select("convidado_id").eq("id", String(form.get("material") ?? "")).maybeSingle();
+  if (data?.convidado_id !== c.id) return;
+  await removerMaterial(String(form.get("material")), CONVIDADO);
+  revalidatePath(`/convidado/b/${token}`);
 }

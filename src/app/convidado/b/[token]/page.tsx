@@ -4,12 +4,18 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ProducaoForm from "@/components/admin/ProducaoForm";
 import BriefingFields from "@/components/agenda/BriefingFields";
+import MaterialUploader from "@/components/agenda/MaterialUploader";
 import { youtubeUrl } from "@/lib/agenda/fluxo";
-import { convidadoPorToken, getArte, getEpisodio, quandoLongo } from "@/lib/agenda/store";
+import { MATERIAL_TIPOS, convidadoPorToken, getArte, getEpisodio, materiaisDe, quandoLongo } from "@/lib/agenda/store";
 import { whatsapp } from "@/lib/config";
 import { QUADROS, isQuadroId } from "@/lib/producao/quadros";
 import { signedUrls } from "@/lib/producao/store";
-import { salvarBriefingAction } from "../../actions";
+import {
+  pedirUploadConvidadoAction,
+  registrarMaterialConvidadoAction,
+  removerMaterialConvidadoAction,
+  salvarBriefingAction,
+} from "../../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +45,9 @@ export default async function ConvidadoBriefingPage({
 
   // As artes aparecem para o convidado só depois de confirmado — é ele quem mais compartilha.
   const arte = ep.status === "confirmado" && ep.arte_id ? await getArte(ep.arte_id) : null;
-  const urls = arte ? await signedUrls([arte.feed_path, arte.story_path]) : new Map<string, string>();
+  const meus = (await materiaisDe(ep.id)).filter((m) => m.convidado_id === c.id);
+  const urls = await signedUrls([...(arte ? [arte.feed_path, arte.story_path] : []), ...meus.map((m) => m.path)]);
+  const aberto = ep.status !== "cancelado" && ep.status !== "realizado";
   const live = youtubeUrl(ep);
 
   return (
@@ -92,7 +100,56 @@ export default async function ConvidadoBriefingPage({
             </section>
           )}
 
-          {ep.status !== "cancelado" && ep.status !== "realizado" && (
+          {aberto && (
+            <section className="bg-[#111] border border-[#222] rounded-2xl p-6">
+              <h2 className="text-white font-bold">Fotos e materiais</h2>
+              <p className="text-white/50 text-sm mt-1">
+                Mande fotos suas (de frente, boa luz), o logo da sua empresa e o que ajudar a montar a arte: uma foto do
+                seu trabalho, do produto, do lugar. Vídeo e PDF também servem para a produção. Até 50 MB por arquivo.
+              </p>
+              <div className="mt-4">
+                <MaterialUploader
+                  pedir={pedirUploadConvidadoAction.bind(null, c.token)}
+                  registrar={registrarMaterialConvidadoAction.bind(null, c.token)}
+                  tipos={(["foto", "logo", "referencia", "outro"] as const).map((v) => ({
+                    value: v,
+                    label: v === "foto" ? "Foto minha" : v === "referencia" ? "Referência para a arte" : MATERIAL_TIPOS[v],
+                  }))}
+                  inputCls="bg-[#0d0d0d] border border-[#2a2a2a] rounded-lg px-3 py-2 text-sm text-white"
+                  buttonCls="btn-primary px-4 py-2 rounded-lg text-sm font-bold"
+                />
+              </div>
+              {meus.length > 0 && (
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 mt-5">
+                  {meus.map((m) => {
+                    const u = urls.get(m.path);
+                    return (
+                      <div key={m.id} className="text-xs">
+                        {m.mime.startsWith("image/") && u ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={u} alt={m.nome} className="w-full aspect-square object-cover rounded-lg bg-black" />
+                        ) : (
+                          <div className="w-full aspect-square rounded-lg bg-[#0a0a0a] border border-[#2a2a2a] flex items-center justify-center text-white/40 p-2 text-center break-all">
+                            {m.nome}
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between gap-1 mt-1">
+                          <span className="text-white/40 truncate">{MATERIAL_TIPOS[m.tipo]}</span>
+                          <form action={removerMaterialConvidadoAction}>
+                            <input type="hidden" name="token" value={c.token} />
+                            <input type="hidden" name="material" value={m.id} />
+                            <button className="text-white/30 hover:text-red-400">apagar</button>
+                          </form>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          )}
+
+          {aberto && (
             <section>
               <h2 className="text-white font-bold text-xl">Seu briefing</h2>
               <p className="text-white/50 text-sm mt-1 mb-6">
