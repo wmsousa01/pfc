@@ -50,6 +50,7 @@ import {
   instagramResetAction,
   liveAction,
   observacoesAction,
+  pautaNewsAction,
   perfilIgAction,
   realizadoAction,
   remarcarAction,
@@ -409,6 +410,44 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
             A IA monta resumo, pauta, título e descrição da live e a legenda do Instagram a partir do briefing do
             convidado. Revise: ela não conhece o convidado além disso.
           </p>
+          {ep.quadro === "pfc-news" && (
+            <div className="mt-4 rounded-xl border border-gold-500/20 bg-gold-500/5 p-4">
+              <p className="text-white/70 text-sm">
+                <strong className="text-white">Notícias da semana:</strong> lê os posts dos perfis de notícia e das prefeituras
+                da região (lista em <a href="/admin/agenda/config" className="text-gold-400 underline">Configurar</a>) pela
+                conta do Instagram conectada, escolhe as principais e monta o tema e o roteiro com a fonte de cada uma.
+              </p>
+              <ProducaoForm action={pautaNewsAction} label="Buscar notícias e gerar roteiro" pending="Lendo os perfis e montando a pauta (~30 s)..." className="mt-3 flex flex-wrap items-center gap-2" buttonClassName="btn-primary px-4 py-2 rounded-lg text-sm font-bold">
+                <input type="hidden" name="id" value={ep.id} />
+                <label className="text-xs text-white/60">
+                  dos últimos
+                  <select name="dias" defaultValue="7" className={`${input} mx-1`}>
+                    {[3, 5, 7, 10, 14].map((d) => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                  dias
+                </label>
+              </ProducaoForm>
+              {b?.noticias && b.noticias.length > 0 && (
+                <ol className="mt-4 space-y-3 list-decimal list-inside">
+                  {b.noticias.map((n, i) => (
+                    <li key={i} className="text-sm text-white/80">
+                      <strong className="text-white">{n.titulo}</strong>
+                      <p className="text-white/55 ml-5">{n.resumo}</p>
+                      <p className="ml-5 text-xs flex flex-wrap gap-x-3">
+                        {n.fontes.map((f) => (
+                          <a key={f.url} href={f.url} target="_blank" className="text-gold-400 hover:underline">@{f.handle} ↗</a>
+                        ))}
+                      </p>
+                    </li>
+                  ))}
+                </ol>
+              )}
+              <p className="text-white/30 text-xs mt-3">
+                Só entram perfis Business/Creator; perfil que não deu para ler aparece no histórico. Confira cada notícia no post
+                original antes de falar no ar.
+              </p>
+            </div>
+          )}
           {b && (
             <ProducaoForm action={salvarBriefingAction} label="Salvar roteiro" pending="Salvando..." okMessage="Salvo." className="mt-4 space-y-3">
               <input type="hidden" name="id" value={ep.id} />

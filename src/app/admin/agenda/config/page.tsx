@@ -2,6 +2,7 @@ import AdminHeader from "@/components/admin/AdminHeader";
 import ProducaoForm from "@/components/admin/ProducaoForm";
 import { requireAdmin } from "@/lib/auth";
 import { YT_STREAM_KEY } from "@/lib/agenda/fluxo";
+import { fontesNews } from "@/lib/agenda/noticias";
 import { pastaDrive } from "@/lib/agenda/video";
 import { calendarAccount, calendarId, equipeEmails } from "@/lib/agenda/gcal";
 import { WEEKDAYS, db, listSlots, type Apresentador, type Bloqueio } from "@/lib/agenda/store";
@@ -16,6 +17,7 @@ import {
   bloqueioAction,
   bloqueioRemoverAction,
   gcalConfigAction,
+  fontesNewsAction,
   gcalDisconnectAction,
   pastaDriveAction,
   slotAction,
@@ -44,7 +46,7 @@ export default async function AgendaConfigPage({ searchParams }: { searchParams:
     getConfig(YT_STREAM_KEY),
     db().from("agenda_apresentadores").select("*").order("quadro").order("ordem").order("created_at"),
   ]);
-  const pasta = await pastaDrive();
+  const [pasta, fontes] = await Promise.all([pastaDrive(), fontesNews()]);
   const hosts = (hostRows ?? []) as Apresentador[];
   const fotos = await signedUrls(hosts.map((h) => h.foto_path).filter((p): p is string => !!p));
   const bloqueios = (bloqRows ?? []) as Bloqueio[];
@@ -248,6 +250,17 @@ export default async function AgendaConfigPage({ searchParams }: { searchParams:
           </p>
           <ProducaoForm action={pastaDriveAction} label="Salvar" pending="Salvando..." okMessage="Salvo." className="mt-3 flex flex-wrap items-start gap-2" buttonClassName={btn2}>
             <input name="pasta" defaultValue={`https://drive.google.com/drive/folders/${pasta}`} className={`${input} w-[28rem] max-w-full`} />
+          </ProducaoForm>
+        </section>
+
+        <section className={card}>
+          <h2 className="text-white font-bold">7. Fontes do PFC News</h2>
+          <p className="text-white/40 text-sm mt-1">
+            Perfis do Instagram de onde sai a pauta do PFC News (o @ ou o link, separados por espaço ou linha). A leitura é
+            pela API oficial com a conta conectada em Marketing, e só funciona com perfil Business/Creator.
+          </p>
+          <ProducaoForm action={fontesNewsAction} label="Salvar" pending="Salvando..." okMessage="Salvo." className="mt-3 space-y-2" buttonClassName={btn2}>
+            <textarea name="fontes" rows={4} defaultValue={fontes.map((h) => `@${h}`).join("\n")} className={`${input} w-full font-mono`} />
           </ProducaoForm>
         </section>
       </div>
