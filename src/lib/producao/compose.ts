@@ -12,7 +12,7 @@ const H = 720;
 const LOGO_BOX = { width: 220, height: 120, fit: "inside" } as const;
 
 let font: opentype.Font | null = null;
-function anton(): opentype.Font {
+export function anton(): opentype.Font {
   // Anton (SIL OFL 1.1) — assets/fonts/OFL.txt. Vetorizada aqui, então não
   // depende de fonte instalada no servidor.
   font ??= opentype.loadSync(path.join(process.cwd(), "assets/fonts/Anton-Regular.ttf"));
@@ -20,7 +20,7 @@ function anton(): opentype.Font {
 }
 
 /** Maior tamanho de fonte (até `max`) em que o texto cabe em `maxW`. */
-function fit(text: string, maxW: number, max: number) {
+export function fit(text: string, maxW: number, max: number) {
   const f = anton();
   let size = max;
   while (size > 24 && f.getAdvanceWidth(text, size) > maxW) size -= 2;
@@ -34,7 +34,7 @@ function rgb01(hex: string): string {
 }
 
 /** Altura das maiúsculas da Anton, em fração do tamanho da fonte. */
-const CAP = 0.86;
+export const CAP = 0.86;
 
 /**
  * Uma linha da headline no acabamento das thumbs da equipe: volume 3D
@@ -43,7 +43,7 @@ const CAP = 0.86;
  * metálico, brilho no topo e textura de metal arranhado. O path fica sem
  * estilo nos defs: atributo no path original não deixa o <use> trocar a cor.
  */
-function lineSvg(id: string, d: string, fill: string, extrude: string, depth: number, bold: number): string {
+export function lineSvg(id: string, d: string, fill: string, extrude: string, depth: number, bold: number): string {
   const outline = bold * 2 + 9;
   const shape = (paint: string) => `fill="${paint}" stroke="${paint}" stroke-width="${bold * 2}" stroke-linejoin="round"`;
   const layers = Array.from({ length: depth }, (_, i) => `<use xlink:href="#${id}" y="${i + 1}"/>`).join("");
@@ -55,40 +55,21 @@ function lineSvg(id: string, d: string, fill: string, extrude: string, depth: nu
 <use xlink:href="#${id}" ${shape("#000")} filter="url(#grunge)"/>`;
 }
 
-function headlineSvg(h: Headline, t: QuadroTheme): string {
+/**
+ * Gradientes e filtros do acabamento da headline (metal, volume, brilho na
+ * cor do quadro). `splitX` = faixa da linha em destaque, para o degradê
+ * dividido na horizontal. Também usado pelas artes de divulgação da agenda.
+ */
+export function textDefs(t: QuadroTheme, splitX: [number, number]): string {
   const [r, g, b] = rgb01(t.glow).split(" ");
-  const f = anton();
-  // Linha 1 menor (o gancho), linha 2 bem maior na cor do quadro e, quando
-  // há, linha 3 do mesmo tamanho em prata — a hierarquia das thumbs da equipe.
-  const three = !!h.l3;
-  const big = three ? 164 : 196;
-  const f1 = fit(h.l1, 1080, three ? 84 : 100);
-  const f2 = fit(h.l2, 1170, big);
-  const f3 = three ? fit(h.l3!, 1170, big) : null;
-  const base3 = H - 44;
-  const base2 = f3 ? base3 - f3.size * CAP - 22 : base3;
-  const base1 = base2 - f2.size * CAP - 26;
-  const last = f3 ? base3 : base2;
-  const p1 = f.getPath(h.l1, (W - f1.width) / 2, base1, f1.size).toPathData(2);
-  const p2 = f.getPath(h.l2, (W - f2.width) / 2, base2, f2.size).toPathData(2);
-  const p3 = f3 ? f.getPath(h.l3!, (W - f3.width) / 2, base3, f3.size).toPathData(2) : null;
-  // Itálico (PFC News): inclina cada linha a partir da própria base, sem sair do centro.
-  const skew = (base: number) => (t.italic ? ` transform="translate(${W / 2} ${base}) skewX(-9) translate(${-W / 2} ${-base})"` : "");
   const accent = t.split
-    ? `<linearGradient id="accent" gradientUnits="userSpaceOnUse" x1="${(W - f2.width) / 2}" y1="0" x2="${(W + f2.width) / 2}" y2="0">
+    ? `<linearGradient id="accent" gradientUnits="userSpaceOnUse" x1="${splitX[0]}" y1="0" x2="${splitX[1]}" y2="0">
     <stop offset="0.46" stop-color="${t.split[0]}"/><stop offset="0.54" stop-color="${t.split[1]}"/>
   </linearGradient>`
     : `<linearGradient id="accent" x1="0" y1="0" x2="0" y2="1">
     <stop offset="0" stop-color="${t.accent[0]}"/><stop offset="0.45" stop-color="${t.accent[1]}"/><stop offset="0.8" stop-color="${t.accent[2]}"/><stop offset="1" stop-color="${t.accent[1]}"/>
   </linearGradient>`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}">
-<defs>
-  <linearGradient id="band" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="${three ? 0.34 : 0.44}" stop-color="#03060f" stop-opacity="0"/>
-    <stop offset="${three ? 0.52 : 0.6}" stop-color="#03060f" stop-opacity="0.92"/>
-    <stop offset="1" stop-color="#000000" stop-opacity="1"/>
-  </linearGradient>
-  <linearGradient id="silver" x1="0" y1="0" x2="0" y2="1">
+  return `<linearGradient id="silver" x1="0" y1="0" x2="0" y2="1">
     <stop offset="0" stop-color="#ffffff"/><stop offset="0.4" stop-color="#f1f1f1"/><stop offset="0.62" stop-color="#b9b9b9"/><stop offset="0.82" stop-color="#ececec"/><stop offset="1" stop-color="#a3a3a3"/>
   </linearGradient>
   ${accent}
@@ -109,7 +90,35 @@ function headlineSvg(h: Headline, t: QuadroTheme): string {
     <feColorMatrix in="b" type="matrix" values="0 0 0 0 ${r}  0 0 0 0 ${g}  0 0 0 0 ${b}  0 0 0 0.6 0"/>
     <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
   </filter>
-  <filter id="streak" x="-20%" y="-400%" width="140%" height="900%"><feGaussianBlur stdDeviation="7 3"/></filter>
+  <filter id="streak" x="-20%" y="-400%" width="140%" height="900%"><feGaussianBlur stdDeviation="7 3"/></filter>`;
+}
+
+function headlineSvg(h: Headline, t: QuadroTheme): string {
+  const f = anton();
+  // Linha 1 menor (o gancho), linha 2 bem maior na cor do quadro e, quando
+  // há, linha 3 do mesmo tamanho em prata — a hierarquia das thumbs da equipe.
+  const three = !!h.l3;
+  const big = three ? 164 : 196;
+  const f1 = fit(h.l1, 1080, three ? 84 : 100);
+  const f2 = fit(h.l2, 1170, big);
+  const f3 = three ? fit(h.l3!, 1170, big) : null;
+  const base3 = H - 44;
+  const base2 = f3 ? base3 - f3.size * CAP - 22 : base3;
+  const base1 = base2 - f2.size * CAP - 26;
+  const last = f3 ? base3 : base2;
+  const p1 = f.getPath(h.l1, (W - f1.width) / 2, base1, f1.size).toPathData(2);
+  const p2 = f.getPath(h.l2, (W - f2.width) / 2, base2, f2.size).toPathData(2);
+  const p3 = f3 ? f.getPath(h.l3!, (W - f3.width) / 2, base3, f3.size).toPathData(2) : null;
+  // Itálico (PFC News): inclina cada linha a partir da própria base, sem sair do centro.
+  const skew = (base: number) => (t.italic ? ` transform="translate(${W / 2} ${base}) skewX(-9) translate(${-W / 2} ${-base})"` : "");
+  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}">
+<defs>
+  <linearGradient id="band" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="${three ? 0.34 : 0.44}" stop-color="#03060f" stop-opacity="0"/>
+    <stop offset="${three ? 0.52 : 0.6}" stop-color="#03060f" stop-opacity="0.92"/>
+    <stop offset="1" stop-color="#000000" stop-opacity="1"/>
+  </linearGradient>
+  ${textDefs(t, [(W - f2.width) / 2, (W + f2.width) / 2])}
 </defs>
 <rect width="${W}" height="${H}" fill="url(#band)"/>
 <ellipse cx="${W / 2}" cy="${last + 22}" rx="560" ry="7" fill="${t.glow}" opacity="0.9" filter="url(#streak)"/>
@@ -121,7 +130,7 @@ ${p3 ? `<g${skew(base3)}>${lineSvg("l3", p3, "url(#silver)", "#2a2a2a", 11, 3.5)
 }
 
 /** Selo com o nome do quadro, no canto superior esquerdo (o logo fica no direito). */
-function seloSvg(t: QuadroTheme): { svg: string; w: number; h: number } {
+export function seloSvg(t: QuadroTheme): { svg: string; w: number; h: number } {
   const f = anton();
   const size = 44;
   const label = t.name.toUpperCase();
