@@ -106,6 +106,38 @@ export async function renderPlate(prompt: string, aspectRatio: "16:9" | "9:16" =
   return Buffer.from(img.data, "base64");
 }
 
+export type ImagemRef = { legenda: string; data: Buffer; mime: string };
+
+export type AspectRatio = "16:9" | "9:16" | "4:5" | "3:4";
+
+/**
+ * Arte inteira desenhada pelo modelo a partir de imagens de referência
+ * (fotos reais, logo, arte anterior). Cada imagem vai logo depois da
+ * legenda dela, para o prompt poder citar "IMAGEM 2" sem ambiguidade.
+ */
+export async function renderWithRefs(
+  prompt: string,
+  refs: ImagemRef[],
+  aspectRatio: AspectRatio,
+  imageSize: "1K" | "2K" = "2K"
+): Promise<Buffer> {
+  const parts: unknown[] = [{ text: prompt }];
+  refs.forEach((r, i) => {
+    parts.push({ text: `IMAGEM ${i + 1} — ${r.legenda}` });
+    parts.push({ inlineData: { mimeType: r.mime, data: r.data.toString("base64") } });
+  });
+  const json = await generate(IMAGE_MODEL, {
+    contents: [{ parts }],
+    generationConfig: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio, imageSize } },
+  });
+  const img = (json.candidates?.[0]?.content?.parts ?? []).find((p: any) => p.inlineData)?.inlineData;
+  if (!img) {
+    const reason = json.candidates?.[0]?.finishReason ?? json.promptFeedback?.blockReason ?? "sem imagem";
+    throw new Error(`Gemini não gerou a arte (${reason}).`);
+  }
+  return Buffer.from(img.data, "base64");
+}
+
 /**
  * Entre frames candidatos do mesmo corte, o melhor para a thumb: rostos de
  * frente ou três-quartos, olhos abertos, expressão viva, sem desfoque. Uma

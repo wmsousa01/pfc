@@ -13,11 +13,13 @@ import {
 } from "@/lib/producao/youtube-api";
 import { MetaError, igBusinessDiscovery, igContainerStatus, igCreateImage, igPublish } from "@/lib/social/meta";
 import { activeConnection, revokeConnection } from "@/lib/social/store";
-import { gerarArtes } from "./arte";
+import { gerarArtes, type OpcoesArte } from "./arte";
 import { gerarBriefing } from "./briefing";
 import { calendarAccount, deleteEvent, upsertEvent } from "./gcal";
+import { runSemanaQueue } from "./semana";
 import {
   CONVIDADO,
+  apresentadoresDoEpisodio,
   convidadosDe,
   db,
   getArte,
@@ -50,19 +52,34 @@ async function mustGet(id: string): Promise<Episodio> {
 
 // ---- Convidado: foto e perfil do Instagram ----
 
-/** Foto do convidado, já girada e no máximo 1600 px. */
-export async function salvarFoto(convidadoId: string, file: File): Promise<string> {
+/** Foto já girada, no máximo 1600 px, gravada como JPEG no caminho dado. */
+async function gravarFoto(path: string, file: File): Promise<void> {
   if (!file.type.startsWith("image/")) throw new Error("A foto precisa ser uma imagem (JPG, PNG ou WebP).");
   const jpeg = await sharp(Buffer.from(await file.arrayBuffer()))
     .rotate()
     .resize(1600, 1600, { fit: "inside", withoutEnlargement: true })
     .jpeg({ quality: 90 })
     .toBuffer();
-  const path = `agenda/convidados/${convidadoId}.jpg`;
   const { error } = await db().storage.from("producao").upload(path, jpeg, { contentType: "image/jpeg", upsert: true });
   if (error) throw new Error(`Storage: ${error.message}`);
+}
+
+export async function salvarFoto(convidadoId: string, file: File): Promise<string> {
+  const path = `agenda/convidados/${convidadoId}.jpg`;
+  await gravarFoto(path, file);
   await updateConvidado(convidadoId, { foto_path: path });
   return path;
+}
+
+/** Foto padrão do apresentador, a que entra em toda arte do quadro. */
+export async function salvarFotoApresentador(id: string, file: File): Promise<void> {
+  // Nome novo a cada troca: a URL assinada antiga não mostra a foto velha do cache.
+  const path = `agenda/apresentadores/${id}-${Date.now().toString(36)}.jpg`;
+  await gravarFoto(path, file);
+  const { data: antes } = await db().from("agenda_apresentadores").select("foto_path").eq("id", id).maybeSingle();
+  const { error } = await db().from("agenda_apresentadores").update({ foto_path: path }).eq("id", id);
+  if (error) throw new Error(error.message);
+  if (antes?.foto_path) await db().storage.from("producao").remove([antes.foto_path]);
 }
 
 /** Lê o perfil público do convidado. Sem Instagram conectado ou perfil pessoal, grava o motivo. */
@@ -93,6 +110,7 @@ export type NovoConvidado = {
   temas: string | null;
   divulgar: string | null;
   links: string | null;
+  cargo: string | null;
 };
 
 /**
@@ -102,15 +120,19 @@ export type NovoConvidado = {
 export async function agendar(quadro: QuadroId, inicio: string, dados: NovoConvidado): Promise<Convidado> {
   const vaga = (await vagasLivres(quadro)).find((v) => v.inicio === inicio);
   if (!vaga) throw new Error("Esse horário acabou de ser ocupado. Escolha outro.");
-  return criarEpisodio({ quadro, inicio, duracao_min: vaga.duracao_min, tema: null }, dados, null);
+  const { convidado } = await criarEpisodio({ quadro, inicio, duracao_min: vaga.duracao_min, tema: null }, dados, null);
+  return convidado!;
 }
 
-/** Episódio novo com o primeiro convidado. `actor` null = o próprio convidado. */
+/**
+ * Episódio novo com o primeiro convidado. `actor` null = o próprio convidado.
+ * Sem `dados`, sai sem convidado (PFC News: só o apresentador da semana).
+ */
 export async function criarEpisodio(
   ep: { quadro: QuadroId; inicio: string; duracao_min: number; tema: string | null },
-  dados: NovoConvidado,
+  dados: NovoConvidado | null,
   actor: string | null
-): Promise<Convidado> {
+): Promise<{ episodioId: string; convidado: Convidado | null }> {
   const { data: novo, error } = await db()
     .from("agenda_episodios")
     .insert({ ...ep, status: actor ? "confirmado" : "solicitado", created_by: actor })
@@ -120,9 +142,9 @@ export async function criarEpisodio(
     if (error.code === "23505") throw new Error("Esse horário acabou de ser ocupado. Escolha outro.");
     throw new Error(error.message);
   }
-  const c = await adicionarConvidado(novo.id, dados);
-  await logAgenda(novo.id, actor ?? CONVIDADO, actor ? "criou o episódio" : "pediu o horário", dados.nome);
-  return c;
+  const c = dados ? await adicionarConvidado(novo.id, dados) : null;
+  await logAgenda(novo.id, actor ?? CONVIDADO, actor ? "criou o episódio" : "pediu o horário", dados?.nome);
+  return { episodioId: novo.id, convidado: c };
 }
 
 export async function adicionarConvidado(episodioId: string, dados: NovoConvidado): Promise<Convidado> {
@@ -197,21 +219,20 @@ export async function remarcar(epId: string, inicio: Date, duracaoMin: number, a
 
 export async function gerarBriefingPara(epId: string, actor: string): Promise<void> {
   const ep = await mustGet(epId);
-  const convidados = await convidadosDe(ep.id);
-  if (convidados.length === 0) throw new Error("Episódio sem convidado.");
-  const b = await gerarBriefing(ep, convidados);
+  const [convidados, hosts] = await Promise.all([convidadosDe(ep.id), apresentadoresDoEpisodio(ep)]);
+  if (convidados.length === 0 && !ep.tema) throw new Error("Episódio sem convidado: escreva o tema da semana nas notas.");
+  const b = await gerarBriefing(ep, convidados, hosts);
   await updateEpisodio(ep.id, { briefing: b, ig_legenda: ep.ig_legenda ?? b.legenda_ig });
   await logAgenda(ep.id, actor, "gerou o briefing");
 }
 
-export async function gerarArtesPara(epId: string, actor: string, headline: Headline | null): Promise<void> {
+export async function gerarArtesPara(epId: string, actor: string, headline: Headline | null, opts: OpcoesArte): Promise<void> {
   const ep = await mustGet(epId);
   const convidados = await convidadosDe(ep.id);
-  if (convidados.length === 0) throw new Error("Episódio sem convidado.");
   const h = headline ?? ep.briefing?.arte;
   if (!h?.l1 || !h.l2) throw new Error("Gere o briefing ou escreva a headline da arte.");
-  const arte = await gerarArtes(ep, convidados, h, actor);
-  await logAgenda(ep.id, actor, "gerou as artes", [h.l1, h.l2, h.l3].filter(Boolean).join(" / "));
+  const arte = await gerarArtes(ep, convidados, h, actor, opts);
+  await logAgenda(ep.id, actor, `gerou as artes (${opts.modo === "ia" ? "IA" : "recorte"})`, [h.l1, h.l2, h.l3].filter(Boolean).join(" / "));
   // A primeira arte já entra aprovada; trocar é um clique.
   if (!ep.arte_id) await updateEpisodio(ep.id, { arte_id: arte.id });
 }
@@ -234,10 +255,11 @@ export async function aprovarArte(epId: string, arteId: string, actor: string): 
 function liveInput(ep: Episodio, convidados: Convidado[]) {
   const quadro = isQuadroId(ep.quadro) ? QUADROS[ep.quadro].name : ep.quadro;
   const nomes = convidados.map((c) => c.nome).join(" e ");
+  const com = nomes ? ` com ${nomes}` : "";
   const start = new Date(ep.inicio);
   return {
-    title: ep.briefing?.titulo_live || `${quadro} com ${nomes}${ep.tema ? ` | ${ep.tema}` : ""}`,
-    description: ep.briefing?.descricao_yt || `${quadro} ao vivo com ${nomes}.`,
+    title: ep.briefing?.titulo_live || `${quadro}${com}${ep.tema ? ` | ${ep.tema}` : ""}`,
+    description: ep.briefing?.descricao_yt || `${quadro} ao vivo${com}.`,
     start,
     end: new Date(start.getTime() + ep.duracao_min * 60_000),
   };
@@ -355,7 +377,7 @@ async function publicarInstagram(epId: string): Promise<void> {
  * Rodada da agenda, junto da fila social (a cada 5 min): publica os posts
  * programados que venceram e dá baixa nos episódios que já passaram.
  */
-export async function runAgendaQueue(): Promise<{ instagram: number; realizados: number }> {
+export async function runAgendaQueue(): Promise<{ instagram: number; semanas: number; realizados: number }> {
   const agora = new Date().toISOString();
   const { data: devidos } = await db()
     .from("agenda_episodios")
@@ -365,6 +387,7 @@ export async function runAgendaQueue(): Promise<{ instagram: number; realizados:
     .lte("ig_publicar_em", agora)
     .limit(3);
   for (const d of devidos ?? []) await publicarInstagram(d.id);
+  const semanas = await runSemanaQueue();
 
   // Confirmado cuja gravação terminou há mais de 3 h vira realizado.
   const { data: passados } = await db()
@@ -380,5 +403,5 @@ export async function runAgendaQueue(): Promise<{ instagram: number; realizados:
     await logAgenda(p.id, AUTOMACAO, "marcou como realizado");
     realizados++;
   }
-  return { instagram: (devidos ?? []).length, realizados };
+  return { instagram: (devidos ?? []).length, semanas, realizados };
 }

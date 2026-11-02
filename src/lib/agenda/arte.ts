@@ -6,10 +6,27 @@ import { isGeminiConfigured, renderPlate } from "@/lib/producao/gemini";
 import { matte } from "@/lib/producao/matte";
 import { isQuadroId, quadroLogoPath, themeOf, type QuadroTheme } from "@/lib/producao/quadros";
 import { LOGO_PATH, download, upload, type Headline } from "@/lib/producao/store";
-import { WEEKDAYS, TZ, brtDate, db, type Arte, type Convidado, type Episodio } from "./store";
+import { gerarCenas, jpegFinal, type Img, type PessoaCena, type RefCena } from "./cena";
+import { imagemDe } from "./materiais";
+import {
+  WEEKDAYS,
+  TZ,
+  apresentadoresDoEpisodio,
+  brtDate,
+  db,
+  materiaisDe,
+  type Apresentador,
+  type Arte,
+  type ArteModo,
+  type Convidado,
+  type Episodio,
+  type Material,
+} from "./store";
 
 /**
- * Artes de divulgação do episódio, no acabamento das thumbs dos cortes:
+ * Artes de divulgação do episódio. Dois modos: "ia" (o Gemini desenha a
+ * cena inteira com as fotos reais — ver cena.ts) e "recorte", abaixo, no
+ * acabamento das thumbs dos cortes:
  * fundo de estúdio do Gemini, o convidado recortado da foto dele (MODNet,
  * rosto real), selo e cor do quadro, headline do tema, nome e @ do
  * convidado e a data da live.
@@ -52,13 +69,13 @@ function fallbackPlate(w: number, h: number, t: QuadroTheme): Buffer {
 </radialGradient></defs><rect width="${w}" height="${h}" fill="url(#g)"/></svg>`);
 }
 
-/** "QUINTA · 06/11 · 19H" */
-function dataLabel(iso: string): string {
+/** "QUINTA · 06/11 · 19H" ("HOJE · 06/11 · 19H" na chamada do dia) */
+function dataLabel(iso: string, hoje = false): string {
   const d = new Date(iso);
   const wd = WEEKDAYS[new Date(`${brtDate(d)}T12:00:00-03:00`).getUTCDay()];
   const dia = d.toLocaleDateString("pt-BR", { timeZone: TZ, day: "2-digit", month: "2-digit" });
   const [hh, mm] = d.toLocaleTimeString("pt-BR", { timeZone: TZ, hour: "2-digit", minute: "2-digit" }).split(":");
-  return `${wd} · ${dia} · ${hh}H${mm === "00" ? "" : mm}`.toUpperCase();
+  return `${hoje ? "hoje" : wd} · ${dia} · ${hh}H${mm === "00" ? "" : mm}`.toUpperCase();
 }
 
 type Pessoa = { rgba: Buffer; w: number; h: number };
@@ -253,12 +270,7 @@ async function compor(
     layers.push({ input: logo, left: f.w - width - 30, top: f.safeTop });
   }
   const flat = await sharp(plate).resize(f.w, f.h, { fit: "cover" }).composite(layers).png().toBuffer();
-  // Instagram só publica JPEG; o thumbnails.set aceita até 2 MB.
-  for (const quality of [90, 82, 72]) {
-    const out = await sharp(flat).jpeg({ quality, mozjpeg: true }).toBuffer();
-    if (out.length < 2_000_000) return out;
-  }
-  throw new Error("Arte acima de 2 MB mesmo comprimida.");
+  return jpegFinal(flat, f.w, f.h);
 }
 
 export type ArteInput = {
@@ -271,6 +283,7 @@ export type ArteInput = {
   headline: Headline;
   /** Fundos 16:9 e 9:16; sem eles, o fundo simples do quadro. */
   plates?: { h: Buffer; v: Buffer };
+  hoje?: boolean;
 };
 
 /** Renderiza o conjunto, sem banco nem Storage. */
@@ -287,7 +300,7 @@ export async function renderArtes(a: ArteInput): Promise<{ feed: Buffer; story: 
   const plates = a.plates ?? { h: fallbackPlate(1280, 720, t), v: fallbackPlate(1080, 1920, t) };
   const nomes = `COM ${a.convidados.map((c) => c.nome.trim()).join(" E ")}`.toUpperCase();
   const handles = a.convidados.filter((c) => c.instagram).map((c) => `@${c.instagram}`).join("  ");
-  const data = dataLabel(a.inicio);
+  const data = dataLabel(a.inicio, a.hoje);
 
   const [feed, story, thumb] = await Promise.all(
     FORMATOS.map((f) => compor(f, f.key === "thumb" ? plates.h : plates.v, pessoas, logo, t, a.headline, nomes, handles, data))
@@ -295,33 +308,98 @@ export async function renderArtes(a: ArteInput): Promise<{ feed: Buffer; story: 
   return { feed, story, thumb };
 }
 
+/** Foto do apresentador neste episódio: a que a equipe subiu para ele, senão a do cadastro. */
+function fotoApresentador(a: Apresentador, materiais: Material[]): string | null {
+  const m = materiais.find((x) => x.tipo === "apresentador" && x.apresentador_id === a.id && x.usar_na_arte);
+  return m?.path ?? a.foto_path;
+}
+
+/** Foto do convidado: a principal do briefing, senão a primeira que ele mandou nos materiais, senão a do Instagram. */
+async function imagemConvidado(c: Convidado, materiais: Material[]): Promise<Img | null> {
+  const m = materiais.find((x) => x.tipo === "foto" && x.convidado_id === c.id && x.usar_na_arte);
+  for (const path of [c.foto_path, m?.path]) {
+    if (!path) continue;
+    const img = await imagemDe(path);
+    if (img) return img;
+  }
+  const raw = await fotoDe(c);
+  return raw ? { buf: raw, mime: "image/jpeg" } : null;
+}
+
+export type OpcoesArte = { modo: ArteModo; hoje: boolean };
+
+/** Logo do quadro (Configurar da Produção); sem ele, o do PFC. */
+export async function logoDoQuadro(quadro: string): Promise<Buffer | null> {
+  return (await (isQuadroId(quadro) ? download(quadroLogoPath(quadro)) : Promise.resolve(null))) ?? download(LOGO_PATH);
+}
+
+/** Pessoas da arte, apresentadores primeiro (ficam à esquerda). */
+export async function pessoasDaArte(ep: Episodio, convidados: Convidado[], materiais: Material[]): Promise<PessoaCena[]> {
+  const hosts = await apresentadoresDoEpisodio(ep);
+  const out: PessoaCena[] = [];
+  for (const a of hosts) {
+    const path = fotoApresentador(a, materiais);
+    const img = path ? await imagemDe(path) : null;
+    if (img) out.push({ nome: a.nome, papel: a.papel, host: true, img });
+  }
+  for (const c of convidados.slice(0, 3)) {
+    const img = await imagemConvidado(c, materiais);
+    if (img) out.push({ nome: c.nome, papel: c.cargo || "CONVIDADO", host: false, img });
+  }
+  return out;
+}
+
 /** Gera o conjunto nos três formatos e grava em agenda_artes. */
-export async function gerarArtes(ep: Episodio, convidados: Convidado[], h: Headline, actor: string): Promise<Arte> {
+export async function gerarArtes(ep: Episodio, convidados: Convidado[], h: Headline, actor: string, opts: OpcoesArte): Promise<Arte> {
   const t = themeOf(ep.quadro);
   const lista = convidados.slice(0, 3);
-  const [plates, fotos, logo] = await Promise.all([
-    isGeminiConfigured()
-      ? Promise.all([renderPlate(platePrompt(t, false), "16:9"), renderPlate(platePrompt(t, true), "9:16")]).then(([h, v]) => ({ h, v }))
-      : Promise.resolve(undefined),
-    Promise.all(lista.map(fotoDe)),
-    (isQuadroId(ep.quadro) ? download(quadroLogoPath(ep.quadro)) : Promise.resolve(null)).then((b) => b ?? download(LOGO_PATH)),
-  ]);
-  const { feed, story, thumb } = await renderArtes({
-    quadro: ep.quadro,
-    inicio: ep.inicio,
-    convidados: lista,
-    fotos,
-    logo,
-    headline: h,
-    plates,
-  });
+  const materiais = await materiaisDe(ep.id);
+  const [pessoas, logoRaw] = await Promise.all([pessoasDaArte(ep, lista, materiais), logoDoQuadro(ep.quadro)]);
+
+  let out: { feed: Buffer; story: Buffer; thumb: Buffer };
+  if (opts.modo === "ia") {
+    if (!isGeminiConfigured()) throw new Error("A arte por IA precisa do Gemini (GOOGLE_AI_API_KEY).");
+    const refs: RefCena[] = [];
+    for (const m of materiais.filter((x) => (x.tipo === "logo" || x.tipo === "referencia") && x.usar_na_arte).slice(0, 4)) {
+      const img = await imagemDe(m.path);
+      if (img) refs.push({ legenda: m.tipo === "logo" ? `logo enviado pelo convidado (${m.nome}) — pode aparecer pequeno, perto do nome dele` : `referência enviada para o cenário (${m.nome})`, img });
+    }
+    const a = ep.briefing?.arte;
+    out = await gerarCenas({
+      quadro: t,
+      inicio: ep.inicio,
+      hoje: opts.hoje,
+      pessoas,
+      logo: logoRaw ? { buf: logoRaw, mime: "image/png" } : null,
+      refs,
+      headline: h,
+      topicos: a?.topicos || null,
+      sub: a?.sub || null,
+      cena: a?.cena || null,
+      tema: ep.tema,
+    });
+  } else {
+    const plates = isGeminiConfigured()
+      ? await Promise.all([renderPlate(platePrompt(t, false), "16:9"), renderPlate(platePrompt(t, true), "9:16")]).then(([h, v]) => ({ h, v }))
+      : undefined;
+    out = await renderArtes({
+      quadro: ep.quadro,
+      inicio: ep.inicio,
+      convidados: lista.length ? lista : pessoas.map((p) => ({ nome: p.nome, instagram: null })),
+      fotos: pessoas.map((p) => p.img.buf),
+      logo: logoRaw,
+      headline: h,
+      plates,
+      hoje: opts.hoje,
+    });
+  }
 
   const id = randomUUID();
   const dir = `agenda/${ep.id}/${id}`;
   await Promise.all([
-    upload(`${dir}/feed.jpg`, feed, "image/jpeg"),
-    upload(`${dir}/story.jpg`, story, "image/jpeg"),
-    upload(`${dir}/thumb.jpg`, thumb, "image/jpeg"),
+    upload(`${dir}/feed.jpg`, out.feed, "image/jpeg"),
+    upload(`${dir}/story.jpg`, out.story, "image/jpeg"),
+    upload(`${dir}/thumb.jpg`, out.thumb, "image/jpeg"),
   ]);
   const row = {
     id,
@@ -332,6 +410,7 @@ export async function gerarArtes(ep: Episodio, convidados: Convidado[], h: Headl
     l1: h.l1,
     l2: h.l2,
     l3: h.l3 ?? null,
+    modo: opts.modo,
     created_by: actor,
   };
   const { data: saved, error } = await db().from("agenda_artes").insert(row).select("*").single();

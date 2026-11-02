@@ -3,11 +3,15 @@ import ProducaoForm from "@/components/admin/ProducaoForm";
 import { requireAdmin } from "@/lib/auth";
 import { YT_STREAM_KEY } from "@/lib/agenda/fluxo";
 import { calendarAccount, calendarId, equipeEmails } from "@/lib/agenda/gcal";
-import { WEEKDAYS, db, listSlots, type Bloqueio } from "@/lib/agenda/store";
+import { WEEKDAYS, db, listSlots, type Apresentador, type Bloqueio } from "@/lib/agenda/store";
 import { QUADROS, QUADRO_IDS, isQuadroId } from "@/lib/producao/quadros";
-import { getConfig } from "@/lib/producao/store";
+import { getConfig, signedUrls } from "@/lib/producao/store";
 import { connectedChannel, isYouTubeOAuthConfigured, listLiveStreams } from "@/lib/producao/youtube-api";
 import {
+  apresentadorAction,
+  apresentadorEditarAction,
+  apresentadorRemoverAction,
+  apresentadorToggleAction,
   bloqueioAction,
   bloqueioRemoverAction,
   gcalConfigAction,
@@ -28,7 +32,7 @@ const btn2 = "text-xs border border-[#2a2a2a] hover:border-gold-500/50 text-whit
 export default async function AgendaConfigPage({ searchParams }: { searchParams: { ok?: string; erro?: string } }) {
   await requireAdmin();
   const hoje = new Date().toISOString().slice(0, 10);
-  const [slots, { data: bloqRows }, gcal, cal, equipe, channel, streamId] = await Promise.all([
+  const [slots, { data: bloqRows }, gcal, cal, equipe, channel, streamId, { data: hostRows }] = await Promise.all([
     listSlots(),
     db().from("agenda_bloqueios").select("*").gte("data", hoje).order("data"),
     calendarAccount(),
@@ -36,7 +40,10 @@ export default async function AgendaConfigPage({ searchParams }: { searchParams:
     equipeEmails(),
     connectedChannel(),
     getConfig(YT_STREAM_KEY),
+    db().from("agenda_apresentadores").select("*").order("quadro").order("ordem").order("created_at"),
   ]);
+  const hosts = (hostRows ?? []) as Apresentador[];
+  const fotos = await signedUrls(hosts.map((h) => h.foto_path).filter((p): p is string => !!p));
   const bloqueios = (bloqRows ?? []) as Bloqueio[];
   const streams = channel ? await listLiveStreams().catch((e: Error) => e) : null;
 
@@ -99,7 +106,55 @@ export default async function AgendaConfigPage({ searchParams }: { searchParams:
         </section>
 
         <section className={card}>
-          <h2 className="text-white font-bold">2. Datas bloqueadas</h2>
+          <h2 className="text-white font-bold">2. Apresentadores</h2>
+          <p className="text-white/40 text-sm mt-1">
+            Entram nas artes de todo episódio do quadro, à esquerda, com o nome e o papel embaixo. Foto do peito para
+            cima, de frente, boa luz. No episódio dá para escolher quem entra e trocar a foto só naquela semana.
+          </p>
+          <div className="mt-4 space-y-3">
+            {hosts.map((h) => {
+              const u = h.foto_path ? fotos.get(h.foto_path) : null;
+              return (
+                <div key={h.id} className={`flex flex-wrap items-center gap-3 ${h.ativo ? "" : "opacity-40"}`}>
+                  {u ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={u} alt="" className="w-14 h-14 rounded-lg object-cover bg-black" />
+                  ) : (
+                    <span className="w-14 h-14 rounded-lg border border-dashed border-[#333] text-[10px] text-white/30 flex items-center justify-center">sem foto</span>
+                  )}
+                  <span className="text-white/50 text-xs w-28">{isQuadroId(h.quadro) ? QUADROS[h.quadro].name : h.quadro}</span>
+                  <ProducaoForm action={apresentadorEditarAction} label="Salvar" pending="Salvando..." okMessage="Salvo." className="flex flex-wrap items-center gap-2" buttonClassName={btn2}>
+                    <input type="hidden" name="apresentador" value={h.id} />
+                    <input name="nome" defaultValue={h.nome} className={`${input} w-40`} />
+                    <input name="papel" defaultValue={h.papel} className={`${input} w-32`} />
+                    <input type="file" name="foto" accept="image/*" className="text-xs text-white/50 w-44" />
+                  </ProducaoForm>
+                  <form action={apresentadorToggleAction}>
+                    <input type="hidden" name="apresentador" value={h.id} />
+                    <input type="hidden" name="ativo" value={h.ativo ? "0" : "1"} />
+                    <button className="text-xs text-white/40 hover:text-white">{h.ativo ? "Pausar" : "Ativar"}</button>
+                  </form>
+                  <form action={apresentadorRemoverAction}>
+                    <input type="hidden" name="apresentador" value={h.id} />
+                    <button className="text-xs text-white/30 hover:text-red-400">Remover</button>
+                  </form>
+                </div>
+              );
+            })}
+          </div>
+          <ProducaoForm action={apresentadorAction} label="Adicionar apresentador" pending="Salvando..." className="mt-4 flex flex-wrap items-start gap-2" buttonClassName={btn2}>
+            <select name="quadro" required defaultValue="" className={input}>
+              <option value="" disabled>Quadro</option>
+              {QUADRO_IDS.map((q) => <option key={q} value={q}>{QUADROS[q].name}</option>)}
+            </select>
+            <input name="nome" required placeholder="Nome" className={`${input} w-40`} />
+            <input name="papel" placeholder="APRESENTADOR" className={`${input} w-32`} />
+            <input type="file" name="foto" accept="image/*" className="text-xs text-white/50 w-44" />
+          </ProducaoForm>
+        </section>
+
+        <section className={card}>
+          <h2 className="text-white font-bold">3. Datas bloqueadas</h2>
           <p className="text-white/40 text-sm mt-1">Feriado, viagem, estúdio ocupado: a data some do link público.</p>
           <div className="mt-3 space-y-1">
             {bloqueios.map((bl) => (
@@ -125,7 +180,7 @@ export default async function AgendaConfigPage({ searchParams }: { searchParams:
         </section>
 
         <section className={card}>
-          <h2 className="text-white font-bold">3. Google Calendar</h2>
+          <h2 className="text-white font-bold">4. Google Calendar</h2>
           <p className="text-white/40 text-sm mt-1">
             Cada episódio confirmado vira evento com o convidado e a equipe como participantes; o Google manda o
             convite e o lembrete de véspera por e-mail. Conecte com a conta da produção (não precisa ser a do canal).
@@ -157,7 +212,7 @@ export default async function AgendaConfigPage({ searchParams }: { searchParams:
         </section>
 
         <section className={card}>
-          <h2 className="text-white font-bold">4. Stream do estúdio no YouTube</h2>
+          <h2 className="text-white font-bold">5. Stream do estúdio no YouTube</h2>
           <p className="text-white/40 text-sm mt-1">
             A live criada pelo hub é ligada a este stream: é a chave que o OBS/vMix do estúdio usa, então ninguém
             precisa trocar nada na hora de entrar no ar. Usa o canal conectado em Produção.

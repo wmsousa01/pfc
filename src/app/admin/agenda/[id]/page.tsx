@@ -2,20 +2,25 @@ import { notFound } from "next/navigation";
 import AdminHeader from "@/components/admin/AdminHeader";
 import CopyButton from "@/components/CopyButton";
 import ProducaoForm from "@/components/admin/ProducaoForm";
+import MaterialUploader from "@/components/agenda/MaterialUploader";
 import { requireAdmin } from "@/lib/auth";
 import { pautaTexto } from "@/lib/agenda/briefing";
 import { youtubeUrl } from "@/lib/agenda/fluxo";
 import { calendarAccount } from "@/lib/agenda/gcal";
 import {
+  MATERIAL_TIPOS,
   TZ,
+  apresentadoresDo,
   brtDate,
   convidadosDe,
   db,
   getEpisodio,
   linkConvidado,
+  materiaisDe,
   quandoLongo,
   type Arte,
   type Evento,
+  type MaterialTipo,
 } from "@/lib/agenda/store";
 import { QUADROS, isQuadroId } from "@/lib/producao/quadros";
 import { signedUrls } from "@/lib/producao/store";
@@ -23,6 +28,12 @@ import { activeConnection } from "@/lib/social/store";
 import {
   addConvidadoAction,
   agendaSyncAction,
+  apresentadoresEpisodioAction,
+  cargoConvidadoAction,
+  materialAction,
+  materialRemoverAction,
+  pedirUploadAction,
+  registrarMaterialAction,
   aprovarArteAction,
   cancelarAction,
   confirmarAction,
@@ -67,19 +78,32 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
   if (!ep) notFound();
   const t = isQuadroId(ep.quadro) ? QUADROS[ep.quadro] : null;
 
-  const [convidados, { data: arteRows }, { data: evRows }, gcal, ig] = await Promise.all([
+  const [convidados, { data: arteRows }, { data: evRows }, gcal, ig, hosts, materiais] = await Promise.all([
     convidadosDe(ep.id),
     db().from("agenda_artes").select("*").eq("episodio_id", ep.id).order("created_at", { ascending: false }).limit(12),
     db().from("agenda_eventos").select("*").eq("episodio_id", ep.id).order("created_at", { ascending: false }).limit(40),
     calendarAccount(),
     activeConnection("instagram").catch(() => null),
+    apresentadoresDo(ep.quadro, false),
+    materiaisDe(ep.id),
   ]);
+  // Sem escolha no episódio, entram todos os ativos do quadro.
+  const noEpisodio = (id: string) => (ep.apresentadores ? ep.apresentadores.includes(id) : hosts.find((h) => h.id === id)?.ativo);
   const artes = (arteRows ?? []) as Arte[];
   const eventos = (evRows ?? []) as Evento[];
   const urls = await signedUrls([
     ...artes.flatMap((a) => [a.thumb_path, a.feed_path, a.story_path]),
     ...convidados.map((c) => c.foto_path).filter((p): p is string => !!p),
+    ...hosts.map((h) => h.foto_path).filter((p): p is string => !!p),
+    ...materiais.map((m) => m.path),
   ]);
+  const alvos = [
+    ...convidados.map((c) => ({ value: `c:${c.id}`, label: c.nome })),
+    ...hosts.map((h) => ({ value: `a:${h.id}`, label: `${h.nome} (apresentador)` })),
+    { value: "", label: "Do episódio (sem pessoa)" },
+  ];
+  const nomeAlvo = (convidadoId: string | null, apresentadorId: string | null) =>
+    convidados.find((c) => c.id === convidadoId)?.nome ?? hosts.find((h) => h.id === apresentadorId)?.nome ?? null;
   const aprovada = artes.find((a) => a.id === ep.arte_id) ?? null;
   const b = ep.briefing;
   const live = youtubeUrl(ep);
@@ -155,6 +179,9 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
         {/* ---- Convidados ---- */}
         <section className={card}>
           <h2 className="text-white font-bold">Convidados</h2>
+          {convidados.length === 0 && (
+            <p className="text-white/40 text-sm mt-1">Sem convidado: a arte sai só com o apresentador e o tema da semana.</p>
+          )}
           <div className="mt-4 space-y-5">
             {convidados.map((c) => {
               const foto = (c.foto_path && urls.get(c.foto_path)) || c.ig_perfil?.picture || null;
@@ -193,6 +220,10 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
                     {c.temas && <p className="text-white/70"><span className="text-white/35">Temas:</span> {c.temas}</p>}
                     {c.divulgar && <p className="text-white/70"><span className="text-white/35">Divulgar:</span> {c.divulgar}</p>}
                     {c.links && <p className="text-white/70 break-all"><span className="text-white/35">Links:</span> {c.links}</p>}
+                    <ProducaoForm action={cargoConvidadoAction} label="Salvar" pending="..." okMessage="Salvo." className="flex flex-wrap items-center gap-2" buttonClassName={btn2}>
+                      <input type="hidden" name="convidado" value={c.id} />
+                      <input name="cargo" defaultValue={c.cargo ?? ""} placeholder="Na arte, embaixo do nome (ex.: EMPRESÁRIO)" className={`${input} w-72`} />
+                    </ProducaoForm>
                     <p className="text-xs text-white/35">
                       {c.briefing_em ? `Briefing salvo em ${quando(c.briefing_em)}` : "Ainda não preencheu o briefing"}
                     </p>
@@ -229,8 +260,111 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
                 <input name="instagram" placeholder="@instagram" className={`${input} w-36`} />
                 <input name="whatsapp" placeholder="WhatsApp" className={`${input} w-36`} />
                 <input name="email" type="email" placeholder="E-mail" className={`${input} w-48`} />
+                <input name="cargo" placeholder="Cargo na arte" className={`${input} w-44`} />
               </ProducaoForm>
             </details>
+          )}
+        </section>
+
+        {/* ---- Apresentadores ---- */}
+        <section className={card}>
+          <h2 className="text-white font-bold">Apresentadores na arte</h2>
+          {hosts.length === 0 ? (
+            <p className="text-white/40 text-sm mt-1">
+              Nenhum apresentador cadastrado para este quadro. <a href="/admin/agenda/config" className="text-gold-400 underline">Cadastrar</a>
+            </p>
+          ) : (
+            <>
+              <p className="text-white/40 text-sm mt-1">
+                Quem entra na arte deste episódio. Para usar outra foto só nesta semana, mande em Materiais como “Foto do
+                apresentador”.
+              </p>
+              <ProducaoForm action={apresentadoresEpisodioAction} label="Salvar" pending="Salvando..." okMessage="Salvo." className="mt-3 flex flex-wrap items-center gap-4" buttonClassName={btn2}>
+                <input type="hidden" name="id" value={ep.id} />
+                {hosts.map((h) => {
+                  const extra = materiais.find((m) => m.tipo === "apresentador" && m.apresentador_id === h.id && m.usar_na_arte);
+                  const u = urls.get(extra?.path ?? h.foto_path ?? "");
+                  return (
+                    <label key={h.id} className="flex items-center gap-2 text-sm text-white/80">
+                      <input type="checkbox" name="apresentador" value={h.id} defaultChecked={!!noEpisodio(h.id)} />
+                      {u ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={u} alt="" className="w-10 h-10 rounded-lg object-cover bg-black" />
+                      ) : (
+                        <span className="w-10 h-10 rounded-lg border border-dashed border-[#333] text-[9px] text-white/30 flex items-center justify-center">sem foto</span>
+                      )}
+                      <span>
+                        {h.nome} <span className="text-white/35 text-xs">{h.papel}{extra ? " · foto da semana" : ""}</span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </ProducaoForm>
+            </>
+          )}
+        </section>
+
+        {/* ---- Materiais ---- */}
+        <section className={card}>
+          <h2 className="text-white font-bold">Materiais</h2>
+          <p className="text-white/40 text-sm mt-1">
+            O que o convidado mandou pelo link e o que a equipe subir aqui. Na arte por IA entram as fotos marcadas, até 4
+            logos/referências (ex.: o cão, a viatura, o produto) e a foto da semana do apresentador.
+          </p>
+          <div className="mt-4">
+            <MaterialUploader
+              pedir={pedirUploadAction.bind(null, ep.id)}
+              registrar={registrarMaterialAction.bind(null, ep.id)}
+              tipos={(Object.keys(MATERIAL_TIPOS) as MaterialTipo[]).map((v) => ({ value: v, label: MATERIAL_TIPOS[v] }))}
+              alvos={alvos}
+              inputCls={input}
+              buttonCls={btn2}
+            />
+          </div>
+          {materiais.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5">
+              {materiais.map((m) => {
+                const u = urls.get(m.path);
+                const quem = nomeAlvo(m.convidado_id, m.apresentador_id);
+                return (
+                  <div key={m.id} className={`text-xs rounded-lg p-2 border ${m.usar_na_arte ? "border-emerald-500/30" : "border-[#222]"}`}>
+                    <a href={u} target="_blank" download className="block">
+                      {m.mime.startsWith("image/") && u ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={u} alt={m.nome} className="w-full aspect-square object-cover rounded-md bg-black" />
+                      ) : (
+                        <div className="w-full aspect-square rounded-md bg-[#0a0a0a] border border-[#2a2a2a] flex items-center justify-center text-white/40 p-2 text-center break-all">
+                          {m.mime.split("/")[0]} · {m.nome}
+                        </div>
+                      )}
+                    </a>
+                    <p className="text-white/40 truncate mt-1" title={m.nome}>
+                      {quem ? `${quem} · ` : ""}{m.enviado_por === "convidado" ? "convidado" : m.enviado_por.split("@")[0]}
+                    </p>
+                    <ProducaoForm action={materialAction} label="Salvar" pending="..." className="mt-1 space-y-1" buttonClassName="text-[11px] text-white/50 hover:text-white">
+                      <input type="hidden" name="material" value={m.id} />
+                      <input type="hidden" name="convidado" value={m.convidado_id ?? ""} />
+                      <select name="tipo" defaultValue={m.tipo} className={`${input} w-full`}>
+                        {(Object.keys(MATERIAL_TIPOS) as MaterialTipo[]).map((v) => (
+                          <option key={v} value={v}>{MATERIAL_TIPOS[v]}</option>
+                        ))}
+                      </select>
+                      <select name="apresentador" defaultValue={m.apresentador_id ?? ""} className={`${input} w-full`}>
+                        <option value="">— apresentador (se for foto dele)</option>
+                        {hosts.map((h) => <option key={h.id} value={h.id}>{h.nome}</option>)}
+                      </select>
+                      <label className="flex items-center gap-1 text-white/60">
+                        <input type="checkbox" name="usar" value="1" defaultChecked={m.usar_na_arte} /> usar na arte
+                      </label>
+                    </ProducaoForm>
+                    <form action={materialRemoverAction}>
+                      <input type="hidden" name="material" value={m.id} />
+                      <button className="text-[11px] text-white/30 hover:text-red-400">apagar</button>
+                    </form>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </section>
 
@@ -279,6 +413,15 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
                   <input name="l3" defaultValue={b.arte.l3 ?? ""} placeholder="Linha 3 (opcional)" className={`${input} w-44`} />
                 </div>
               </div>
+              <label className="block text-white/50 text-xs">Tópicos da arte (separados por •)
+                <input name="topicos" defaultValue={b.arte.topicos ?? ""} placeholder="DISCIPLINA • TREINAMENTO • SEGURANÇA PÚBLICA" className={`${input} w-full`} />
+              </label>
+              <label className="block text-white/50 text-xs">Frase de apoio (opcional)
+                <input name="sub" defaultValue={b.arte.sub ?? ""} placeholder="OS BASTIDORES DO CRESCIMENTO NO MERCADO JURÍDICO" className={`${input} w-full`} />
+              </label>
+              <label className="block text-white/50 text-xs">Cenário da arte por IA
+                <textarea name="cena" rows={2} defaultValue={b.arte.cena ?? ""} placeholder="Elementos do fundo que combinam com o tema, sem pessoas nem texto" className={area} />
+              </label>
             </ProducaoForm>
           )}
         </section>
@@ -287,17 +430,27 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
         <section className={card}>
           <h2 className="text-white font-bold">Artes de divulgação</h2>
           <p className="text-white/40 text-sm mt-1">
-            Feed 4:5 (post collab), 9:16 (Story, Reels e TikTok) e 16:9 (thumb da live). O convidado sai recortado da
-            foto dele; sem foto, entra a do Instagram. A arte escolhida aparece para o convidado baixar no link dele.
+            Feed 4:5 (post collab), 9:16 (Story, Reels e TikTok) e 16:9 (thumb da live), com o apresentador e o convidado.
+            <strong className="text-white/60"> IA</strong>: o Gemini desenha a cena inteira a partir das fotos (cenário do
+            tema, luz nos rostos), como as artes da equipe — confira os rostos e o texto antes de usar.
+            <strong className="text-white/60"> Recorte</strong>: a foto real recortada com o texto por cima, rosto 100%
+            fiel. A arte escolhida aparece para o convidado baixar no link dele.
           </p>
           <ProducaoForm
             action={gerarArteAction}
             label={artes.length ? "Gerar outra versão" : "Gerar artes"}
-            pending="Gerando (~40 s)..."
+            pending="Gerando (até 2 min)..."
             className="mt-4 flex flex-wrap items-start gap-2"
             buttonClassName="px-3 py-1.5 rounded-lg text-xs font-bold border border-gold-500/40 text-gold-400 hover:bg-gold-500/10"
           >
             <input type="hidden" name="id" value={ep.id} />
+            <select name="modo" defaultValue="ia" className={input}>
+              <option value="ia">IA (cena completa)</option>
+              <option value="recorte">Recorte (rosto fiel)</option>
+            </select>
+            <label className="flex items-center gap-1.5 text-xs text-white/60 py-1.5">
+              <input type="checkbox" name="hoje" value="1" /> Chamada do dia (“HOJE”)
+            </label>
             <input name="l1" placeholder={b?.arte.l1 || "Linha 1"} className={`${input} w-56`} />
             <input name="l2" placeholder={b?.arte.l2 || "Linha 2 (destaque)"} className={`${input} w-44`} />
             <input name="l3" placeholder={b?.arte.l3 || "Linha 3 (opcional)"} className={`${input} w-44`} />
@@ -311,6 +464,7 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
                 <div key={a.id} className={`rounded-xl p-3 border ${esc ? "border-emerald-500/40 bg-emerald-500/5" : "border-[#222]"}`}>
                   <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                     <span className="text-xs text-white/60">
+                      <span className="text-white/40 uppercase text-[10px] font-bold mr-1">{a.modo === "ia" ? "IA" : "Recorte"}</span>
                       {[a.l1, a.l2, a.l3].filter(Boolean).join(" / ")} · {quando(a.created_at)}
                     </span>
                     {esc ? (
