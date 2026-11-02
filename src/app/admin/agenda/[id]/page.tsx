@@ -7,6 +7,7 @@ import { requireAdmin } from "@/lib/auth";
 import { pautaTexto } from "@/lib/agenda/briefing";
 import { youtubeUrl } from "@/lib/agenda/fluxo";
 import { calendarAccount } from "@/lib/agenda/gcal";
+import { listarPasta, pastaDrive, type ArquivoDrive } from "@/lib/agenda/video";
 import {
   MATERIAL_TIPOS,
   TZ,
@@ -29,6 +30,11 @@ import {
   addConvidadoAction,
   agendaSyncAction,
   apresentadoresEpisodioAction,
+  atualizarVideoAction,
+  enviarVideoAction,
+  framesAction,
+  liberarEnvioAction,
+  ligarVideoAction,
   cargoConvidadoAction,
   materialAction,
   materialRemoverAction,
@@ -105,6 +111,24 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
   const nomeAlvo = (convidadoId: string | null, apresentadorId: string | null) =>
     convidados.find((c) => c.id === convidadoId)?.nome ?? hosts.find((h) => h.id === apresentadorId)?.nome ?? null;
   const aprovada = artes.find((a) => a.id === ep.arte_id) ?? null;
+  // Episódio gravado: o PFC Visita, ou qualquer um que já tenha vídeo ligado.
+  const gravado = ep.quadro === "pfc-visita" || !!ep.video_drive_id;
+  let arquivos: ArquivoDrive[] = [];
+  let erroPasta: string | null = null;
+  if (gravado && !ep.video_drive_id) {
+    try {
+      const todos = await listarPasta(await pastaDrive());
+      const { data: usados } = await db().from("agenda_episodios").select("video_drive_id").not("video_drive_id", "is", null).neq("status", "cancelado");
+      const ja = new Set((usados ?? []).map((u) => u.video_drive_id as string));
+      arquivos = todos.filter((a) => !ja.has(a.id));
+    } catch (e) {
+      erroPasta = e instanceof Error ? e.message : String(e);
+    }
+  }
+  const up = ep.yt_upload;
+  const pct = up ? Math.floor((up.offset / up.total) * 100) : 0;
+  const gb = (n: number | null) => (n ? `${(n / 1e9).toFixed(1)} GB` : "");
+  const min = (s: number | null) => (s ? `${Math.floor(s / 60)} min` : "");
   const b = ep.briefing;
   const live = youtubeUrl(ep);
   const ativo = ep.status === "solicitado" || ep.status === "confirmado";
@@ -426,6 +450,108 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
           )}
         </section>
 
+        {/* ---- Vídeo gravado (Drive → YouTube) ---- */}
+        {gravado && (
+          <section className={card}>
+            <h2 className="text-white font-bold">Vídeo gravado</h2>
+            <p className="text-white/40 text-sm mt-1">
+              O episódio pronto fica no Drive. O hub tira frames dele para a arte, sobe o vídeo para o YouTube em
+              pedaços, direto do Drive e agendado para estrear em {quandoLongo(ep.inicio)}, e manda cortar no Contenta
+              depois da estreia.
+            </p>
+            {!ep.video_drive_id ? (
+              <ProducaoForm action={ligarVideoAction} label="Ligar vídeo" pending="Lendo o vídeo..." className="mt-4 flex flex-wrap items-start gap-2" buttonClassName={btn2}>
+                <input type="hidden" name="id" value={ep.id} />
+                {arquivos.length > 0 && (
+                  <select name="arquivo" defaultValue="" className={`${input} min-w-64`}>
+                    <option value="">Da pasta do Drive...</option>
+                    {arquivos.map((a) => (
+                      <option key={a.id} value={`${a.id}|${a.nome}`}>{a.nome}</option>
+                    ))}
+                  </select>
+                )}
+                <input name="link" placeholder="ou cole o link do arquivo no Drive" className={`${input} w-72`} />
+                {erroPasta && <p className="text-yellow-300/80 text-xs w-full">{erroPasta}</p>}
+              </ProducaoForm>
+            ) : (
+              <div className="mt-4 space-y-4 text-sm">
+                <p className="text-white/80">
+                  <a href={`https://drive.google.com/file/d/${ep.video_drive_id}/view`} target="_blank" className="text-gold-400 hover:underline">
+                    {ep.video_nome ?? ep.video_drive_id}
+                  </a>{" "}
+                  <span className="text-white/40">{[gb(ep.video_tamanho), min(ep.video_duracao_s)].filter(Boolean).join(" · ")}</span>
+                </p>
+                <ProducaoForm action={framesAction} label="Tirar frames para a arte" pending="Lendo o vídeo (~1 min)..." buttonClassName={btn2}>
+                  <input type="hidden" name="id" value={ep.id} />
+                </ProducaoForm>
+                <p className="text-white/30 text-xs -mt-2">
+                  Os frames aparecem em Materiais; o melhor já vai marcado para a arte. Quem não tiver foto própria a IA tira dos
+                  frames.
+                </p>
+
+                <div className="border-t border-[#1c1c1c] pt-4">
+                  <h3 className="text-white/80 font-semibold">YouTube</h3>
+                  {ep.yt_status === "nenhum" &&
+                    (ep.status === "confirmado" ? (
+                      <ProducaoForm action={enviarVideoAction} label={`Enviar e agendar para ${quandoLongo(ep.inicio)}`} pending="Enviando a primeira parte..." className="mt-2">
+                        <input type="hidden" name="id" value={ep.id} />
+                      </ProducaoForm>
+                    ) : (
+                      <p className="text-white/40 mt-1">Confirme o episódio primeiro.</p>
+                    ))}
+                  {ep.yt_status === "nenhum" && !aprovada && ep.status === "confirmado" && (
+                    <p className="text-yellow-300/80 text-xs mt-2">Sem arte escolhida o vídeo sobe sem thumb (dá para pôr depois em “Atualizar”).</p>
+                  )}
+                  {ep.yt_status === "enviando" && (
+                    <div className="mt-2 space-y-1">
+                      <div className="h-2 rounded-full bg-[#1c1c1c] overflow-hidden">
+                        <div className="h-full bg-gold-500" style={{ width: `${pct}%` }} />
+                      </div>
+                      <p className="text-white/50 text-xs">
+                        {pct}% · {gb(up?.offset ?? 0)} de {gb(up?.total ?? 0)} · continua sozinho a cada 5 minutos, pode fechar a página.
+                      </p>
+                      {ep.yt_erro && <p className="text-yellow-300/80 text-xs break-words">Última falha (tenta de novo): {ep.yt_erro}</p>}
+                    </div>
+                  )}
+                  {ep.yt_status === "erro" && (
+                    <div className="mt-2 space-y-2">
+                      <p className="text-red-400 text-xs break-words">Envio parado: {ep.yt_erro}</p>
+                      <form action={liberarEnvioAction}>
+                        <input type="hidden" name="id" value={ep.id} />
+                        <button className={btn2}>Tentar de novo</button>
+                      </form>
+                    </div>
+                  )}
+                  {ep.yt_status === "enviado" && ep.yt_video_id && (
+                    <div className="mt-2 space-y-2">
+                      <p>
+                        <a href={`https://www.youtube.com/watch?v=${ep.yt_video_id}`} target="_blank" className="text-gold-400 hover:underline">
+                          youtube.com/watch?v={ep.yt_video_id}
+                        </a>
+                        <span className="text-white/30"> · </span>
+                        <a href={`https://studio.youtube.com/video/${ep.yt_video_id}/edit`} target="_blank" className="text-white/50 hover:text-white">
+                          Abrir no Studio ↗
+                        </a>
+                      </p>
+                      <p className="text-white/40 text-xs">
+                        Privado até {quandoLongo(ep.inicio)}, quando o YouTube publica sozinho. Remarcar o episódio muda a data.
+                        {ep.cortes_live_id ? (
+                          <> Cortes pedidos ao Contenta: acompanhe em <a href="/admin/producao" className="underline">Produção</a>.</>
+                        ) : (
+                          " Os cortes saem uns 20 minutos depois da estreia."
+                        )}
+                      </p>
+                      <ProducaoForm action={atualizarVideoAction} label="Atualizar título, descrição, data e thumb" pending="Atualizando..." okMessage="Atualizado." buttonClassName={btn2}>
+                        <input type="hidden" name="id" value={ep.id} />
+                      </ProducaoForm>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
         {/* ---- Artes ---- */}
         <section className={card}>
           <h2 className="text-white font-bold">Artes de divulgação</h2>
@@ -567,6 +693,7 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
         </section>
 
         {/* ---- YouTube ---- */}
+        {!gravado && (
         <section className={card}>
           <h2 className="text-white font-bold">Live no YouTube</h2>
           {live ? (
@@ -600,6 +727,7 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
             </>
           )}
         </section>
+        )}
 
         {/* ---- Agenda e notas ---- */}
         <section className={`${card} grid md:grid-cols-2 gap-6`}>

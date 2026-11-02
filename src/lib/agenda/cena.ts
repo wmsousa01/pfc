@@ -1,6 +1,6 @@
 import "server-only";
 import sharp from "sharp";
-import { renderWithRefs, type AspectRatio, type ImagemRef } from "@/lib/producao/gemini";
+import { detectPeople, renderWithRefs, type AspectRatio, type ImagemRef } from "@/lib/producao/gemini";
 import type { QuadroId, QuadroTheme } from "@/lib/producao/quadros";
 import type { Headline } from "@/lib/producao/store";
 import { TZ, WEEKDAYS, brtDate } from "./store";
@@ -17,7 +17,8 @@ import { TZ, WEEKDAYS, brtDate } from "./store";
  */
 
 export type Img = { buf: Buffer; mime: string };
-export type PessoaCena = { nome: string; papel: string; host: boolean; img: Img };
+/** `img` null: a pessoa não tem foto própria e aparece nos frames do episódio. */
+export type PessoaCena = { nome: string; papel: string; host: boolean; img: Img | null };
 export type RefCena = { legenda: string; img: Img };
 
 export type CenaInput = {
@@ -33,6 +34,10 @@ export type CenaInput = {
   sub: string | null;
   cena: string | null;
   tema: string | null;
+  /** Frames do próprio episódio gravado (PFC Visita): as pessoas reais e o lugar. */
+  frames: Img[];
+  /** Episódio gravado estreia no YouTube, não é ao vivo. */
+  gravado: boolean;
 };
 
 /** Identidade de cada quadro nas artes da equipe. */
@@ -49,14 +54,18 @@ const ESTILO: Record<QuadroId, string> = {
     "Faixas de luz azul-celeste e bokeh ciano suave, clima mais leve e amigável; fundo escuro, textos brancos e azul-celeste.",
 };
 
-const PRESERVAR = `PRESERVAÇÃO ABSOLUTA DAS PESSOAS
-Use as pessoas reais das fotografias fornecidas, aplicando só recorte, composição, iluminação suave e correção de cor.
+const PRESERVAR = `PRESERVAÇÃO ABSOLUTA DAS PESSOAS (prioridade máxima, acima de qualquer estilo)
+Trate cada fotografia como um recorte colado na arte, não como inspiração: os rostos são os da foto, não um redesenho.
+- Rosto, olhos, nariz, boca, formato da cabeça, linha do cabelo, barba, rugas, marcas e textura de pele exatamente como na foto. Nada de pele lisa, olhos maiores, queixo afinado ou rosto rejuvenescido.
+- A luz do rosto continua a da foto original: o color grading e a luz de recorte do cenário tocam só o contorno da silhueta e o fundo, nunca remodelam o rosto.
+- Mesmo ângulo de cabeça e mesma expressão da foto; não vire o rosto para encaixar na composição — ajuste a composição à pessoa.
 - Não reconstruir nem "melhorar" rostos (sem AI face enhancement); não alterar expressão, idade, cabelo, barba, óculos, tatuagens, tom de pele, roupas ou acessórios.
 - Não deformar mãos, braços ou proporções; não criar pessoas parecidas: são estas pessoas.
 - Não adicionar nenhuma outra pessoa, nem ao fundo, nem silhueta reconhecível. Não repetir a mesma pessoa.`;
 
 const PROIBIDO = `PROIBIDO
 - Texto além do listado em TEXTOS OBRIGATÓRIOS; manchetes falsas, marcas d'água, nomes de patrocinadores.
+- Repetir um texto: cada item de TEXTOS OBRIGATÓRIOS aparece uma única vez na arte.
 - Logotipos inventados ou redesenhados.
 - Erros de ortografia: confira cada acento, cedilha e ponto de interrogação.
 - Visual genérico de IA, HDR exagerado, pele plastificada, aparência de ilustração.`;
@@ -99,12 +108,8 @@ function quadroNome(t: QuadroTheme) {
   return t.name === "Fora da Caixa" ? "PFC — PAPO FORA DA CAIXA" : `${t.name.toUpperCase()} — PFC | PAPO FORA DA CAIXA`;
 }
 
-/**
- * Monta o prompt e a lista de imagens na ordem em que o prompt cita.
- * `base` é a arte do feed já gerada: o story e a thumb recompõem a partir
- * dela, para os três formatos saírem com a mesma cara.
- */
-function montar(c: CenaInput, f: FormatoCena, base: Buffer | null): { prompt: string; refs: ImagemRef[] } {
+/** Monta o prompt e a lista de imagens na ordem em que o prompt cita. */
+function montar(c: CenaInput, f: FormatoCena): { prompt: string; refs: ImagemRef[] } {
   const refs: ImagemRef[] = [];
   const add = (legenda: string, img: Img) => {
     refs.push({ legenda, data: img.buf, mime: img.mime });
@@ -116,15 +121,18 @@ function montar(c: CenaInput, f: FormatoCena, base: Buffer | null): { prompt: st
   const solo = c.pessoas.length === 1;
   const n = c.pessoas.length;
 
+  const framesI = c.frames.slice(0, 3).map((fr) => add("FRAME DO EPISÓDIO GRAVADO — as pessoas reais e o lugar.", fr));
+  const nosFrames = framesI.length ? `IMAGEM ${framesI.join(", ")}` : null;
+
   // Posições: apresentador(es) à esquerda, convidado(s) à direita. Sozinho, à direita com o texto à esquerda.
   const descPessoas = c.pessoas.map((p) => {
-    const i = add(`FOTOGRAFIA de ${p.nome} (${p.host ? "apresentador" : "convidado"}).`, p.img);
     const lado = solo ? "à DIREITA, grande, da cintura ou do peito para cima" : p.host ? "à ESQUERDA" : "à DIREITA, em primeiro plano, com presença dominante";
+    if (!p.img) return `- ${p.nome} — ${p.papel}: sem foto própria; é ${p.host ? "o apresentador" : "o convidado (o dono ou responsável pelo lugar)"} que aparece nos frames do episódio (${nosFrames}). Recorte dele dos frames. Posicionar ${lado}.`;
+    const i = add(`FOTOGRAFIA de ${p.nome} (${p.host ? "apresentador" : "convidado"}).`, p.img);
     return `- IMAGEM ${i}: ${p.nome} — ${p.papel}. Posicionar ${lado}.`;
   });
   const logoI = c.logo ? add(`LOGOTIPO OFICIAL do ${c.quadro.name}. Usar exatamente como está.`, c.logo) : null;
   const refsI = c.refs.map((r) => `- IMAGEM ${add(r.legenda, r.img)}: ${r.legenda}`);
-  const baseI = base ? add("ARTE APROVADA DO FEED (4:5) deste episódio — referência de estilo, cores, cenário e tipografia.", { buf: base, mime: "image/jpeg" }) : null;
 
   const { dia, hora } = chamada(c.inicio, c.hoje);
   const h = c.headline;
@@ -135,7 +143,7 @@ function montar(c: CenaInput, f: FormatoCena, base: Buffer | null): { prompt: st
     textos.push(`HEADLINE em ${h.l3 ? "três" : "duas"} linhas: ${[h.l1, h.l2, h.l3].filter(Boolean).map((l) => `"${l}"`).join(" / ")}`);
   } else {
     textos.push(`HEADLINE: ${[h.l1, h.l2, h.l3].filter(Boolean).map((l) => `"${l}"`).join(" / ")}`);
-    textos.push(`SELO VERMELHO LUMINOSO: "● AO VIVO"`);
+    textos.push(c.gravado ? `SELO VERMELHO LUMINOSO: "▶ ESTREIA"` : `SELO VERMELHO LUMINOSO: "● AO VIVO"`);
     textos.push(`DATA: "${dia}"`);
     textos.push(`HORÁRIO: "${hora}"`);
     textos.push(`"NO YOUTUBE" com o ícone vermelho oficial do YouTube`);
@@ -157,26 +165,28 @@ ${c.logo ? "- Logotipo oficial na região superior central, entre as pessoas.\n"
 ${c.logo ? "- Logotipo oficial no canto superior esquerdo.\n" : ""}- "${hora.replace("ÀS ", "")}" e o dia com enorme destaque: a pessoa precisa entender em menos de 2 segundos o programa, o dia e o horário.`
         : `COMPOSIÇÃO
 - ${hosts.length ? "Apresentador à esquerda, convidado à direita" : "As pessoas lado a lado"}, enquadramento cinematográfico de meio corpo, rostos grandes na metade de cima.
-${c.logo ? "- Logotipo oficial no topo, centralizado.\n" : ""}- Selo AO VIVO, data, horário e "NO YOUTUBE" na região central, entre as pessoas, sem cobrir rostos.
+${c.logo ? "- Logotipo oficial no topo, centralizado.\n" : ""}- Selo ${c.gravado ? "ESTREIA" : "AO VIVO"}, data, horário e "NO YOUTUBE" na região central, entre as pessoas, sem cobrir rostos.
 - Identificação de cada pessoa ao lado dela, discreta, sem disputar com a headline.
 - Headline gigante na metade de baixo, ocupando 55% a 90% da largura, sem cobrir rostos; tópicos logo abaixo.`;
 
   const prompt = `ARTE PROMOCIONAL CINEMATOGRÁFICA PREMIUM — ${quadroNome(c.quadro)}
-${f === "thumb" ? "Thumbnail da live no YouTube" : "Divulgação do episódio ao vivo no YouTube"}${c.tema ? `, tema: ${c.tema}` : ""}.
+${f === "thumb" ? `Thumbnail ${c.gravado ? "do episódio" : "da live"} no YouTube` : c.gravado ? "Divulgação da estreia do episódio gravado no YouTube" : "Divulgação do episódio ao vivo no YouTube"}${c.tema ? `, tema: ${c.tema}` : ""}.
 
 FORMATO
 ${FORMATO[f].texto}
 A arte ocupa a tela inteira, de borda a borda: sem faixas vazias, molduras ou barras.
-${baseI ? `\nRecomponha a IMAGEM ${baseI} (arte do feed já aprovada) para este formato: mesmas pessoas, mesmo cenário, mesmas cores e a mesma tipografia da headline. Reorganize os elementos para o novo formato em vez de esticar ou cortar.\n` : ""}
+
 PESSOAS — exatamente ${n} ${n === 1 ? "pessoa" : "pessoas"} na arte, nem mais nem menos:
 ${descPessoas.join("\n")}
-${PRESERVAR}
+${nosFrames ? `
+FRAMES DO EPISÓDIO (${nosFrames}): imagens reais do episódio gravado. O cenário parte do lugar real que eles mostram (fachada, salão, produtos), com o tratamento cinematográfico abaixo. As pessoas dos frames são as mesmas das fotografias: os rostos vêm das fotografias, sem misturar nem inventar.
+` : ""}${PRESERVAR}
 ${logoI ? `\nLOGOTIPO: IMAGEM ${logoI}. Preservar símbolo, tipografia, cores e proporções; não redesenhar nem criar outra versão. Só integrar com luz e sombra suaves.` : "\nNão há logotipo enviado: não desenhe nenhum símbolo ou logo."}
 ${refsI.length ? `\nREFERÊNCIAS DO EPISÓDIO (use como elementos do cenário, sem copiar textos delas):\n${refsI.join("\n")}` : ""}
 
 IDENTIDADE VISUAL
 ${ESTILO[c.quadro.id]}
-Color grading cinematográfico 4K, pretos densos, sombras navy, recorte de luz âmbar nas silhuetas, pele natural, profundidade de campo.
+Color grading cinematográfico no cenário: pretos densos, sombras navy, profundidade de campo. Nas pessoas, só um leve recorte de luz âmbar no contorno; pele com a textura e o tom da fotografia.
 
 CENÁRIO
 ${c.cena ? `${c.cena}\n` : ""}Elementos do tema no segundo plano, desfocados, sem competir com rostos e headline. Telas e documentos só com grafismos abstratos, sem texto legível.
@@ -190,7 +200,7 @@ Headline: tipografia sans-serif condensada extrabold, acabamento metálico; ${c.
 ${PROIBIDO}
 
 REVISÃO ANTES DE ENTREGAR
-${f === "thumb" ? "" : `✓ "${dia}" e "${hora}" exatamente assim — não troque o dia da semana nem a data.\n`}✓ ${n} ${n === 1 ? "pessoa" : "pessoas"}, os rostos idênticos às fotografias.
+${f === "thumb" ? "" : `✓ "${dia}" e "${hora}" exatamente assim — não troque o dia da semana nem a data.\n`}✓ ${n} ${n === 1 ? "pessoa" : "pessoas"}, os rostos idênticos às fotografias: quem conhece a pessoa a reconhece na hora, sem cara de IA.
 ✓ Ortografia perfeita.`;
 
   return { prompt, refs };
@@ -206,20 +216,64 @@ export async function jpegFinal(img: Buffer, w: number, h: number): Promise<Buff
   throw new Error("Arte acima de 2 MB mesmo comprimida.");
 }
 
+/** Caixa 0–1000 com folga de 12% para cada lado (e mais em cima, para não cortar o cabelo). */
+async function recortar(frame: Img, box: [number, number, number, number]): Promise<Img> {
+  const { width = 1920, height = 1080 } = await sharp(frame.buf).metadata();
+  const [y0, x0, y1, x1] = box.map((v) => v / 1000);
+  const fw = x1 - x0;
+  const fh = y1 - y0;
+  const left = Math.max(0, Math.floor((x0 - fw * 0.12) * width));
+  const top = Math.max(0, Math.floor((y0 - fh * 0.15) * height));
+  const right = Math.min(width, Math.ceil((x1 + fw * 0.12) * width));
+  const bottom = Math.min(height, Math.ceil((y1 + fh * 0.05) * height));
+  const buf = await sharp(frame.buf).extract({ left, top, width: right - left, height: bottom - top }).jpeg({ quality: 92 }).toBuffer();
+  return { buf, mime: "image/jpeg" };
+}
+
 /**
- * Os três formatos. A thumb recompõe a partir do feed (mesma cara); o story
- * sai direto das fotos, junto com o feed: com o feed de referência o modelo
- * encaixava a arte 4:5 no meio do 9:16, com faixas vazias em cima e embaixo.
+ * Quem não tem foto própria ganha um recorte dos frames: o Gemini localiza
+ * cada pessoa (e qual é o apresentador) e cada uma vira uma foto separada.
+ * Com o frame inteiro o modelo de imagem trocava os rostos (teste de 02/11
+ * com o episódio da pizzaria); com uma foto por pessoa, preserva.
+ */
+export async function fotosDosFrames(pessoas: PessoaCena[], frames: Img[]): Promise<PessoaCena[]> {
+  const out = pessoas.map((p) => ({ ...p }));
+  const faltam = () => out.filter((p) => !p.img);
+  const hostsComFoto = out.filter((p) => p.host && p.img).map((p) => p.img!.buf);
+  for (const frame of frames) {
+    if (faltam().length === 0) break;
+    const achadas = await detectPeople(frame.buf, hostsComFoto).catch(() => []);
+    // As maiores primeiro: quem está mais perto da câmera é quem conversa.
+    const ordem = achadas.sort((a, b) => (b.box[2] - b.box[0]) * (b.box[3] - b.box[1]) - (a.box[2] - a.box[0]) * (a.box[3] - a.box[1]));
+    const livres = [...ordem];
+    for (const p of faltam()) {
+      // Sem foto do apresentador não dá para saber quem é quem: vai na ordem.
+      const i = livres.findIndex((a) => !hostsComFoto.length || a.apresentador === p.host);
+      if (i < 0) continue;
+      p.img = await recortar(frame, livres[i].box);
+      livres.splice(i, 1);
+    }
+  }
+  return out;
+}
+
+/**
+ * Os três formatos, todos direto das fotos e em paralelo. Recompor a partir
+ * do feed gerado (como a thumb fazia) copiava rostos que a IA já tinha
+ * alterado e alterava de novo; no story, ainda encaixava o 4:5 com faixas
+ * vazias em cima e embaixo.
  */
 export async function gerarCenas(c: CenaInput): Promise<{ feed: Buffer; story: Buffer; thumb: Buffer }> {
-  if (c.pessoas.length === 0) throw new Error("Sem foto de ninguém: suba a foto do apresentador ou do convidado.");
-  const um = async (f: FormatoCena, base: Buffer | null) => {
-    const { prompt, refs } = montar(c, f, base);
+  if (!c.pessoas.some((p) => p.img) && c.frames.length === 0) {
+    throw new Error("Sem foto de ninguém: suba a foto do apresentador ou do convidado, ou tire frames do vídeo.");
+  }
+  if (c.frames.length && c.pessoas.some((p) => !p.img)) c = { ...c, pessoas: await fotosDosFrames(c.pessoas, c.frames) };
+  const um = async (f: FormatoCena) => {
+    const { prompt, refs } = montar(c, f);
     const img = await renderWithRefs(prompt, refs, FORMATO[f].aspect);
     return jpegFinal(img, FORMATO[f].w, FORMATO[f].h);
   };
-  const [feed, story] = await Promise.all([um("feed", null), um("story", null)]);
-  const thumb = await um("thumb", feed);
+  const [feed, story, thumb] = await Promise.all([um("feed"), um("story"), um("thumb")]);
   return { feed, story, thumb };
 }
 
@@ -232,6 +286,7 @@ export type CardSemana = {
   arte: Img | null;
   /** Sem arte aprovada, as fotos e o logo vão direto. */
   pessoas: PessoaCena[];
+  gravado: boolean;
   logo: Img | null;
   convidados: { nome: string; papel: string }[];
   apresentadores: string[];
@@ -261,7 +316,7 @@ export async function gerarCenaSemana(cards: CardSemana[], logoPfc: Img | null, 
     const imgs: string[] = [];
     if (k.arte) imgs.push(`IMAGEM ${add(`ARTE ORIGINAL do episódio ${k.quadro.name} de ${p.dia} — referência de pessoas, logotipo e cenário.`, k.arte)} (arte original do episódio: use as pessoas, o logotipo e o clima dela)`);
     else {
-      for (const pe of k.pessoas) imgs.push(`IMAGEM ${add(`FOTOGRAFIA de ${pe.nome} (${pe.host ? "apresentador" : "convidado"}) — card ${idx + 1}.`, pe.img)} (${pe.nome}, ${pe.papel})`);
+      for (const pe of k.pessoas.filter((x): x is PessoaCena & { img: Img } => !!x.img)) imgs.push(`IMAGEM ${add(`FOTOGRAFIA de ${pe.nome} (${pe.host ? "apresentador" : "convidado"}) — card ${idx + 1}.`, pe.img)} (${pe.nome}, ${pe.papel})`);
       if (k.logo) imgs.push(`IMAGEM ${add(`LOGOTIPO OFICIAL do ${k.quadro.name}.`, k.logo)} (logotipo do ${k.quadro.name})`);
     }
     const h = [k.headline.l1, k.headline.l2, k.headline.l3].filter(Boolean).join(" ");
@@ -271,7 +326,7 @@ Participantes: ${[...k.apresentadores.map((a) => `${a} (apresentador, à esquerd
 Textos obrigatórios:
 - DATA (enorme, branco e dourado): "${p.dia}"
 - DIA: "${diaSemana}"
-- HORÁRIO: "${hojeAqui ? `HOJE ${horario}` : horario}"
+- HORÁRIO: "${[hojeAqui && "HOJE", k.gravado && "ESTREIA", horario].filter(Boolean).join(" ")}"
 - PROGRAMA: logotipo ou nome "${k.quadro.name.toUpperCase()}"
 ${quem ? `- CONVIDADO: "${quem.toUpperCase()}"${k.convidados[0]?.papel ? ` e, menor, "${k.convidados.map((c) => c.papel.toUpperCase()).join(" | ")}"` : ""}\n` : ""}- HEADLINE: "${h}"
 ${k.topicos ? `- TÓPICOS (pequeno): "${k.topicos.toUpperCase()}"\n` : ""}Estilo do card: ${ESTILO[k.quadro.id]}`;

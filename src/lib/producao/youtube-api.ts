@@ -231,6 +231,125 @@ export async function uploadVideo(
   return json.id;
 }
 
+// ---- Upload retomável de vídeo grande (episódio gravado, vários GB) ----
+
+export type UploadMeta = { title: string; description: string; publishAt: Date | null; tags?: string[] };
+
+/**
+ * Abre a sessão de upload retomável. Sai privado; com `publishAt`, o YouTube
+ * publica sozinho na hora. A sessão vale uma semana e aceita os bytes em
+ * pedaços, em quantas requisições for preciso.
+ */
+export async function startResumableUpload(meta: UploadMeta, total: number): Promise<string> {
+  const token = await accessToken();
+  const res = await fetch("https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json; charset=UTF-8",
+      "X-Upload-Content-Type": "video/mp4",
+      "X-Upload-Content-Length": String(total),
+    },
+    body: JSON.stringify({
+      snippet: { title: meta.title.slice(0, 100), description: meta.description.slice(0, 5000), tags: meta.tags, categoryId: "22" },
+      status: {
+        privacyStatus: "private",
+        ...(meta.publishAt && meta.publishAt.getTime() > Date.now() ? { publishAt: meta.publishAt.toISOString() } : {}),
+        selfDeclaredMadeForKids: false,
+      },
+    }),
+    cache: "no-store",
+  });
+  const session = res.headers.get("location");
+  if (!res.ok || !session) throw new Error(`YouTube ${res.status}: ${(await res.text().catch(() => "")).slice(0, 300)}`);
+  return session;
+}
+
+export type ChunkResult = { done: true; videoId: string } | { done: false; next: number };
+
+/** "bytes=0-1048575" → 1048576 (o próximo byte que o YouTube espera). */
+function nextFromRange(range: string | null): number {
+  const m = /bytes=\d+-(\d+)/.exec(range ?? "");
+  return m ? Number(m[1]) + 1 : 0;
+}
+
+/** Manda um pedaço (múltiplo de 256 KiB, menos o último). */
+export async function putChunk(session: string, chunk: Uint8Array<ArrayBuffer>, start: number, total: number): Promise<ChunkResult> {
+  const end = start + chunk.length - 1;
+  const res = await fetch(session, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${await accessToken()}`,
+      "Content-Type": "video/mp4",
+      "Content-Range": `bytes ${start}-${end}/${total}`,
+    },
+    body: chunk,
+    cache: "no-store",
+  });
+  if (res.status === 308) return { done: false, next: nextFromRange(res.headers.get("range")) };
+  if (res.ok) {
+    const json = (await res.json()) as { id?: string };
+    if (!json.id) throw new Error("O YouTube não devolveu o id do vídeo.");
+    return { done: true, videoId: json.id };
+  }
+  throw new Error(`YouTube upload ${res.status}: ${(await res.text().catch(() => "")).slice(0, 300)}`);
+}
+
+/** Onde a sessão parou (depois de uma rodada interrompida no meio de um pedaço). */
+export async function queryUpload(session: string, total: number): Promise<ChunkResult> {
+  const res = await fetch(session, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${await accessToken()}`, "Content-Range": `bytes */${total}` },
+    cache: "no-store",
+  });
+  if (res.status === 308) return { done: false, next: nextFromRange(res.headers.get("range")) };
+  if (res.ok) {
+    const json = (await res.json()) as { id?: string };
+    if (json.id) return { done: true, videoId: json.id };
+  }
+  throw new Error(`YouTube upload ${res.status}: ${(await res.text().catch(() => "")).slice(0, 300)}`);
+}
+
+export type VideoState = { privacy: string; publishAt: string | null; uploadStatus: string; processed: boolean };
+
+export async function videoState(videoId: string): Promise<VideoState | null> {
+  const r = await ytFetch<{ items?: { status: { privacyStatus: string; publishAt?: string; uploadStatus: string } }[] }>(
+    `/videos?part=status&id=${videoId}`
+  );
+  const s = r.items?.[0]?.status;
+  if (!s) return null;
+  return { privacy: s.privacyStatus, publishAt: s.publishAt ?? null, uploadStatus: s.uploadStatus, processed: s.uploadStatus === "processed" };
+}
+
+/** Atualiza título e descrição (o resto do snippet vem do estado atual). */
+export async function updateVideoSnippet(videoId: string, title: string, description: string): Promise<void> {
+  const cur = await ytFetch<{ items?: { snippet: Record<string, unknown> }[] }>(`/videos?part=snippet&id=${videoId}`);
+  const snippet = cur.items?.[0]?.snippet;
+  if (!snippet) throw new Error("Vídeo não encontrado no canal.");
+  await ytFetch(`/videos?part=snippet`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      id: videoId,
+      snippet: { title: title.slice(0, 100), description: description.slice(0, 5000), categoryId: snippet.categoryId ?? "22", tags: snippet.tags },
+    }),
+  });
+}
+
+/** Tira o agendamento e deixa privado (episódio cancelado não pode estrear sozinho). */
+export async function unscheduleVideo(videoId: string): Promise<void> {
+  const cur = await ytFetch<{ items?: { status: Record<string, unknown> }[] }>(`/videos?part=status&id=${videoId}`);
+  const status = cur.items?.[0]?.status;
+  if (!status) return;
+  const { uploadStatus, failureReason, rejectionReason, publishAt, ...rest } = status;
+  void uploadStatus; void failureReason; void rejectionReason; void publishAt;
+  await ytFetch(`/videos?part=status`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: videoId, status: { ...rest, privacyStatus: "private" } }),
+  });
+}
+
 /**
  * Publica agora (publishAt null) ou agenda. O videos.update troca o objeto
  * `status` inteiro, então os demais campos vêm do estado atual — sem isso o

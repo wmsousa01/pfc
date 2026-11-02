@@ -106,6 +106,49 @@ export async function renderPlate(prompt: string, aspectRatio: "16:9" | "9:16" =
   return Buffer.from(img.data, "base64");
 }
 
+export type PessoaNoFrame = { box: [number, number, number, number]; apresentador: boolean };
+
+/**
+ * Onde está cada pessoa em primeiro plano no frame (caixas 0–1000, ymin,
+ * xmin, ymax, xmax) e qual delas é o apresentador, comparando com as fotos
+ * dele. Serve para recortar uma foto por pessoa: com o frame inteiro, o
+ * modelo de imagem redesenha os rostos; com a foto de cada um, preserva.
+ */
+export async function detectPeople(frame: Buffer, apresentador: Buffer[]): Promise<PessoaNoFrame[]> {
+  const parts: unknown[] = [
+    {
+      text: `A IMAGEM 1 é um frame de um episódio de podcast gravado num estabelecimento.${
+        apresentador.length ? ` As imagens seguintes são fotos do APRESENTADOR do programa.` : ""
+      }
+Liste as pessoas em primeiro plano da IMAGEM 1 (ignore quem está ao fundo, desfocado ou cortado pela borda), com a caixa de cada uma do topo da cabeça até a cintura, em coordenadas 0–1000 [ymin, xmin, ymax, xmax], e diga se é o apresentador${apresentador.length ? " (compare com as fotos)" : " (sem fotos: false para todos)"}.`,
+    },
+    { inlineData: { mimeType: "image/jpeg", data: frame.toString("base64") } },
+    ...apresentador.map((a) => ({ inlineData: { mimeType: "image/jpeg", data: a.toString("base64") } })),
+  ];
+  const json = await generate(TEXT_MODEL, {
+    contents: [{ parts }],
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: "OBJECT",
+        properties: {
+          pessoas: {
+            type: "ARRAY",
+            items: {
+              type: "OBJECT",
+              properties: { box: { type: "ARRAY", items: { type: "INTEGER" } }, apresentador: { type: "BOOLEAN" } },
+              required: ["box", "apresentador"],
+            },
+          },
+        },
+        required: ["pessoas"],
+      },
+    },
+  });
+  const parsed = JSON.parse(json.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}") as { pessoas?: PessoaNoFrame[] };
+  return (parsed.pessoas ?? []).filter((p) => Array.isArray(p.box) && p.box.length === 4 && p.box[2] > p.box[0] && p.box[3] > p.box[1]);
+}
+
 export type ImagemRef = { legenda: string; data: Buffer; mime: string };
 
 export type AspectRatio = "16:9" | "9:16" | "4:5" | "3:4";

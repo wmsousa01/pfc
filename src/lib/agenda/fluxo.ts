@@ -17,6 +17,7 @@ import { gerarArtes, type OpcoesArte } from "./arte";
 import { gerarBriefing } from "./briefing";
 import { calendarAccount, deleteEvent, upsertEvent } from "./gcal";
 import { runSemanaQueue } from "./semana";
+import { reagendarVideo, suspenderVideo } from "./video";
 import {
   CONVIDADO,
   apresentadoresDoEpisodio,
@@ -41,8 +42,11 @@ export const YT_STREAM_KEY = "yt_stream_id";
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e)).slice(0, 500);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export const youtubeUrl = (ep: Pick<Episodio, "yt_broadcast_id">) =>
-  ep.yt_broadcast_id ? `https://www.youtube.com/watch?v=${ep.yt_broadcast_id}` : null;
+/** A live agendada ou, no episódio gravado, o vídeo enviado. */
+export const youtubeUrl = (ep: Pick<Episodio, "yt_broadcast_id" | "yt_video_id">) => {
+  const id = ep.yt_broadcast_id ?? ep.yt_video_id;
+  return id ? `https://www.youtube.com/watch?v=${id}` : null;
+};
 
 async function mustGet(id: string): Promise<Episodio> {
   const ep = await getEpisodio(id);
@@ -201,6 +205,7 @@ export async function cancelar(epId: string, actor: string, motivo: string | nul
       .then(() => updateEpisodio(ep.id, { yt_broadcast_id: null }))
       .catch((e) => logAgenda(ep.id, actor, "falhou ao apagar a live", msg(e)));
   }
+  await suspenderVideo(ep).catch((e) => logAgenda(ep.id, actor, "falhou ao tirar o vídeo da agenda do YouTube", msg(e)));
 }
 
 export async function remarcar(epId: string, inicio: Date, duracaoMin: number, actor: string): Promise<void> {
@@ -213,6 +218,7 @@ export async function remarcar(epId: string, inicio: Date, duracaoMin: number, a
   await logAgenda(ep.id, actor, "remarcou", inicio.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }));
   await sincronizarAgenda(ep.id, actor);
   if (ep.yt_broadcast_id) await sincronizarLive(ep.id, actor);
+  await reagendarVideo(ep, inicio).catch((e) => logAgenda(ep.id, actor, "falhou ao reagendar o vídeo", msg(e)));
 }
 
 // ---- Briefing e artes ----
@@ -269,6 +275,7 @@ function liveInput(ep: Episodio, convidados: Convidado[]) {
 export async function sincronizarLive(epId: string, actor: string): Promise<string> {
   const ep = await mustGet(epId);
   if (ep.status !== "confirmado") throw new Error("Confirme o episódio antes de criar a live.");
+  if (ep.video_drive_id) throw new Error("Episódio gravado: ele vai para o YouTube pelo envio do vídeo, não por live.");
   if (!(await connectedChannel())) throw new Error("Canal do YouTube não conectado (/admin/producao/config).");
   const convidados = await convidadosDe(ep.id);
   const input = liveInput(ep, convidados);

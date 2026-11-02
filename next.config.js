@@ -4,12 +4,13 @@ const nextConfig = {
     // Uploads de logo/capa passam pela server action.
     serverActions: { bodySizeLimit: "6mb" },
     // Recorte das pessoas (MODNet) roda num binário nativo: fica fora do bundle.
-    serverComponentsExternalPackages: ["onnxruntime-node"],
+    // O ffmpeg-static também: o binário dele é lido do node_modules em runtime.
+    serverComponentsExternalPackages: ["onnxruntime-node", "ffmpeg-static"],
     // A headline é vetorizada da fonte Anton lida em runtime.
     outputFileTracingIncludes: {
       "/admin/producao": ["./assets/fonts/**"],
       "/api/cron/producao": ["./assets/fonts/**"],
-      "/admin/agenda/[id]": ["./assets/fonts/**"],
+      "/admin/agenda/[id]": ["./assets/fonts/**", "./node_modules/ffmpeg-static/ffmpeg*"],
     },
   },
   images: {
