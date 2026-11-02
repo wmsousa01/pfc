@@ -135,23 +135,64 @@ async function comProxy<T>(id: string, total: number, fn: (url: string) => Promi
   }
 }
 
-/** Tamanho pelo Content-Range e duração pelo cabeçalho do MP4 (o ffmpeg lê só o índice). */
+/** Um trecho fechado do arquivo no Drive, com prazo: o Drive às vezes não responde. */
+async function trecho(id: string, start: number, end: number): Promise<{ buf: Buffer; total: number; tipo: string }> {
+  const res = await fetch(driveUrl(id), { headers: { Range: `bytes=${start}-${end}` }, cache: "no-store", signal: AbortSignal.timeout(20_000) });
+  if (res.status !== 206) {
+    await res.body?.cancel().catch(() => null);
+    throw new Error(`Não consegui abrir o vídeo no Drive (${res.status}): confira se o arquivo está com link público.`);
+  }
+  return {
+    buf: Buffer.from(await res.arrayBuffer()),
+    total: Number(/\/(\d+)$/.exec(res.headers.get("content-range") ?? "")?.[1] ?? 0),
+    tipo: res.headers.get("content-type") ?? "",
+  };
+}
+
+/**
+ * Duração pelo mvhd do MP4, pulando de caixa em caixa no nível de cima até o
+ * moov. Poucos KB lidos, sem ffmpeg: na Vercel o ffmpeg pelo proxy deixava o
+ * "Ligar vídeo" pendurado. Devolve 0 se não achar (a duração é só informativa).
+ */
+async function duracaoMp4(id: string, total: number): Promise<number> {
+  let pos = 0;
+  for (let i = 0; i < 20 && pos + 8 <= total; i++) {
+    const { buf: h } = await trecho(id, pos, Math.min(pos + 15, total - 1));
+    let size = h.readUInt32BE(0);
+    const tipo = h.toString("latin1", 4, 8);
+    let head = 8;
+    if (size === 1) {
+      size = Number(h.readBigUInt64BE(8));
+      head = 16;
+    } else if (size === 0) size = total - pos;
+    if (size < head) return 0;
+    if (tipo === "moov") {
+      // O mvhd costuma ser o primeiro filho; 4 KB bastam.
+      const { buf } = await trecho(id, pos + head, Math.min(pos + head + 4095, total - 1));
+      const at = buf.indexOf("mvhd", 0, "latin1");
+      if (at < 4) return 0;
+      const v = buf[at + 4];
+      const escala = v === 1 ? buf.readUInt32BE(at + 24) : buf.readUInt32BE(at + 16);
+      const dur = v === 1 ? Number(buf.readBigUInt64BE(at + 28)) : buf.readUInt32BE(at + 20);
+      return escala ? Math.round(dur / escala) : 0;
+    }
+    pos += size;
+  }
+  return 0;
+}
+
+/** Tamanho pelo Content-Range e duração pelo cabeçalho do MP4. */
 async function infoVideo(id: string): Promise<{ tamanho: number; duracao: number }> {
-  const res = await fetch(driveUrl(id), { headers: { Range: "bytes=0-0" }, cache: "no-store" });
-  const total = Number(/\/(\d+)$/.exec(res.headers.get("content-range") ?? "")?.[1] ?? 0);
-  const tipo = res.headers.get("content-type") ?? "";
-  await res.body?.cancel().catch(() => null);
+  const { total, tipo } = await trecho(id, 0, 0);
   if (!total || !tipo.startsWith("video/")) throw new Error("Não consegui abrir o vídeo: confira se o arquivo é MP4 e está com link público.");
-  const r = await comProxy(id, total, (url) =>
-    run(ffmpeg(), ["-hide_banner", "-i", url], { timeout: 60_000 }).catch((e: { stderr?: string }) => ({ stderr: e.stderr ?? "" }))
-  );
-  const d = /Duration: (\d+):(\d+):(\d+)/.exec(r.stderr ?? "");
-  return { tamanho: total, duracao: d ? Number(d[1]) * 3600 + Number(d[2]) * 60 + Number(d[3]) : 0 };
+  const duracao = await duracaoMp4(id, total).catch(() => 0);
+  return { tamanho: total, duracao };
 }
 
 export async function ligarVideo(epId: string, link: string, nome: string | null, actor: string): Promise<void> {
+  if (!link.trim()) throw new Error("Escolha um vídeo da pasta ou cole o link do arquivo no Drive.");
   const id = driveIdDe(link);
-  if (!id) throw new Error("Link do Drive inválido.");
+  if (!id) throw new Error("Link do Drive inválido: use o link do arquivo (…/file/d/…), não o da pasta.");
   const ep = await getEpisodio(epId);
   if (!ep) throw new Error("Episódio não encontrado.");
   if (ep.yt_status === "enviando" || ep.yt_status === "enviado") throw new Error("O vídeo já foi para o YouTube; não dá para trocar o arquivo.");
