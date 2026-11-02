@@ -66,6 +66,17 @@ export type Episodio = {
   ig_erro: string | null;
   /** null = todos os apresentadores ativos do quadro. */
   apresentadores: string[] | null;
+  /** Episódio gravado (PFC Visita): o arquivo no Drive e o envio ao YouTube. */
+  video_drive_id: string | null;
+  video_nome: string | null;
+  video_tamanho: number | null;
+  video_duracao_s: number | null;
+  yt_video_id: string | null;
+  yt_status: "nenhum" | "enviando" | "enviado" | "erro";
+  yt_upload: { session: string; offset: number; total: number; falhas?: number } | null;
+  yt_erro: string | null;
+  yt_lock_ate: string | null;
+  cortes_live_id: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -130,13 +141,14 @@ export type Apresentador = {
   created_at: string;
 };
 
-export type MaterialTipo = "foto" | "apresentador" | "logo" | "referencia" | "outro";
+export type MaterialTipo = "foto" | "apresentador" | "logo" | "referencia" | "frame" | "outro";
 
 export const MATERIAL_TIPOS: Record<MaterialTipo, string> = {
   foto: "Foto do convidado",
   apresentador: "Foto do apresentador",
   logo: "Logo",
   referencia: "Referência para a arte",
+  frame: "Frame do vídeo",
   outro: "Outro material",
 };
 

@@ -92,6 +92,7 @@ export async function gerarArteSemana(segunda: string, primeiroHoje: boolean, ac
       inicio: ep.inicio,
       arte: arteImg,
       pessoas,
+      gravado: !!ep.video_drive_id,
       logo: logo ? { buf: logo, mime: "image/png" } : null,
       convidados: convidados.map((c) => ({ nome: c.nome, papel: c.cargo || "" })),
       apresentadores: hosts.map((h) => h.nome),

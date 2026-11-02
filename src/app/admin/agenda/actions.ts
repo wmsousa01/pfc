@@ -25,6 +25,7 @@ import {
 import { disconnectCalendar } from "@/lib/agenda/gcal";
 import { pedirUpload, registrarMaterial, removerMaterial } from "@/lib/agenda/materiais";
 import { escolherArteSemana, gerarArteSemana, liberarSemana, programarSemana } from "@/lib/agenda/semana";
+import { PASTA_KEY, atualizarVideo, enviarVideo, liberarEnvio, ligarVideo, tirarFrames } from "@/lib/agenda/video";
 import {
   brt,
   cleanInstagram,
@@ -509,4 +510,43 @@ export async function semanaResetAction(form: FormData): Promise<void> {
   await requireAdmin();
   await liberarSemana(semanaDe(form));
   refresh();
+}
+
+// ---- Episódio gravado (Drive → YouTube) ----
+
+export async function ligarVideoAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  // O select da pasta manda "id|nome"; o campo livre, o link.
+  const escolha = str(form, "arquivo");
+  const [idDaPasta, ...nome] = escolha.split("|");
+  const link = str(form, "link") || idDaPasta;
+  return run((a) => ligarVideo(str(form, "id"), link, nome.join("|") || null, a));
+}
+
+export async function framesAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  return run((a) => tirarFrames(str(form, "id"), a));
+}
+
+export async function enviarVideoAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  // A primeira leva vai aqui mesmo; o resto, no cron de 5 em 5 minutos.
+  return run((a) => enviarVideo(str(form, "id"), a, 200_000));
+}
+
+export async function atualizarVideoAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  return run((a) => atualizarVideo(str(form, "id"), a));
+}
+
+export async function liberarEnvioAction(form: FormData): Promise<void> {
+  await requireAdmin();
+  await liberarEnvio(str(form, "id"));
+  refresh();
+}
+
+export async function pastaDriveAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  return run(async () => {
+    const v = str(form, "pasta");
+    const m = /folders\/([A-Za-z0-9_-]+)/.exec(v);
+    const id = m?.[1] ?? (/^[A-Za-z0-9_-]{20,}$/.test(v) ? v : null);
+    if (!id) throw new Error("Link da pasta inválido.");
+    await setConfig(PASTA_KEY, id);
+  });
 }

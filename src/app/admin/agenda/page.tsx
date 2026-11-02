@@ -40,7 +40,7 @@ function etapas(ep: Episodio, cs: Convidado[], gcal: boolean) {
     { label: "Roteiro", ok: !!ep.briefing },
     { label: "Arte", ok: !!ep.arte_id },
     { label: "Instagram", ok: ep.ig_status === "publicado", warn: ep.ig_status === "erro", wait: ep.ig_status === "agendado" },
-    { label: "Live", ok: !!ep.yt_broadcast_id },
+    { label: "YouTube", ok: !!(ep.yt_broadcast_id || ep.yt_status === "enviado"), wait: ep.yt_status === "enviando", warn: ep.yt_status === "erro" },
     ...(gcal ? [{ label: "Agenda", ok: !!ep.gcal_event_id }] : []),
   ];
 }

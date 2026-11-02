@@ -334,17 +334,33 @@ export async function logoDoQuadro(quadro: string): Promise<Buffer | null> {
 }
 
 /** Pessoas da arte, apresentadores primeiro (ficam à esquerda). */
+/**
+ * Pessoas da arte, apresentadores primeiro (ficam à esquerda). Quem não tem
+ * foto fica de fora — a não ser que o episódio tenha frames marcados: aí a
+ * pessoa entra sem foto e a IA a tira dos frames (PFC Visita).
+ */
 export async function pessoasDaArte(ep: Episodio, convidados: Convidado[], materiais: Material[]): Promise<PessoaCena[]> {
   const hosts = await apresentadoresDoEpisodio(ep);
+  const comFrames = materiais.some((m) => m.tipo === "frame" && m.usar_na_arte);
   const out: PessoaCena[] = [];
   for (const a of hosts) {
     const path = fotoApresentador(a, materiais);
     const img = path ? await imagemDe(path) : null;
-    if (img) out.push({ nome: a.nome, papel: a.papel, host: true, img });
+    if (img || comFrames) out.push({ nome: a.nome, papel: a.papel, host: true, img });
   }
   for (const c of convidados.slice(0, 3)) {
     const img = await imagemConvidado(c, materiais);
-    if (img) out.push({ nome: c.nome, papel: c.cargo || "CONVIDADO", host: false, img });
+    if (img || comFrames) out.push({ nome: c.nome, papel: c.cargo || "CONVIDADO", host: false, img });
+  }
+  return out;
+}
+
+/** Frames do episódio marcados para a arte (até 3). */
+async function framesDaArte(materiais: Material[]): Promise<Img[]> {
+  const out: Img[] = [];
+  for (const m of materiais.filter((x) => x.tipo === "frame" && x.usar_na_arte).slice(0, 3)) {
+    const img = await imagemDe(m.path);
+    if (img) out.push(img);
   }
   return out;
 }
@@ -366,6 +382,8 @@ export async function gerarArtes(ep: Episodio, convidados: Convidado[], h: Headl
     }
     const a = ep.briefing?.arte;
     out = await gerarCenas({
+      frames: await framesDaArte(materiais),
+      gravado: !!ep.video_drive_id,
       quadro: t,
       inicio: ep.inicio,
       hoje: opts.hoje,
@@ -386,7 +404,8 @@ export async function gerarArtes(ep: Episodio, convidados: Convidado[], h: Headl
       quadro: ep.quadro,
       inicio: ep.inicio,
       convidados: lista.length ? lista : pessoas.map((p) => ({ nome: p.nome, instagram: null })),
-      fotos: pessoas.map((p) => p.img.buf),
+      // O recorte precisa de foto de cada pessoa; quem só está nos frames fica de fora.
+      fotos: pessoas.map((p) => p.img?.buf ?? null),
       logo: logoRaw,
       headline: h,
       plates,
