@@ -151,7 +151,7 @@ Liste as pessoas em primeiro plano da IMAGEM 1 (ignore quem está ao fundo, desf
 
 export type ImagemRef = { legenda: string; data: Buffer; mime: string };
 
-export type AspectRatio = "16:9" | "9:16" | "4:5" | "3:4";
+export type AspectRatio = "16:9" | "9:16" | "4:5" | "3:4" | "1:1";
 
 /**
  * Arte inteira desenhada pelo modelo a partir de imagens de referência

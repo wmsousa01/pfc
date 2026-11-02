@@ -20,6 +20,9 @@ const SCOPES = [
   "instagram_content_publish",
   "instagram_manage_insights",
   "business_management",
+  // Campanhas pagas (/admin/campanhas).
+  "ads_management",
+  "ads_read",
 ].join(",");
 
 export class MetaError extends Error {
@@ -53,7 +56,7 @@ export function metaAuthUrl(redirectUri: string, state: string): string {
   return `https://www.facebook.com/${V}/dialog/oauth?${params}`;
 }
 
-async function graph<T>(path: string, params: Record<string, string> = {}, method: "GET" | "POST" = "GET"): Promise<T> {
+export async function graph<T>(path: string, params: Record<string, string> = {}, method: "GET" | "POST" = "GET"): Promise<T> {
   const qs = new URLSearchParams(params);
   const res = await fetch(method === "GET" ? `${GRAPH}${path}?${qs}` : `${GRAPH}${path}`, {
     method,
@@ -90,8 +93,16 @@ function pickPage(pages: Page[]): Page {
   );
 }
 
-/** Troca o code do callback e grava Página e Instagram. Devolve o que conectou. */
-export async function connectMeta(code: string, redirectUri: string): Promise<string> {
+/**
+ * Troca o code do callback e grava Página e Instagram. Devolve o que conectou.
+ * `comTokenDeUsuario` recebe o token longo de usuário (as campanhas pagas
+ * usam ele: anúncio não aceita token de Página) e devolve o que anexar.
+ */
+export async function connectMeta(
+  code: string,
+  redirectUri: string,
+  comTokenDeUsuario?: (token: string) => Promise<string | null>
+): Promise<string> {
   const app = { client_id: process.env.META_APP_ID ?? "", client_secret: process.env.META_APP_SECRET ?? "" };
   const short = await graph<{ access_token: string }>("/oauth/access_token", { ...app, redirect_uri: redirectUri, code });
   const long = await graph<{ access_token: string }>("/oauth/access_token", {
@@ -104,10 +115,12 @@ export async function connectMeta(code: string, redirectUri: string): Promise<st
     access_token: long.access_token,
   });
   const page = pickPage(pages.data ?? []);
+  const extra = comTokenDeUsuario ? await comTokenDeUsuario(long.access_token) : null;
+  const sufixo = extra ? ` · anúncios: ${extra}` : "";
 
   await saveConnection({ platform: "facebook", accountId: page.id, accountName: page.name, token: page.access_token, scopes: SCOPES });
   const ig = page.instagram_business_account;
-  if (!ig) return `${page.name} (sem Instagram Business ligado à Página)`;
+  if (!ig) return `${page.name} (sem Instagram Business ligado à Página)${sufixo}`;
   await saveConnection({
     platform: "instagram",
     accountId: ig.id,
@@ -115,7 +128,7 @@ export async function connectMeta(code: string, redirectUri: string): Promise<st
     token: page.access_token,
     scopes: SCOPES,
   });
-  return `${page.name} + ${ig.username ? `@${ig.username}` : "Instagram"}`;
+  return `${page.name} + ${ig.username ? `@${ig.username}` : "Instagram"}${sufixo}`;
 }
 
 // ---- Instagram Reels: container → processamento → media_publish ----

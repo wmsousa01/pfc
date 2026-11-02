@@ -4,6 +4,9 @@ import { decrypt, encrypt } from "./crypto";
 
 export type Platform = "youtube" | "instagram" | "facebook" | "tiktok";
 export type ConnectedPlatform = Exclude<Platform, "youtube">;
+/** Contas de anúncio (/admin/campanhas): mesma tabela, mesmo cofre de tokens. */
+export type AdsPlatform = "meta_ads" | "google_ads";
+type AnyConnection = ConnectedPlatform | AdsPlatform;
 
 export type PostStatus = "agendado" | "publicando" | "processando" | "publicado" | "erro" | "cancelado";
 
@@ -17,10 +20,12 @@ export const PLATFORMS: Record<Platform, { label: string; ready: boolean }> = {
 /** Conexão sem token — é o que pode ir para a página. */
 export type SafeConnection = {
   id: number;
-  platform: ConnectedPlatform;
+  platform: AnyConnection;
   external_account_id: string;
   account_name: string | null;
   status: "ativa" | "revogada";
+  /** null = não expira (token de Página da Meta). */
+  token_expires_at: string | null;
   created_at: string;
 };
 
@@ -69,30 +74,36 @@ export type ReelMetrics = {
 export async function listConnections(): Promise<SafeConnection[]> {
   const { data } = await db()
     .from("social_connections")
-    .select("id, platform, external_account_id, account_name, status, created_at")
+    .select("id, platform, external_account_id, account_name, status, token_expires_at, created_at")
     .order("created_at", { ascending: false });
   return (data ?? []) as SafeConnection[];
 }
 
 /** A conta ativa da rede, com o token em claro. Só para o publicador. */
 export async function activeConnection(
-  platform: ConnectedPlatform
-): Promise<{ id: number; accountId: string; token: string } | null> {
+  platform: AnyConnection
+): Promise<{ id: number; accountId: string; accountName: string | null; token: string; expiresAt: string | null } | null> {
   const { data } = await db()
     .from("social_connections")
-    .select("id, external_account_id, access_token_enc")
+    .select("id, external_account_id, account_name, access_token_enc, token_expires_at")
     .eq("platform", platform)
     .eq("status", "ativa")
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
   if (!data) return null;
-  return { id: data.id, accountId: data.external_account_id, token: decrypt(data.access_token_enc) };
+  return {
+    id: data.id,
+    accountId: data.external_account_id,
+    accountName: data.account_name,
+    token: decrypt(data.access_token_enc),
+    expiresAt: data.token_expires_at,
+  };
 }
 
 /** Grava a conta e desativa as outras da mesma rede: uma conta ativa por rede. */
 export async function saveConnection(c: {
-  platform: ConnectedPlatform;
+  platform: AnyConnection;
   accountId: string;
   accountName: string | null;
   token: string;
@@ -127,7 +138,7 @@ export async function revokeConnection(id: number): Promise<void> {
   await db().from("social_connections").update({ status: "revogada", updated_at: new Date().toISOString() }).eq("id", id);
 }
 
-export async function deleteConnections(platforms: ConnectedPlatform[]): Promise<void> {
+export async function deleteConnections(platforms: AnyConnection[]): Promise<void> {
   await db().from("social_connections").delete().in("platform", platforms);
 }
 

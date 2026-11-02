@@ -126,7 +126,7 @@ export default async function MarketingPage({
 
   const ig = connections?.find((c) => c.platform === "instagram" && c.status === "ativa");
   const fb = connections?.find((c) => c.platform === "facebook" && c.status === "ativa");
-  const metaRevoked = !ig && !fb && connections?.some((c) => c.platform !== "tiktok" && c.status === "revogada");
+  const metaRevoked = !ig && !fb && connections?.some((c) => (c.platform === "instagram" || c.platform === "facebook") && c.status === "revogada");
 
   const connected: Record<Platform, boolean> = { youtube: !!channel, instagram: !!ig, facebook: !!fb, tiktok: false };
   const ready = (Object.keys(PLATFORMS) as Platform[]).filter((p) => PLATFORMS[p].ready);
