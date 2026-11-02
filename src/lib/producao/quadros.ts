@@ -49,10 +49,9 @@ export const QUADROS: Record<QuadroId, QuadroTheme> = {
     name: "Lado A Lado B",
     episodes: "Lado A Lado B",
     cuts: "Cortes Lado A Lado B",
-    // Logo: disco azul-marinho (#051a2d) × laranja (#f7941d). O marinho do logo some no
-    // fundo escuro, então a metade azul da headline é ele clareado.
+    // Logo: disco azul-marinho (#051a2d) × laranja (#f7941d). A headline vai no
+    // laranja; o marinho fica no selo e na luz do fundo.
     accent: ["#ffc06a", "#f7941d", "#e66d01"],
-    split: ["#5b9bdc", "#f7941d"],
     stroke: "#04121f",
     glow: "#f7941d",
     rim: "#ff8a1c",
