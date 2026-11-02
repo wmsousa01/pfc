@@ -24,6 +24,7 @@ import {
 } from "@/lib/agenda/fluxo";
 import { disconnectCalendar } from "@/lib/agenda/gcal";
 import { pedirUpload, registrarMaterial, removerMaterial } from "@/lib/agenda/materiais";
+import { FONTES_KEY, gerarPautaNews } from "@/lib/agenda/noticias";
 import { escolherArteSemana, gerarArteSemana, liberarSemana, programarSemana } from "@/lib/agenda/semana";
 import { PASTA_KEY, atualizarVideo, enviarVideo, liberarEnvio, ligarVideo, tirarFrames } from "@/lib/agenda/video";
 import {
@@ -216,7 +217,10 @@ export async function salvarBriefingAction(_prev: ActionState, form: FormData): 
   return run(async (a) => {
     const id = str(form, "id");
     const up = (k: string) => str(form, k).toUpperCase().slice(0, 40);
+    // As notícias do PFC News não têm campo no formulário: ficam como estavam.
+    const antes = (await getEpisodio(id))?.briefing;
     const b: Briefing = {
+      ...(antes?.noticias ? { noticias: antes.noticias } : {}),
       resumo: str(form, "resumo"),
       pauta: pautaDeTexto(str(form, "pauta")),
       cuidados: str(form, "cuidados"),
@@ -548,5 +552,23 @@ export async function pastaDriveAction(_prev: ActionState, form: FormData): Prom
     const id = m?.[1] ?? (/^[A-Za-z0-9_-]{20,}$/.test(v) ? v : null);
     if (!id) throw new Error("Link da pasta inválido.");
     await setConfig(PASTA_KEY, id);
+  });
+}
+
+// ---- PFC News: pauta com as notícias da semana no Instagram ----
+
+export async function pautaNewsAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const dias = Math.min(14, Math.max(1, Number(str(form, "dias")) || 7));
+  return run((a) => gerarPautaNews(str(form, "id"), dias, a));
+}
+
+export async function fontesNewsAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  return run(async () => {
+    const handles = str(form, "fontes")
+      .split(/[\s,]+/)
+      .map((h) => cleanInstagram(h))
+      .filter((h): h is string => !!h);
+    if (handles.length === 0) throw new Error("Coloque pelo menos um @.");
+    await setConfig(FONTES_KEY, handles.join(" "));
   });
 }

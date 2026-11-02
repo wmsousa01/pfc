@@ -30,6 +30,8 @@ export type Briefing = {
    * apoio opcional e o cenário temático que a IA desenha atrás das pessoas.
    */
   arte: { l1: string; l2: string; l3?: string; topicos?: string; sub?: string; cena?: string };
+  /** PFC News: as notícias da semana que viraram pauta, com o post de origem de cada uma. */
+  noticias?: { titulo: string; resumo: string; fontes: { handle: string; url: string; data: string }[] }[];
 };
 
 export type Slot = {

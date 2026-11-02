@@ -196,6 +196,38 @@ export async function igBusinessDiscovery(
   };
 }
 
+export type IgPostPublico = {
+  id: string;
+  caption: string;
+  timestamp: string;
+  permalink: string;
+  mediaType: string;
+  likes: number | null;
+  comments: number | null;
+};
+
+/**
+ * Posts recentes de outro perfil Business/Creator, pelo mesmo Business
+ * Discovery (não é scraping: é a API oficial, com a conta conectada).
+ * Perfil pessoal ou inexistente volta com erro 110.
+ */
+export async function igBusinessMedia(igId: string, token: string, username: string, limit = 25): Promise<IgPostPublico[]> {
+  const r = await graph<{ business_discovery?: any }>(`/${igId}`, {
+    fields: `business_discovery.username(${username}){media.limit(${limit}){id,caption,timestamp,permalink,media_type,like_count,comments_count}}`,
+    access_token: token,
+  });
+  const items: any[] = r.business_discovery?.media?.data ?? [];
+  return items.map((m) => ({
+    id: String(m.id),
+    caption: String(m.caption ?? ""),
+    timestamp: String(m.timestamp ?? ""),
+    permalink: String(m.permalink ?? ""),
+    mediaType: String(m.media_type ?? ""),
+    likes: typeof m.like_count === "number" ? m.like_count : null,
+    comments: typeof m.comments_count === "number" ? m.comments_count : null,
+  }));
+}
+
 /** Quantos posts a conta publicou pela API nas últimas 24h (o teto da Meta é 100). */
 export async function igPublishingUsage(igId: string, token: string): Promise<number> {
   const r = await graph<{ data?: { quota_usage?: number }[] }>(`/${igId}/content_publishing_limit`, {
