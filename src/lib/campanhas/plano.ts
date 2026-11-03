@@ -11,7 +11,7 @@ export type Fonte = "estudio" | "gerador" | "contenta";
 export type Peca = {
   codigo: string;
   /** Chave do modelo em modelos.ts: a estratégia que nasce dele recebe a peça. */
-  campanha: "sem-enrolacao" | "piloto-30" | "pfc-visita";
+  campanha: "audiencia" | "sem-enrolacao" | "piloto-30" | "pfc-visita";
   titulo: string;
   tipo: "video" | "imagem";
   formatos: Formato[];
@@ -26,6 +26,7 @@ export type Peca = {
 export const PLANO_URL = "https://claude.ai/artifact/SHvH2TxvRMgaHjewYfrzM8";
 
 export const CAMPANHAS_DO_PLANO: Record<Peca["campanha"], { codigo: string; resumo: string }> = {
+  audiencia: { codigo: "C0", resumo: "Fora do pago nesta fase · fixado no perfil, Google a partir de janeiro" },
   "sem-enrolacao": { codigo: "C1", resumo: "Topo · ThruPlay · R$ 7/dia · a partir de 10/11" },
   "piloto-30": { codigo: "C2", resumo: "Fundo · tráfego para /parcerias · R$ 7/dia · 10/11 a 20/12, volta em 05/01" },
   "pfc-visita": { codigo: "C3", resumo: "Fundo · tráfego para /pfc-visita · R$ 6/dia · 17/11 a 13/12" },
@@ -38,6 +39,7 @@ export const FONTES: Record<Fonte, string> = {
 };
 
 export const PECAS: Peca[] = [
+  { codigo: "C0-V1", campanha: "audiencia", titulo: "Vídeo 1 · Apresentação do canal (30s), ganchos A, B e C", tipo: "video", formatos: ["9:16", "4:5"], fonte: "estudio", prazo: "2026-11-09", nota: "Orgânico fixado; entra no Google quando ele for testado" },
   { codigo: "C1-V2", campanha: "sem-enrolacao", titulo: "Vídeo 2 · Números (25s), ganchos A, B e C", tipo: "video", formatos: ["9:16", "4:5"], fonte: "estudio", prazo: "2026-11-09" },
   { codigo: "C1-SE1", campanha: "sem-enrolacao", titulo: "Série #1 · “Anúncio ou doação?”", tipo: "video", formatos: ["9:16"], fonte: "estudio", prazo: "2026-11-09" },
   { codigo: "C1-SE2", campanha: "sem-enrolacao", titulo: "Série #2 · “O problema nunca foi o meio”", tipo: "video", formatos: ["9:16"], fonte: "estudio", prazo: "2026-11-16", nota: "Sai também como carrossel no orgânico" },
@@ -113,4 +115,11 @@ export const PECAS: Peca[] = [
   },
 ];
 
-export const pecaPorCodigo = (codigo: string | null | undefined): Peca | undefined => PECAS.find((p) => p.codigo === codigo);
+/** A pauta em texto, para o Gemini escolher a peça que o criativo cumpre. */
+export function pautaParaIA(tipo: Peca["tipo"]): string {
+  return PECAS.filter((p) => p.tipo === tipo)
+    .map((p) => `- ${p.codigo} (${CAMPANHAS_DO_PLANO[p.campanha].codigo}: ${CAMPANHAS_DO_PLANO[p.campanha].resumo}): ${p.titulo} · ${p.formatos.join(" + ")}`)
+    .join("\n");
+}
+
+export const pecaPorCodigo =(codigo: string | null | undefined): Peca | undefined => PECAS.find((p) => p.codigo === codigo);
