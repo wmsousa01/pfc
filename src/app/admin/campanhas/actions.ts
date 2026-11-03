@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/auth";
 import type { ActionState } from "@/app/admin/producao/actions";
 import { analisarCriativo, sugerirCopy } from "@/lib/campanhas/analise";
 import { gerarEstatico } from "@/lib/campanhas/estatico";
+import { escolherConta } from "@/lib/campanhas/google-ads";
 import {
   PASTA_KEY,
   formatoDe,
@@ -289,6 +290,18 @@ export async function sincronizarAction(_prev: ActionState): Promise<ActionState
   } catch (e) {
     return fail(e);
   }
+}
+
+export async function escolherContaGoogleAction(form: FormData): Promise<void> {
+  await requireAdmin();
+  let destino: string;
+  try {
+    destino = `${BASE}?ok=${encodeURIComponent(`Google Ads conectado: ${await escolherConta(str(form, "conta"))}`)}`;
+  } catch (e) {
+    destino = `${BASE}?erro=${encodeURIComponent(e instanceof Error ? e.message : String(e))}`;
+  }
+  refresh();
+  redirect(destino);
 }
 
 export async function desconectarAdsAction(form: FormData): Promise<void> {

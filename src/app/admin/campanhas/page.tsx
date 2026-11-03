@@ -2,13 +2,20 @@ import AdminHeader from "@/components/admin/AdminHeader";
 import { Flash, MetricasView, STATUS_ESTRATEGIA, SubNav, btnPri, btnSec, card, input } from "@/components/admin/Campanhas";
 import ProducaoForm from "@/components/admin/ProducaoForm";
 import { requireAdmin } from "@/lib/auth";
-import { googleCampanhas, isGoogleAdsConfigured, type GoogleCampanha } from "@/lib/campanhas/google-ads";
+import {
+  CONTA_PENDENTE,
+  contasParaEscolher,
+  googleCampanhas,
+  isGoogleAdsConfigured,
+  type ContaGoogle,
+  type GoogleCampanha,
+} from "@/lib/campanhas/google-ads";
 import { metaCampanhas, type MetaCampanha } from "@/lib/campanhas/meta-ads";
 import { MODELOS } from "@/lib/campanhas/modelos";
 import { OBJETIVOS, listEntregas, listEstrategias, reais, type Metricas } from "@/lib/campanhas/store";
 import { isMetaConfigured } from "@/lib/social/meta";
 import { listConnections } from "@/lib/social/store";
-import { criarEstrategiaAction, desconectarAdsAction, sincronizarAction } from "./actions";
+import { criarEstrategiaAction, desconectarAdsAction, escolherContaGoogleAction, sincronizarAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +43,11 @@ export default async function CampanhasPage({ searchParams }: { searchParams: { 
     listConnections().catch(() => []),
   ]);
   const metaAds = conexoes.find((c) => c.platform === "meta_ads" && c.status === "ativa");
-  const googleAds = conexoes.find((c) => c.platform === "google_ads" && c.status === "ativa");
+  const googleConectado = conexoes.find((c) => c.platform === "google_ads" && c.status === "ativa");
+  // Acesso autorizado, mas a conta do PFC ainda não foi escolhida entre as do login.
+  const googlePendente = googleConectado?.external_account_id === CONTA_PENDENTE;
+  const googleAds = googlePendente ? undefined : googleConectado;
+  const contasGoogle: ContaGoogle[] = googlePendente ? await contasParaEscolher() : [];
   const metaExpira = metaAds ? diasPara(metaAds.token_expires_at) : null;
 
   let metaCamp: MetaCampanha[] = [];
@@ -136,13 +147,29 @@ export default async function CampanhasPage({ searchParams }: { searchParams: { 
           <div className={card}>
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-white font-bold">Google Ads</h2>
-              {googleAds ? (
+              {googlePendente ? (
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border bg-gold-500/10 border-gold-500/30 text-gold-400">Escolher conta</span>
+              ) : googleAds ? (
                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border bg-emerald-500/10 border-emerald-500/30 text-emerald-400">Conectada · leitura</span>
               ) : (
                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border bg-white/5 border-white/10 text-white/40">Desconectada</span>
               )}
             </div>
-            {googleAds ? (
+            {googlePendente ? (
+              <form action={escolherContaGoogleAction} className="mt-3 space-y-2">
+                <p className="text-white/60 text-xs">O login enxerga várias contas. Qual é a do Fora da Caixa?</p>
+                <select name="conta" required className={`${input} w-full`} defaultValue="">
+                  <option value="" disabled>Escolha a conta</option>
+                  {contasGoogle.map((c) => (
+                    <option key={c.id} value={c.id} disabled={c.mcc}>
+                      {c.nome} · {c.id.replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3")}
+                      {c.mcc ? " · MCC (sem métricas próprias)" : c.moeda ? ` · ${c.moeda}` : ""}
+                    </option>
+                  ))}
+                </select>
+                <button className={btnPri}>Usar esta conta</button>
+              </form>
+            ) : googleAds ? (
               <p className="text-white/70 text-sm mt-2">{googleAds.account_name ?? googleAds.external_account_id}</p>
             ) : (
               <p className="text-white/40 text-xs mt-2 leading-relaxed">
@@ -157,7 +184,7 @@ export default async function CampanhasPage({ searchParams }: { searchParams: { 
               ) : (
                 <span className="text-xs text-white/30">GOOGLE_CLIENT_ID ausente.</span>
               )}
-              {googleAds && (
+              {googleConectado && (
                 <form action={desconectarAdsAction}>
                   <input type="hidden" name="platform" value="google_ads" />
                   <button className={btnSec}>Desconectar</button>

@@ -1,4 +1,5 @@
 import "server-only";
+import { db, getConfig, setConfig } from "@/lib/producao/store";
 import { tokenRequest } from "@/lib/producao/youtube-api";
 import { activeConnection, saveConnection } from "@/lib/social/store";
 import type { Metricas } from "./store";
@@ -77,28 +78,84 @@ async function gads<T>(path: string, token: string, body?: unknown): Promise<T> 
   return json as T;
 }
 
-/** Troca o code, escolhe a conta (GOOGLE_ADS_CUSTOMER_ID ou a única acessível) e grava. */
+/** Conta vista pelo login: nome, moeda e se é MCC (MCC não tem métrica própria). */
+export type ContaGoogle = { id: string; nome: string; moeda: string; mcc: boolean };
+
+/** A conexão fica com este id até a equipe escolher a conta no painel. */
+export const CONTA_PENDENTE = "pendente";
+const CONTAS_KEY = "gads_contas";
+
+async function infoDaConta(id: string, token: string): Promise<ContaGoogle | null> {
+  try {
+    const r = await gads<{ results?: { customer?: { descriptiveName?: string; currencyCode?: string; manager?: boolean } }[] }>(
+      `/customers/${id}/googleAds:search`,
+      token,
+      { query: "SELECT customer.descriptive_name, customer.currency_code, customer.manager FROM customer LIMIT 1" }
+    );
+    const c = r.results?.[0]?.customer;
+    return { id, nome: c?.descriptiveName || id, moeda: c?.currencyCode ?? "", mcc: !!c?.manager };
+  } catch {
+    // Conta cancelada ou sem permissão direta: fica fora da lista.
+    return null;
+  }
+}
+
+const rotulo = (c: ContaGoogle) => `${c.nome} (${c.moeda || c.id})`;
+
+/**
+ * Troca o code e escolhe a conta: GOOGLE_ADS_CUSTOMER_ID manda; senão a única
+ * conta de anúncios; senão a única com "Fora da Caixa"/"PFC" no nome. Sem
+ * como decidir, grava o acesso como pendente e o painel mostra a lista.
+ */
 export async function connectGoogleAds(code: string, redirectUri: string): Promise<string> {
   const t = await tokenRequest({ code, redirect_uri: redirectUri, grant_type: "authorization_code" });
   if (!t.refresh_token) throw new Error("O Google não devolveu refresh_token. Remova o acesso do app na conta Google e conecte de novo.");
 
-  let customer = process.env.GOOGLE_ADS_CUSTOMER_ID ? digits(process.env.GOOGLE_ADS_CUSTOMER_ID) : null;
-  if (!customer) {
+  const forced = process.env.GOOGLE_ADS_CUSTOMER_ID ? digits(process.env.GOOGLE_ADS_CUSTOMER_ID) : null;
+  let contas: ContaGoogle[];
+  if (forced) {
+    contas = [(await infoDaConta(forced, t.access_token)) ?? { id: forced, nome: forced, moeda: "", mcc: false }];
+  } else {
     const r = await gads<{ resourceNames?: string[] }>("/customers:listAccessibleCustomers", t.access_token);
     const ids = (r.resourceNames ?? []).map((n) => n.split("/")[1]);
     if (ids.length === 0) throw new Error("Essa conta Google não acessa nenhuma conta do Google Ads.");
-    if (ids.length > 1) throw new Error(`Várias contas do Google Ads (${ids.join(", ")}). Defina GOOGLE_ADS_CUSTOMER_ID na Vercel.`);
-    customer = ids[0];
+    contas = (await Promise.all(ids.map((id) => infoDaConta(id, t.access_token)))).filter((c): c is ContaGoogle => !!c);
+    if (contas.length === 0) throw new Error(`Nenhuma das contas (${ids.join(", ")}) respondeu: confira o acesso no Google Ads.`);
   }
-  const info = await gads<{ results?: { customer?: { descriptiveName?: string; currencyCode?: string } }[] }>(
-    `/customers/${customer}/googleAds:search`,
-    t.access_token,
-    { query: "SELECT customer.descriptive_name, customer.currency_code FROM customer LIMIT 1" }
-  );
-  const c = info.results?.[0]?.customer;
-  const nome = c?.descriptiveName ? `${c.descriptiveName} (${c.currencyCode ?? ""})` : customer;
-  await saveConnection({ platform: "google_ads", accountId: customer, accountName: nome, token: t.refresh_token, scopes: SCOPE });
-  return nome;
+
+  const anuncios = contas.filter((c) => !c.mcc);
+  const pfc = anuncios.filter((c) => /fora\s*da\s*caixa|pfc/i.test(c.nome));
+  const escolhida = forced ? contas[0] : anuncios.length === 1 ? anuncios[0] : pfc.length === 1 ? pfc[0] : null;
+
+  if (!escolhida) {
+    await setConfig(CONTAS_KEY, JSON.stringify(contas));
+    await saveConnection({ platform: "google_ads", accountId: CONTA_PENDENTE, accountName: null, token: t.refresh_token, scopes: SCOPE });
+    return `acesso autorizado; escolha abaixo qual das ${contas.length} contas é a do PFC`;
+  }
+  await saveConnection({ platform: "google_ads", accountId: escolhida.id, accountName: rotulo(escolhida), token: t.refresh_token, scopes: SCOPE });
+  return rotulo(escolhida);
+}
+
+/** As contas lidas na conexão, para o seletor do painel. */
+export async function contasParaEscolher(): Promise<ContaGoogle[]> {
+  const v = await getConfig(CONTAS_KEY);
+  try {
+    return v ? (JSON.parse(v) as ContaGoogle[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Fixa a conta escolhida, com o mesmo refresh token da conexão pendente. */
+export async function escolherConta(id: string): Promise<string> {
+  const c = (await contasParaEscolher()).find((x) => x.id === digits(id));
+  if (!c) throw new Error("Conta fora da lista. Conecte o Google Ads de novo.");
+  if (c.mcc) throw new Error("Essa é uma conta de administrador (MCC): escolha a conta de anúncios do PFC.");
+  const atual = await activeConnection("google_ads");
+  if (!atual) throw new Error("Google Ads não conectado.");
+  await saveConnection({ platform: "google_ads", accountId: c.id, accountName: rotulo(c), token: atual.token, scopes: SCOPE });
+  await db().from("social_connections").delete().eq("platform", "google_ads").eq("external_account_id", CONTA_PENDENTE);
+  return rotulo(c);
 }
 
 let cached: { token: string; exp: number } | null = null;
@@ -106,6 +163,7 @@ let cached: { token: string; exp: number } | null = null;
 async function conta(): Promise<{ customer: string; token: string }> {
   const c = await activeConnection("google_ads");
   if (!c) throw new Error("Google Ads não conectado.");
+  if (c.accountId === CONTA_PENDENTE) throw new Error("Escolha a conta do Google Ads do PFC no painel.");
   if (!cached || cached.exp < Date.now() + 60_000) {
     const t = await tokenRequest({ refresh_token: c.token, grant_type: "refresh_token" });
     cached = { token: t.access_token, exp: Date.now() + t.expires_in * 1000 };
