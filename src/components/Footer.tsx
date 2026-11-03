@@ -79,6 +79,9 @@ export default function Footer() {
           </p>
           <div className="flex items-center gap-4">
             <p className="text-white/20 text-xs">{site.location} · Brasil</p>
+            <a href="/privacidade" className="text-white/20 hover:text-white/50 text-xs transition-colors">
+              Privacidade
+            </a>
             <a href="/revendedor" className="text-white/20 hover:text-white/50 text-xs transition-colors">
               Revendedor
             </a>
