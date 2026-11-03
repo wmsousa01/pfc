@@ -64,6 +64,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "weekly" as const,
       priority: 0.7,
     },
+    {
+      path: "/privacidade",
+      alterado: "2026-11-03",
+      changeFrequency: "yearly" as const,
+      priority: 0.2,
+    },
   ].map(({ path, alterado, ...rest }) => ({
     ...rest,
     url: `${site.url}${path}`,
