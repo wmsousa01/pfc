@@ -241,6 +241,22 @@ export async function previews(criativos: Criativo[]): Promise<Map<string, strin
   return out;
 }
 
+/** Arquivo aberto como stream, para repassar sem carregar tudo na memória. */
+export type Fonte = { stream: ReadableStream<Uint8Array>; tamanho: number | null; mime: string };
+
+export async function abrirStream(c: Criativo): Promise<Fonte> {
+  const res = await fetch(await urlPublica(c), { cache: "no-store", signal: AbortSignal.timeout(240_000) });
+  if (!res.ok || !res.body) throw new Error(`Não consegui baixar o criativo (${res.status}). No Drive, o arquivo precisa estar com link público.`);
+  const type = res.headers.get("content-type") ?? "";
+  // O Drive responde text/html quando o link não é público.
+  if (type.includes("text/html")) {
+    await res.body.cancel();
+    throw new Error("O Drive devolveu uma página em vez do arquivo: deixe o link público.");
+  }
+  const tamanho = Number(res.headers.get("content-length")) || null;
+  return { stream: res.body, tamanho, mime: c.mime ?? (type || "application/octet-stream") };
+}
+
 /** Baixa o arquivo inteiro (para o Gemini ou para a Meta em bytes). */
 export async function bytesDe(c: Criativo, max = 300 * 1024 * 1024): Promise<{ buf: Buffer; mime: string }> {
   if (c.origem === "upload" || c.origem === "gerado") {

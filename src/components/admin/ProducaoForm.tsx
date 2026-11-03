@@ -36,12 +36,14 @@ export default function ProducaoForm({
   buttonClassName?: string;
 }) {
   const [state, formAction] = useFormState(action, initial);
+  // A função caiu (falta de memória, tempo esgotado): sem estado de volta, a página não pode quebrar.
+  const error = state ? state.error : "O servidor caiu no meio do pedido. Tente de novo; se repetir, avise a equipe.";
   return (
     <form action={formAction} className={className}>
       {children}
       <Submit label={label} pending={pending} className={buttonClassName} />
-      {state.error && <p className="text-red-400 text-xs mt-2 break-words">{state.error}</p>}
-      {state.ok && okMessage && <p className="text-emerald-400 text-xs mt-2">{okMessage}</p>}
+      {error && <p className="text-red-400 text-xs mt-2 break-words">{error}</p>}
+      {state?.ok && okMessage && <p className="text-emerald-400 text-xs mt-2">{okMessage}</p>}
     </form>
   );
 }
