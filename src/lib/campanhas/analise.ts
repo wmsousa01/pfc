@@ -1,6 +1,8 @@
 import "server-only";
 import { TEXT_MODEL, generate } from "@/lib/producao/gemini";
-import { CTAS, OBJETIVOS, abrirStream, bytesDe, type Analise, type Criativo, type Estrategia, type Fonte } from "./store";
+import { MODELOS } from "./modelos";
+import { CAMPANHAS_DO_PLANO, PECAS, pautaParaIA, pecaPorCodigo, type Peca } from "./plano";
+import { CTAS, OBJETIVOS, abrirStream, bytesDe, type Analise, type Criativo, type Enquadramento, type Estrategia, type Fonte } from "./store";
 
 const FILES = "https://generativelanguage.googleapis.com";
 
@@ -107,6 +109,44 @@ const CRIT = {
 };
 const LISTA = { type: "ARRAY", items: { type: "STRING" } };
 
+const NENHUMA = "NENHUMA";
+
+/** Pauta do plano com o público e a mensagem de cada campanha, para o Gemini escolher a peça. */
+function pauta(tipo: Criativo["tipo"]): string {
+  const campanhas = (Object.keys(CAMPANHAS_DO_PLANO) as Peca["campanha"][])
+    .map((k) => `- ${CAMPANHAS_DO_PLANO[k].codigo} · ${MODELOS[k].m.nome}: público ${MODELOS[k].m.publico} Mensagem: ${MODELOS[k].m.mensagem}`)
+    .join("\n");
+  return `PLANO DE CAMPANHAS (onde este criativo pode entrar)
+${campanhas}
+
+PEÇAS DA PAUTA (${tipo === "video" ? "vídeos" : "imagens"}):
+${pautaParaIA(tipo)}`;
+}
+
+const enquadramentoSchema = (tipo: Criativo["tipo"]) => ({
+  type: "OBJECT",
+  properties: {
+    peca: { type: "STRING", format: "enum", enum: [...PECAS.filter((p) => p.tipo === tipo).map((p) => p.codigo), NENHUMA] },
+    confianca: { type: "INTEGER" },
+    motivo: { type: "STRING" },
+  },
+  required: ["peca", "confianca", "motivo"],
+});
+
+const PEDIDO_ENQUADRAMENTO = `Diga também em qual peça da pauta o criativo melhor se enquadra ("enquadramento"): o código da peça, ou ${NENHUMA} se ele não cumpre nenhuma.
+Decida pelo conteúdo (o que é dito e mostrado, para quem fala, qual a chamada), não pelo nome do arquivo. "confianca" de 0 a 100; "motivo" em uma frase, citando o que no criativo decidiu.`;
+
+/** Só aceita código que existe na pauta e é do mesmo tipo do criativo. */
+function validarEnquadramento(raw: { peca?: string; confianca?: number; motivo?: string } | undefined, tipo: Criativo["tipo"]): Enquadramento | undefined {
+  if (!raw) return undefined;
+  const p = pecaPorCodigo(raw.peca);
+  return {
+    peca: p && p.tipo === tipo ? p.codigo : null,
+    confianca: Math.max(0, Math.min(100, Math.round(Number(raw.confianca) || 0))),
+    motivo: String(raw.motivo ?? "").slice(0, 300),
+  };
+}
+
 /**
  * Análise de um criativo como anúncio pago: nota por critério, problemas,
  * sugestões concretas e uma copy pronta para o anúncio. Com a estratégia, o
@@ -144,7 +184,11 @@ Avalie como ANÚNCIO PAGO, com notas de 0 a 100 e comentário curto e específic
 - alinhamento: serve ao objetivo, ao público e à oferta da estratégia?
 A "nota" geral NÃO é a média: é a chance de esta peça bater o KPI.
 Liste pontos fortes, problemas, sugestões de edição concretas (o que cortar, mover, escrever), riscos de reprovação nas políticas de anúncio (alegações, antes/depois, texto enganoso) e os posicionamentos onde ela rende mais (ex.: Reels, Stories, Feed, YouTube Shorts, In-stream).
-Escreva também uma copy para o anúncio: headline de até 40 caracteres e texto principal de até 300 caracteres, em português do Brasil, com as palavras do comerciante (sem jargão de marketing), sem emojis em excesso.`;
+Escreva também uma copy para o anúncio: headline de até 40 caracteres e texto principal de até 300 caracteres, em português do Brasil, com as palavras do comerciante (sem jargão de marketing), sem emojis em excesso.
+
+${pauta(c.tipo)}
+
+${PEDIDO_ENQUADRAMENTO}`;
 
   const json = await generate(TEXT_MODEL, {
     contents: [{ parts: [media, { text: prompt }] }],
@@ -171,8 +215,9 @@ Escreva também uma copy para o anúncio: headline de até 40 caracteres e texto
             properties: { headline: { type: "STRING" }, texto: { type: "STRING" } },
             required: ["headline", "texto"],
           },
+          enquadramento: enquadramentoSchema(c.tipo),
         },
-        required: ["nota", "resumo", "gancho", "clareza", "ritmo", "cta", "formato", "alinhamento", "pontos_fortes", "problemas", "sugestoes", "riscos_politica", "posicionamentos", "copy"],
+        required: ["nota", "resumo", "gancho", "clareza", "ritmo", "cta", "formato", "alinhamento", "pontos_fortes", "problemas", "sugestoes", "riscos_politica", "posicionamentos", "copy", "enquadramento"],
       },
     },
   });
@@ -184,7 +229,38 @@ Escreva também uma copy para o anúncio: headline de até 40 caracteres e texto
   for (const k of ["gancho", "clareza", "ritmo", "cta", "formato", "alinhamento"] as const) a[k].nota = clamp(a[k].nota);
   a.copy.headline = a.copy.headline.slice(0, 40);
   a.copy.texto = a.copy.texto.slice(0, 300);
+  a.enquadramento = validarEnquadramento(a.enquadramento as Parameters<typeof validarEnquadramento>[0], c.tipo);
   return { ...a, ...(e ? { estrategia: e.nome } : {}), modelo: TEXT_MODEL };
+}
+
+/**
+ * Enquadra na pauta um criativo já analisado, só pelo texto da análise (sem
+ * mandar o vídeo de novo): segundos e centavos em vez de ~1 min por vídeo.
+ */
+export async function enquadrarPelaAnalise(c: Criativo): Promise<Enquadramento> {
+  const a = c.analise;
+  if (!a) throw new Error(`"${c.nome}" ainda não foi analisado.`);
+  const prompt = `Você é estrategista de mídia paga do "Fora da Caixa", podcast e mídia local de Mogi Guaçu (SP).
+Um criativo já foi assistido e analisado. Use a análise abaixo para decidir onde ele entra no plano.
+
+CRIATIVO: ${c.tipo === "video" ? "vídeo" : "imagem"} "${c.nome}"${c.formato ? `, formato ${c.formato}` : ""}${c.duracao_s ? `, ${c.duracao_s}s` : ""}.
+Resumo: ${a.resumo}
+Gancho: ${a.gancho.comentario}
+Chamada para ação: ${a.cta.comentario}
+Pontos fortes: ${a.pontos_fortes.join(" · ")}
+Problemas: ${a.problemas.join(" · ")}
+Copy sugerida: ${a.copy.headline}. ${a.copy.texto}
+
+${pauta(c.tipo)}
+
+${PEDIDO_ENQUADRAMENTO}`;
+  const json = await generate(TEXT_MODEL, {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { responseMimeType: "application/json", responseSchema: enquadramentoSchema(c.tipo) },
+  });
+  const enq = validarEnquadramento(JSON.parse(json.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}"), c.tipo);
+  if (!enq?.motivo) throw new Error(`O Gemini não enquadrou "${c.nome}".`);
+  return enq;
 }
 
 /** Headline + texto para uma entrega, a partir da estratégia e do ângulo (sem olhar a peça). */

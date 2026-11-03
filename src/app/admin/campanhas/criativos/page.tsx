@@ -6,13 +6,14 @@ import { requireAdmin } from "@/lib/auth";
 import { arquivosDaPasta, pastaCampanhas } from "@/lib/campanhas/fontes";
 import { MODELOS } from "@/lib/campanhas/modelos";
 import { CAMPANHAS_DO_PLANO, FONTES, PECAS, PLANO_URL, pecaPorCodigo, type Peca } from "@/lib/campanhas/plano";
-import { FORMATOS, listCriativos, listEstrategias, previews, type Criativo, type Origem } from "@/lib/campanhas/store";
+import { FORMATOS, listCriativos, listEstrategias, previews, type Criativo, type Enquadramento, type Origem } from "@/lib/campanhas/store";
 import { isContentaConfigured, listContentaJobs, listJobCuts, type ContentaCut, type ContentaJob } from "@/lib/producao/contenta";
 import { isGeminiConfigured } from "@/lib/producao/gemini";
 import {
   analisarCriativoAction,
   arquivarCriativoAction,
   classificarCriativoAction,
+  classificarNaPautaAction,
   gerarEstaticoAction,
   importarContentaAction,
   importarDriveAction,
@@ -34,6 +35,26 @@ function abrirUrl(c: Criativo, preview: string | undefined): string | undefined 
 }
 
 const dataBR = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+
+/** O que a IA sugeriu e se a peça marcada bate com a sugestão. */
+function Enquadrado({ e, atual }: { e: Enquadramento; atual: string | null }) {
+  const p = pecaPorCodigo(e.peca);
+  const campanha = p ? CAMPANHAS_DO_PLANO[p.campanha].codigo : null;
+  const estado = !p ? null : atual === p.codigo ? "aplicada" : atual ? `a equipe marcou ${atual}` : "abaixo de 60%, não aplicada";
+  return (
+    <p className="text-[11px] text-white/50 mt-2 leading-snug">
+      <span className="text-white/70 font-semibold">IA: </span>
+      {p ? (
+        <>
+          <span className="text-gold-400 font-mono">{p.codigo}</span> ({campanha}) · {e.confianca}%{estado && <span className="text-white/35"> · {estado}</span>}
+        </>
+      ) : (
+        "não cumpre nenhuma peça da pauta"
+      )}
+      <span className="block text-white/40">{e.motivo}</span>
+    </p>
+  );
+}
 
 export default async function CriativosPage({ searchParams }: { searchParams: { job?: string; f?: string; peca?: string } }) {
   await requireAdmin();
@@ -86,6 +107,7 @@ export default async function CriativosPage({ searchParams }: { searchParams: { 
   const atrasadas = PECAS.filter((p) => daPeca(p).length === 0 && p.prazo < hoje).length;
   const pecaSel = pecaPorCodigo(searchParams.peca);
   const est = pecaSel?.estatico;
+  const semPeca = criativos.filter((c) => c.analise && !c.peca).length;
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] pb-20">
@@ -310,7 +332,19 @@ export default async function CriativosPage({ searchParams }: { searchParams: { 
         {/* ---- Biblioteca ---- */}
         <section>
           <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
-            <h2 className="text-white font-bold text-lg">Na biblioteca ({criativos.length})</h2>
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-white font-bold text-lg">Na biblioteca ({criativos.length})</h2>
+              {semPeca > 0 && isGeminiConfigured() && (
+                <ProducaoForm
+                  action={classificarNaPautaAction}
+                  label={`Classificar na pauta (${semPeca})`}
+                  pending="Classificando…"
+                  okMessage="Classificados: veja a sugestão em cada cartão."
+                  className="flex flex-col"
+                  buttonClassName={btnSec}
+                />
+              )}
+            </div>
             <div className="flex gap-1 text-xs">
               {[
                 ["", "Todos"],
@@ -385,6 +419,7 @@ export default async function CriativosPage({ searchParams }: { searchParams: { 
                         </select>
                       </ProducaoForm>
                     )}
+                    {c.analise?.enquadramento && <Enquadrado e={c.analise.enquadramento} atual={c.peca} />}
                     {c.analise && <AnaliseView a={c.analise} />}
                     <form action={arquivarCriativoAction} className="mt-2">
                       <input type="hidden" name="id" value={c.id} />

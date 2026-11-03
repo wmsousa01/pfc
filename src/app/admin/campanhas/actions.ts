@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import type { ActionState } from "@/app/admin/producao/actions";
-import { analisarCriativo, sugerirCopy } from "@/lib/campanhas/analise";
+import { analisarCriativo, enquadrarPelaAnalise, sugerirCopy } from "@/lib/campanhas/analise";
 import { gerarEstatico } from "@/lib/campanhas/estatico";
 import { escolherConta } from "@/lib/campanhas/google-ads";
 import {
@@ -26,9 +26,12 @@ import {
   getCriativo,
   getEntrega,
   getEstrategia,
+  listCriativos,
   updateCriativo,
   updateEntrega,
   updateEstrategia,
+  type Criativo,
+  type Enquadramento,
   type EstrategiaStatus,
   type Objetivo,
   type Plataforma,
@@ -391,9 +394,39 @@ export async function analisarCriativoAction(_prev: ActionState, form: FormData)
     const eid = str(form, "estrategia_id");
     const e = eid ? await getEstrategia(eid) : null;
     const a = await analisarCriativo(c, e);
-    await updateCriativo(c.id, { analise: a, analise_nota: a.nota, analisado_em: new Date().toISOString() });
+    await updateCriativo(c.id, { analise: a, analise_nota: a.nota, analisado_em: new Date().toISOString(), ...pecaAutomatica(c, a.enquadramento) });
     refresh();
     return { ok: true, error: null };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Confiança mínima para a IA marcar a peça sozinha. */
+const CONFIANCA_MIN = 60;
+
+/** A IA só preenche peça vazia: a escolha da equipe nunca é sobrescrita. */
+function pecaAutomatica(c: Criativo, enq: Enquadramento | undefined): Partial<Criativo> {
+  return !c.peca && enq?.peca && enq.confianca >= CONFIANCA_MIN ? { peca: enq.peca } : {};
+}
+
+/** Enquadra na pauta os criativos analisados que ainda não têm peça, pelo texto da análise. */
+export async function classificarNaPautaAction(_prev: ActionState, _form: FormData): Promise<ActionState> {
+  await requireAdmin();
+  try {
+    const alvos = (await listCriativos()).filter((c) => c.analise && !c.peca).slice(0, 20);
+    if (!alvos.length) throw new Error("Nenhum criativo analisado sem peça.");
+    const erros: string[] = [];
+    for (const c of alvos) {
+      try {
+        const enq = await enquadrarPelaAnalise(c);
+        await updateCriativo(c.id, { analise: { ...c.analise!, enquadramento: enq }, ...pecaAutomatica(c, enq) });
+      } catch (e) {
+        erros.push(e instanceof Error ? e.message : String(e));
+      }
+    }
+    refresh();
+    return erros.length ? { ok: false, error: erros.join(" · ") } : { ok: true, error: null };
   } catch (e) {
     return fail(e);
   }

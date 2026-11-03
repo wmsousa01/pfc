@@ -58,6 +58,9 @@ export type Estrategia = {
   updated_at: string;
 };
 
+/** null em peca = não cumpre nenhuma peça da pauta; confiança de 0 a 100. */
+export type Enquadramento = { peca: string | null; confianca: number; motivo: string };
+
 /** Nota de 0 a 100 por critério, com o porquê. */
 export type Criterio = { nota: number; comentario: string };
 
@@ -76,6 +79,8 @@ export type Analise = {
   riscos_politica: string[];
   posicionamentos: string[];
   copy: { headline: string; texto: string };
+  /** Peça da pauta (plano.ts) que o Gemini acha que o criativo cumpre. */
+  enquadramento?: Enquadramento;
   /** Estratégia usada como contexto, quando houve. */
   estrategia?: string;
   modelo: string;
