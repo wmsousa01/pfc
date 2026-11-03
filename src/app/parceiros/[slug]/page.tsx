@@ -144,8 +144,10 @@ export default async function PartnerPage({
             </div>
 
             {partner.logo_url ? (
+              // Altura fixa e largura pela proporção da imagem: o quadrado
+              // fixo encolhia logo horizontal a uma faixa fina no meio.
               <div
-                className="relative w-28 h-28 overflow-hidden flex items-center justify-center"
+                className="h-28 sm:h-32 min-w-28 max-w-full overflow-hidden inline-flex items-center justify-center p-2.5"
                 style={{
                   borderRadius: t.radius + 6,
                   backgroundColor: withAlpha(t.fg, "0d"),
@@ -156,9 +158,10 @@ export default async function PartnerPage({
                 <Image
                   src={partner.logo_url}
                   alt={partner.name}
-                  fill
-                  className="object-contain p-2.5"
-                  sizes="112px"
+                  width={0}
+                  height={0}
+                  className="h-full w-auto max-w-[min(20rem,calc(100vw-4rem))] object-contain"
+                  sizes="320px"
                   priority
                 />
               </div>
