@@ -4,20 +4,25 @@ import { activeConnection, saveConnection } from "@/lib/social/store";
 import type { Metricas } from "./store";
 
 /**
- * Google Ads API (REST), só leitura nesta fase: a criação de anúncio exige
- * developer token com acesso Básico aprovado pelo Google, e anúncio de vídeo
- * precisa do vídeo no YouTube. A equipe monta no gerenciador e cola o id do
- * anúncio na entrega; daqui saem as métricas.
+ * Google Ads API (REST), só leitura nesta fase: anúncio de vídeo precisa do
+ * vídeo no YouTube e a criação fica no gerenciador. A equipe monta lá e cola
+ * o id do anúncio na entrega; daqui saem as métricas.
  *
  * Usa o mesmo client OAuth do YouTube (GOOGLE_CLIENT_ID), com escopo adwords.
  * O refresh token fica cifrado em social_connections (google_ads).
+ *
+ * Sem developer token: o Google desligou os tokens em 09/09/2026 e o nível de
+ * acesso (Test, Explorer, Basic, Standard) passou a ser do projeto do Google
+ * Cloud dono do client OAuth. Test só enxerga conta de teste; a conta real
+ * pede Explorer ou acima (Google Ads API > Overview, no Cloud Console). O
+ * cabeçalho do token é ignorado hoje e vai ser recusado numa versão futura.
  */
 const SCOPE = "https://www.googleapis.com/auth/adwords";
 const V = process.env.GOOGLE_ADS_API_VERSION || "v26";
 const API = `https://googleads.googleapis.com/${V}`;
 
 export function isGoogleAdsConfigured(): boolean {
-  return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_ADS_DEVELOPER_TOKEN);
+  return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 }
 
 export function googleAdsAuthUrl(redirectUri: string, state: string): string {
@@ -39,7 +44,6 @@ function headers(token: string): Record<string, string> {
   const login = process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID;
   return {
     Authorization: `Bearer ${token}`,
-    "developer-token": process.env.GOOGLE_ADS_DEVELOPER_TOKEN ?? "",
     "Content-Type": "application/json",
     // Conta acessada por uma MCC: o id da MCC vai aqui.
     ...(login ? { "login-customer-id": digits(login) } : {}),
@@ -56,7 +60,18 @@ async function gads<T>(path: string, token: string, body?: unknown): Promise<T> 
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     const e = Array.isArray(json) ? json[0]?.error : json.error;
-    const detalhe = e?.details?.[0]?.errors?.[0]?.message ?? e?.message ?? "erro";
+    const erro = e?.details?.[0]?.errors?.[0];
+    const detalhe = erro?.message ?? e?.message ?? "erro";
+    const codigo = JSON.stringify(erro?.errorCode ?? {});
+    // O projeto do Cloud ainda está no nível Test (só contas de teste).
+    if (/CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION|ACTION_NOT_PERMITTED/.test(codigo)) {
+      throw new Error(
+        "Google Ads: o projeto do Google Cloud do client OAuth está só com acesso de teste. Peça o nível Explorer em APIs e serviços > Google Ads API > Overview no Cloud Console e conecte de novo."
+      );
+    }
+    if (/SERVICE_DISABLED|has not been used in project/.test(JSON.stringify(json))) {
+      throw new Error("Google Ads: a Google Ads API está desativada no projeto do Google Cloud. Ative em APIs e serviços > Biblioteca.");
+    }
     throw new Error(`Google Ads ${res.status}: ${detalhe}`);
   }
   return json as T;
