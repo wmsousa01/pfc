@@ -15,6 +15,8 @@ export type PedidoEstatico = {
   refs: string[];
   instrucao: string;
   comLogo: boolean;
+  /** Peça do plano que esta geração cumpre (plano.ts). */
+  peca: string | null;
 };
 
 /** Tamanho final de cada formato, no padrão da Meta. */
@@ -91,6 +93,7 @@ export async function gerarEstatico(p: PedidoEstatico, e: Estrategia | null, act
     tamanho: jpg.length,
     duracao_s: null,
     formato: p.formato,
+    ...(p.peca ? { peca: p.peca } : {}),
     gerado_com: { ...p, estrategia: e?.nome ?? null, cta: e ? CTAS[e.cta] : null, modelo: IMAGE_MODEL },
     created_by: actor,
   });

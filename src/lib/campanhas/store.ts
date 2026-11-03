@@ -92,6 +92,8 @@ export type Criativo = {
   tamanho: number | null;
   duracao_s: number | null;
   formato: Formato | null;
+  /** Código da peça do plano que o criativo cumpre (plano.ts); null = avulso. */
+  peca: string | null;
   gerado_com: Record<string, unknown> | null;
   analise: Analise | null;
   analise_nota: number | null;
@@ -181,7 +183,9 @@ export async function updateCriativo(id: string, patch: Partial<Criativo>): Prom
 }
 
 /** Grava o criativo; se o mesmo arquivo já está na biblioteca, devolve o existente. */
-export async function addCriativo(c: Omit<Criativo, "id" | "created_at" | "analise" | "analise_nota" | "analisado_em" | "arquivado">): Promise<Criativo> {
+export async function addCriativo(
+  c: Omit<Criativo, "id" | "created_at" | "analise" | "analise_nota" | "analisado_em" | "arquivado" | "peca"> & { peca?: string | null }
+): Promise<Criativo> {
   const { data: existing } = await db().from("mkt_criativos").select("*").eq("origem", c.origem).eq("ref", c.ref).maybeSingle();
   if (existing) {
     if ((existing as Criativo).arquivado) await updateCriativo(existing.id, { arquivado: false });

@@ -18,6 +18,7 @@ import {
 import { subirNaMeta } from "@/lib/campanhas/meta-ads";
 import { sincronizarMetricas } from "@/lib/campanhas/metricas";
 import { MODELOS } from "@/lib/campanhas/modelos";
+import { pecaPorCodigo } from "@/lib/campanhas/plano";
 import {
   CTAS,
   OBJETIVOS,
@@ -398,9 +399,10 @@ export async function analisarCriativoAction(_prev: ActionState, form: FormData)
   }
 }
 
-export async function formatoCriativoAction(form: FormData): Promise<void> {
+export async function classificarCriativoAction(form: FormData): Promise<void> {
   await requireAdmin();
-  await updateCriativo(str(form, "id"), { formato: formatoDe(str(form, "formato")) });
+  const peca = pecaPorCodigo(str(form, "peca"));
+  await updateCriativo(str(form, "id"), { formato: formatoDe(str(form, "formato")), peca: peca?.codigo ?? null });
   refresh();
 }
 
@@ -426,6 +428,7 @@ export async function gerarEstaticoAction(_prev: ActionState, form: FormData): P
         refs: form.getAll("refs").map(String),
         instrucao: str(form, "instrucao"),
         comLogo: form.get("logo") === "on",
+        peca: pecaPorCodigo(str(form, "peca"))?.codigo ?? null,
       },
       e,
       actorOf(role)

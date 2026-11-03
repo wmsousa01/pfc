@@ -4,13 +4,15 @@ import ProducaoForm from "@/components/admin/ProducaoForm";
 import MaterialUploader from "@/components/agenda/MaterialUploader";
 import { requireAdmin } from "@/lib/auth";
 import { arquivosDaPasta, pastaCampanhas } from "@/lib/campanhas/fontes";
+import { MODELOS } from "@/lib/campanhas/modelos";
+import { CAMPANHAS_DO_PLANO, FONTES, PECAS, PLANO_URL, pecaPorCodigo, type Peca } from "@/lib/campanhas/plano";
 import { FORMATOS, listCriativos, listEstrategias, previews, type Criativo, type Origem } from "@/lib/campanhas/store";
 import { isContentaConfigured, listContentaJobs, listJobCuts, type ContentaCut, type ContentaJob } from "@/lib/producao/contenta";
 import { isGeminiConfigured } from "@/lib/producao/gemini";
 import {
   analisarCriativoAction,
   arquivarCriativoAction,
-  formatoCriativoAction,
+  classificarCriativoAction,
   gerarEstaticoAction,
   importarContentaAction,
   importarDriveAction,
@@ -31,7 +33,9 @@ function abrirUrl(c: Criativo, preview: string | undefined): string | undefined 
   return preview;
 }
 
-export default async function CriativosPage({ searchParams }: { searchParams: { job?: string; f?: string } }) {
+const dataBR = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+
+export default async function CriativosPage({ searchParams }: { searchParams: { job?: string; f?: string; peca?: string } }) {
   await requireAdmin();
 
   const [criativos, estrategias, pasta] = await Promise.all([
@@ -74,6 +78,15 @@ export default async function CriativosPage({ searchParams }: { searchParams: { 
   );
   const imagens = criativos.filter((c) => c.tipo === "imagem" || c.thumb_url);
 
+  // Pauta do plano: o que já tem criativo marcado e a melhor nota de cada peça.
+  const hoje = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
+  const daPeca = (p: Peca) => criativos.filter((c) => c.peca === p.codigo);
+  const estrategiaDe = (k: Peca["campanha"]) => estrategias.find((e) => e.nome === MODELOS[k].m.nome);
+  const prontas = PECAS.filter((p) => daPeca(p).length > 0).length;
+  const atrasadas = PECAS.filter((p) => daPeca(p).length === 0 && p.prazo < hoje).length;
+  const pecaSel = pecaPorCodigo(searchParams.peca);
+  const est = pecaSel?.estatico;
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] pb-20">
       <AdminHeader />
@@ -85,6 +98,63 @@ export default async function CriativosPage({ searchParams }: { searchParams: { 
             As peças gravadas e editadas, de onde estiverem. Daqui elas são analisadas pela IA e entregues às estratégias.
           </p>
         </div>
+
+        {/* ---- Pauta do plano ---- */}
+        <section className={card}>
+          <h2 className="text-white font-bold">Pauta do plano de campanhas</h2>
+          <p className="text-white/40 text-xs mt-0.5">
+            {prontas} de {PECAS.length} peças na biblioteca{atrasadas > 0 ? ` · ${atrasadas} com prazo vencido` : ""}. Marque cada criativo com a peça que ele
+            cumpre, no cartão dele lá embaixo.{" "}
+            <a href={PLANO_URL} target="_blank" className="text-gold-400 hover:text-gold-300">Ver o plano ↗</a>
+          </p>
+          <div className="mt-4 space-y-5">
+            {(Object.keys(CAMPANHAS_DO_PLANO) as Peca["campanha"][]).map((k) => {
+              const camp = CAMPANHAS_DO_PLANO[k];
+              const e = estrategiaDe(k);
+              return (
+                <div key={k}>
+                  <p className="text-xs font-bold text-white/80">
+                    {camp.codigo} · {MODELOS[k].m.nome}
+                    <span className="font-normal text-white/40"> — {camp.resumo}</span>
+                    {e ? (
+                      <a href={`/admin/campanhas/${e.id}`} className="ml-2 font-normal text-gold-400 hover:text-gold-300">estratégia ↗</a>
+                    ) : (
+                      <span className="ml-2 font-normal text-white/30">· estratégia ainda não criada (modelo {camp.codigo})</span>
+                    )}
+                  </p>
+                  <div className="mt-2 divide-y divide-[#1c1c1c] border border-[#1c1c1c] rounded-xl">
+                    {PECAS.filter((p) => p.campanha === k).map((p) => {
+                      const feitos = daPeca(p);
+                      const notas = feitos.map((c) => c.analise_nota).filter((n): n is number => n !== null);
+                      const atrasada = feitos.length === 0 && p.prazo < hoje;
+                      return (
+                        <div key={p.codigo} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-xs">
+                          <span className="font-mono text-[11px] text-gold-400 w-14 shrink-0">{p.codigo}</span>
+                          <span className="text-white/80 flex-1 min-w-[12rem]">
+                            {p.titulo}
+                            {p.nota && <span className="text-white/35"> · {p.nota}</span>}
+                          </span>
+                          <span className="text-white/40">{p.formatos.join(" + ")}</span>
+                          <span className="text-white/40 w-28">{FONTES[p.fonte]}</span>
+                          <span className={`w-16 ${atrasada ? "text-red-400" : "text-white/40"}`}>até {dataBR(p.prazo)}</span>
+                          <span className="w-24 flex justify-end">
+                            {feitos.length > 0 ? (
+                              <Nota n={notas.length ? Math.max(...notas) : null} titulo={`${feitos.length} na biblioteca`} />
+                            ) : p.estatico ? (
+                              <a href={`?peca=${p.codigo}#gerar`} className="text-gold-400 hover:text-gold-300">gerar →</a>
+                            ) : (
+                              <span className={atrasada ? "text-red-400" : "text-white/30"}>falta</span>
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
 
         {/* ---- Fontes ---- */}
         <section className="grid lg:grid-cols-3 gap-4">
@@ -165,7 +235,7 @@ export default async function CriativosPage({ searchParams }: { searchParams: { 
         </section>
 
         {/* ---- Gerador de estático ---- */}
-        <section className={card}>
+        <section id="gerar" className={card}>
           <h2 className="text-white font-bold">Gerar criativo estático</h2>
           <p className="text-white/40 text-xs mt-0.5">
             O Gemini desenha a peça com o texto exato, na identidade do PFC, usando fotos da biblioteca como referência (rostos reais, sem inventar
@@ -174,27 +244,46 @@ export default async function CriativosPage({ searchParams }: { searchParams: { 
           {!isGeminiConfigured() ? (
             <p className="text-white/30 text-xs mt-3">GOOGLE_AI_API_KEY ausente.</p>
           ) : (
-            <ProducaoForm action={gerarEstaticoAction} label="Gerar peça" pending="Gerando… (~40 s)" okMessage="Peça gerada: está na biblioteca abaixo." className="mt-4 space-y-3">
+            <ProducaoForm
+              // Remonta ao trocar de peça, para os campos pegarem o texto do plano.
+              key={pecaSel?.codigo ?? "livre"}
+              action={gerarEstaticoAction}
+              label="Gerar peça"
+              pending="Gerando… (~40 s)"
+              okMessage="Peça gerada: está na biblioteca abaixo."
+              className="mt-4 space-y-3"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <select name="peca" defaultValue={est ? pecaSel?.codigo : ""} className={input}>
+                  <option value="">Peça avulsa (fora do plano)</option>
+                  {PECAS.filter((p) => p.tipo === "imagem").map((p) => (
+                    <option key={p.codigo} value={p.codigo}>{p.codigo} · {p.titulo}</option>
+                  ))}
+                </select>
+                <span className="text-[11px] text-white/40">
+                  {est ? `Texto do plano para ${pecaSel?.codigo}.${pecaSel?.nota ? ` ${pecaSel.nota}.` : ""}` : "Para vir com o texto do plano, use “gerar →” na pauta."}
+                </span>
+              </div>
               <div className="grid md:grid-cols-4 gap-2">
-                <select name="estrategia_id" className={input} defaultValue={estrategias[0]?.id ?? ""}>
+                <select name="estrategia_id" className={input} defaultValue={(pecaSel && estrategiaDe(pecaSel.campanha)?.id) || estrategias[0]?.id || ""}>
                   <option value="">Sem estratégia</option>
                   {estrategias.map((e) => (
                     <option key={e.id} value={e.id}>{e.nome}</option>
                   ))}
                 </select>
-                <select name="formato" className={input} defaultValue="4:5">
+                <select name="formato" className={input} defaultValue={est ? pecaSel?.formatos[0] : "4:5"}>
                   <option value="4:5">4:5 · Feed</option>
                   <option value="9:16">9:16 · Stories/Reels</option>
                   <option value="1:1">1:1 · Quadrado</option>
                   <option value="16:9">16:9 · Paisagem</option>
                 </select>
-                <input name="chamada" placeholder="Chamada na peça (ex.: PEÇA O MEDIA KIT)" className={`${input} md:col-span-2`} />
+                <input name="chamada" defaultValue={est?.chamada} placeholder="Chamada na peça (ex.: PEÇA O MEDIA KIT)" className={`${input} md:col-span-2`} />
               </div>
               <div className="grid md:grid-cols-2 gap-2">
-                <input name="headline" required placeholder="Headline (exatamente como vai na peça)" className={input} />
-                <input name="apoio" placeholder="Linha de apoio (opcional)" className={input} />
+                <input name="headline" required defaultValue={est?.headline} placeholder="Headline (exatamente como vai na peça)" className={input} />
+                <input name="apoio" defaultValue={est?.apoio} placeholder="Linha de apoio (opcional)" className={input} />
               </div>
-              <textarea name="instrucao" rows={2} placeholder="Pedido extra (opcional): cenário, clima, o que destacar" className={`${input} w-full`} />
+              <textarea name="instrucao" rows={2} defaultValue={est?.instrucao} placeholder="Pedido extra (opcional): cenário, clima, o que destacar" className={`${input} w-full`} />
               {imagens.length > 0 && (
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-wide text-white/40 mb-2">Referências (até 3)</p>
@@ -255,6 +344,7 @@ export default async function CriativosPage({ searchParams }: { searchParams: { 
                     <p className="text-white/40 text-xs mt-0.5">
                       {c.tipo === "video" ? "Vídeo" : "Imagem"} · {ORIGEM[c.origem]}
                       {c.duracao_s ? ` · ${c.duracao_s}s` : ""}
+                      {c.peca && <span className="text-gold-400 font-mono"> · {c.peca}</span>}
                       {abrir && (
                         <>
                           {" · "}
@@ -262,12 +352,18 @@ export default async function CriativosPage({ searchParams }: { searchParams: { 
                         </>
                       )}
                     </p>
-                    <form action={formatoCriativoAction} className="flex items-center gap-1 mt-2">
+                    <form action={classificarCriativoAction} className="flex flex-wrap items-center gap-1 mt-2">
                       <input type="hidden" name="id" value={c.id} />
                       <select name="formato" defaultValue={c.formato ?? ""} className={input}>
                         <option value="">Formato?</option>
                         {FORMATOS.map((f) => (
                           <option key={f} value={f}>{f}</option>
+                        ))}
+                      </select>
+                      <select name="peca" defaultValue={c.peca ?? ""} className={`${input} max-w-[11rem]`}>
+                        <option value="">Peça do plano?</option>
+                        {PECAS.filter((p) => p.tipo === c.tipo).map((p) => (
+                          <option key={p.codigo} value={p.codigo}>{p.codigo} · {p.titulo}</option>
                         ))}
                       </select>
                       <button className="text-[11px] text-white/40 hover:text-white px-1">ok</button>
