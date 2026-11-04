@@ -36,6 +36,29 @@ function platformsOf(form: FormData): Platform[] {
 
 const isTrial = (form: FormData) => str(form, "ig") === "teste";
 
+/**
+ * Perfis do collab: atalhos marcados (`collab`) + campo livre (`collab_extra`),
+ * que aceita @perfil, perfil ou o link do Instagram, separados por vírgula/espaço.
+ */
+function collaboratorsOf(form: FormData): string[] {
+  const raw = [...form.getAll("collab").map(String), ...str(form, "collab_extra").split(/[\s,;]+/)];
+  const users = raw
+    .map((u) =>
+      u
+        .trim()
+        .replace(/^https?:\/\/(www\.)?instagram\.com\//i, "")
+        .replace(/[/?#].*$/, "")
+        .replace(/^@/, "")
+        .toLowerCase()
+    )
+    .filter(Boolean);
+  const bad = users.find((u) => !/^[a-z0-9._]{1,30}$/.test(u));
+  if (bad) throw new Error(`Perfil de collab inválido: ${bad}`);
+  const unique = Array.from(new Set(users));
+  if (unique.length > 3) throw new Error("O Instagram aceita no máximo 3 perfis no collab.");
+  return unique;
+}
+
 /** `when` vem do datetime-local, no horário de Brasília (sem horário de verão). */
 function brasilia(when: string): Date {
   const d = new Date(`${when}:00-03:00`);
@@ -58,6 +81,7 @@ type NewPost = {
   at: Date;
   actor: string;
   trial: boolean;
+  collaborators: string[];
 };
 
 /** Folga aleatória de até 20 min: horários redondos repetidos parecem robô. */
@@ -82,6 +106,7 @@ async function insertPosts(posts: NewPost[]): Promise<{ criados: number; repetid
       scheduled_at: p.at.toISOString(),
       created_by: p.actor,
       trial: p.platform === "instagram" && p.trial,
+      collaborators: p.platform === "instagram" ? p.collaborators : [],
     });
     if (!error) criados++;
     else if (error.code === "23505") repetidos++;
@@ -108,8 +133,9 @@ export async function scheduleCutAction(_prev: ActionState, form: FormData): Pro
     const title = str(form, "title") || cut.title || cut.file;
     const caption = str(form, "caption") || defaultCaption(cut);
     const trial = isTrial(form);
+    const collaborators = collaboratorsOf(form);
     const r = await insertPosts(
-      platforms.map((platform) => ({ platform, cut, jobId, title, caption, at, actor: actorOf(role), trial }))
+      platforms.map((platform) => ({ platform, cut, jobId, title, caption, at, actor: actorOf(role), trial, collaborators }))
     );
     const q = !when && r.criados > 0 ? await runSocialQueue(r.criados) : null;
     refresh();
@@ -146,6 +172,7 @@ export async function scheduleJobAction(_prev: ActionState, form: FormData): Pro
       };
     }
     const trial = isTrial(form);
+    const collaborators = collaboratorsOf(form);
 
     const cuts = await cutsOf(jobId);
     const { data: taken } = await db()
@@ -163,7 +190,7 @@ export async function scheduleJobAction(_prev: ActionState, form: FormData): Pro
       const at = jitter(new Date(start.getTime() + slot * interval * 3_600_000));
       const caption = defaultCaption(cut);
       for (const platform of free) {
-        posts.push({ platform, cut, jobId, title: cut.title || cut.file, caption, at, actor: actorOf(role), trial });
+        posts.push({ platform, cut, jobId, title: cut.title || cut.file, caption, at, actor: actorOf(role), trial, collaborators });
       }
       slot++;
     }

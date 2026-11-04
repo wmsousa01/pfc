@@ -31,6 +31,8 @@ const BUDGET_MS = 150_000;
 export const IG_DAILY_MAX = 12;
 const IG_GAP_MS = 90 * 60_000;
 const IG_JITTER_MS = 15 * 60_000;
+/** Perfis com atalho de collab no formulário (sem @). */
+export const IG_COLLAB_FAVORITOS = ["ladoaladob26"];
 /** Uso da API (inclui outras ferramentas) a partir do qual a fila para. */
 const IG_API_STOP = 25;
 
@@ -92,7 +94,17 @@ async function publishOne(p: SocialPost): Promise<void> {
     }
     case "instagram": {
       const c = await meta("instagram");
-      const containerId = await igCreateReel(c.accountId, c.token, p.video_url, p.caption, p.trial);
+      const collab = p.collaborators ?? [];
+      let containerId: string;
+      try {
+        containerId = await igCreateReel(c.accountId, c.token, p.video_url, p.caption, p.trial, collab);
+      } catch (e) {
+        // A Meta não documenta se reel de teste aceita collab. Se recusar,
+        // o teste sai sem o convite e o post avisa, em vez de travar a fila.
+        if (!(e instanceof MetaError) || e.tokenDead || !p.trial || collab.length === 0) throw e;
+        containerId = await igCreateReel(c.accountId, c.token, p.video_url, p.caption, true);
+        await updatePost(p.id, { collab_dropped: true });
+      }
       await updatePost(p.id, { status: "processando", container_id: containerId, connection_id: c.id });
       await finishReel({ ...p, container_id: containerId }, 60_000);
       return;

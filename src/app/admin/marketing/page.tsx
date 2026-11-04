@@ -14,7 +14,7 @@ import { connectedChannel } from "@/lib/producao/youtube-api";
 import { defaultCaption } from "@/lib/social/caption";
 import { isCryptoConfigured } from "@/lib/social/crypto";
 import { isMetaConfigured } from "@/lib/social/meta";
-import { IG_DAILY_MAX } from "@/lib/social/publisher";
+import { IG_COLLAB_FAVORITOS, IG_DAILY_MAX } from "@/lib/social/publisher";
 import { PLATFORMS, listConnections, type Platform, type PostStatus, type SocialPost } from "@/lib/social/store";
 import {
   cancelPostAction,
@@ -156,6 +156,24 @@ export default async function MarketingPage({
     </label>
   );
 
+  // Collab no Instagram: o perfil recebe o convite e, aceitando no app, o Reel aparece nos dois.
+  const CollabFields = () => (
+    <div className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs ${connected.instagram ? "text-white/80" : "text-white/30"}`}>
+      <span>Collab</span>
+      {IG_COLLAB_FAVORITOS.map((u) => (
+        <label key={u} className="flex items-center gap-1.5">
+          <input type="checkbox" name="collab" value={u} disabled={!connected.instagram} className="accent-gold-500" />@{u}
+        </label>
+      ))}
+      <input
+        name="collab_extra"
+        placeholder="outros perfis (até 3 no total)"
+        disabled={!connected.instagram}
+        className={`${input} w-56`}
+      />
+    </div>
+  );
+
   const Badge = ({ s }: { s: PostStatus }) => (
     <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${STATUS[s].cls}`}>
       {STATUS[s].label}
@@ -194,6 +212,18 @@ export default async function MarketingPage({
           {p.trial && (
             <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border border-gold-500/30 bg-gold-500/10 text-gold-400">
               {p.graduated_at ? "Teste promovido" : "Teste"}
+            </span>
+          )}
+          {p.collaborators?.length > 0 && (
+            <span
+              className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                p.collab_dropped
+                  ? "border-red-500/30 bg-red-500/10 text-red-300 line-through"
+                  : "border-sky-500/30 bg-sky-500/10 text-sky-300"
+              }`}
+              title={p.collab_dropped ? "O Instagram não aceitou collab neste reel de teste: saiu sem o convite." : undefined}
+            >
+              Collab {p.collaborators.map((u) => `@${u}`).join(" ")}
             </span>
           )}
         </div>
@@ -477,6 +507,7 @@ export default async function MarketingPage({
                     <div className="space-y-1.5">
                       <PlatformBoxes prefix="job" />
                       <InstagramMode />
+                      <CollabFields />
                     </div>
                     <label className="text-xs text-white/50">
                       Primeiro post
@@ -532,6 +563,7 @@ export default async function MarketingPage({
                           />
                           <PlatformBoxes prefix={c.file} />
                           <InstagramMode />
+                          <CollabFields />
                           <label className="text-xs text-white/50 block">
                             Quando (em branco = agora)
                             <input type="datetime-local" name="publish_at" className={`${input} block mt-1`} />
