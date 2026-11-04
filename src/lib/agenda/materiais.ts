@@ -45,6 +45,8 @@ export type NovoMaterial = {
   nome: string;
   mime: string;
   enviado_por: string;
+  /** Bloco do espelho da transmissão; fora dele quando não vem. */
+  bloco?: number | null;
 };
 
 /** Registra o arquivo que o navegador acabou de subir, conferindo que ele está mesmo lá. */

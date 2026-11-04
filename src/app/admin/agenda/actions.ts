@@ -22,6 +22,7 @@ import {
   sincronizarAgenda,
   sincronizarLive,
 } from "@/lib/agenda/fluxo";
+import { abrirEspelho } from "@/lib/agenda/espelho";
 import { disconnectCalendar } from "@/lib/agenda/gcal";
 import { pedirUpload, registrarMaterial, removerMaterial } from "@/lib/agenda/materiais";
 import { FONTES_KEY, gerarPautaNews } from "@/lib/agenda/noticias";
@@ -392,7 +393,8 @@ export async function registrarMaterialAction(
   nome: string,
   mime: string,
   tipo: string,
-  alvo: string | null
+  alvo: string | null,
+  bloco: number | null = null
 ): Promise<ActionState> {
   const [k, id] = (alvo ?? "").split(":");
   return run((a) =>
@@ -405,6 +407,7 @@ export async function registrarMaterialAction(
       nome,
       mime,
       enviado_por: a,
+      bloco: bloco != null && Number.isInteger(bloco) && bloco >= 0 ? bloco : null,
     })
   );
 }
@@ -420,6 +423,7 @@ export async function materialAction(_prev: ActionState, form: FormData): Promis
         usar_na_arte: form.get("usar") === "1",
         apresentador_id: tipo === "apresentador" ? opt(form, "apresentador") : null,
         convidado_id: opt(form, "convidado"),
+        bloco: str(form, "bloco") === "" ? null : Math.max(0, Math.trunc(Number(str(form, "bloco"))) || 0),
       })
       .eq("id", str(form, "material"));
     if (error) throw new Error(error.message);
@@ -553,6 +557,12 @@ export async function pastaDriveAction(_prev: ActionState, form: FormData): Prom
     if (!id) throw new Error("Link da pasta inválido.");
     await setConfig(PASTA_KEY, id);
   });
+}
+
+// ---- Espelho da transmissão ----
+
+export async function espelhoAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  return run((a) => abrirEspelho(str(form, "id"), a, form.get("trocar") === "1"));
 }
 
 // ---- PFC News: pauta com as notícias da semana no Instagram ----

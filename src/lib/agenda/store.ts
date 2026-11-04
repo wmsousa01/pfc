@@ -79,6 +79,11 @@ export type Episodio = {
   yt_erro: string | null;
   yt_lock_ate: string | null;
   cortes_live_id: string | null;
+  /** Link do espelho da transmissão (/espelho/<token>) e o bloco no ar. */
+  espelho_token: string | null;
+  espelho_atual: number | null;
+  /** Imagem na tela do OBS: null = a primeira do bloco no ar, id do material, ou "nenhuma". */
+  espelho_imagem: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -165,6 +170,8 @@ export type Material = {
   mime: string;
   tamanho: number;
   usar_na_arte: boolean;
+  /** Bloco do espelho em que a imagem entra (0 = abertura); null = fora do espelho. */
+  bloco: number | null;
   enviado_por: string;
   created_at: string;
 };

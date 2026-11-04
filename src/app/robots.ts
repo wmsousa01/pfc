@@ -20,6 +20,7 @@ export default function robots(): MetadataRoute.Robots {
         "/r/",
         "/parceiros/*/painel",
         "/proposta/",
+        "/espelho/",
       ],
     },
     sitemap: `${site.url}/sitemap.xml`,

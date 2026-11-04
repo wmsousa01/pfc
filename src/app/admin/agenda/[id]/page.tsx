@@ -5,6 +5,7 @@ import ProducaoForm from "@/components/admin/ProducaoForm";
 import MaterialUploader from "@/components/agenda/MaterialUploader";
 import { requireAdmin } from "@/lib/auth";
 import { pautaTexto } from "@/lib/agenda/briefing";
+import { blocosDoEspelho, linkEspelho } from "@/lib/agenda/espelho";
 import { youtubeUrl } from "@/lib/agenda/fluxo";
 import { calendarAccount } from "@/lib/agenda/gcal";
 import { listarPasta, pastaDrive, type ArquivoDrive } from "@/lib/agenda/video";
@@ -36,6 +37,7 @@ import {
   liberarEnvioAction,
   ligarVideoAction,
   cargoConvidadoAction,
+  espelhoAction,
   materialAction,
   materialRemoverAction,
   pedirUploadAction,
@@ -135,6 +137,9 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
   const ativo = ep.status === "solicitado" || ep.status === "confirmado";
   const handles = convidados.filter((c) => c.instagram).map((c) => `@${c.instagram}`);
   const st = STATUS_EP[ep.status];
+  const blocos = blocosDoEspelho(b).map((x, i) => ({ value: String(i), label: `Espelho ${i + 1}: ${x.titulo}`.slice(0, 60) }));
+  const espelho = ep.espelho_token ? linkEspelho(ep.espelho_token) : null;
+  const noEspelho = materiais.filter((m) => m.bloco != null).length;
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] pb-20">
@@ -342,6 +347,8 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
               registrar={registrarMaterialAction.bind(null, ep.id)}
               tipos={(Object.keys(MATERIAL_TIPOS) as MaterialTipo[]).map((v) => ({ value: v, label: MATERIAL_TIPOS[v] }))}
               alvos={alvos}
+              blocos={blocos}
+              tipoInicial={ep.quadro === "pfc-news" ? "outro" : undefined}
               inputCls={input}
               buttonCls={btn2}
             />
@@ -378,6 +385,12 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
                         <option value="">— apresentador (se for foto dele)</option>
                         {hosts.map((h) => <option key={h.id} value={h.id}>{h.nome}</option>)}
                       </select>
+                      {blocos.length > 0 && (
+                        <select name="bloco" defaultValue={m.bloco ?? ""} className={`${input} w-full`}>
+                          <option value="">— fora do espelho</option>
+                          {blocos.map((x) => <option key={x.value} value={x.value}>{x.label}</option>)}
+                        </select>
+                      )}
                       <label className="flex items-center gap-1 text-white/60">
                         <input type="checkbox" name="usar" value="1" defaultChecked={m.usar_na_arte} /> usar na arte
                       </label>
@@ -485,6 +498,48 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
               <label className="block text-white/50 text-xs">Cenário da arte por IA
                 <textarea name="cena" rows={2} defaultValue={b.arte.cena ?? ""} placeholder="Elementos do fundo que combinam com o tema, sem pessoas nem texto" className={area} />
               </label>
+            </ProducaoForm>
+          )}
+        </section>
+
+        {/* ---- Espelho da transmissão ---- */}
+        <section className={card}>
+          <h2 className="text-white font-bold">Espelho da transmissão</h2>
+          <p className="text-white/40 text-sm mt-1">
+            O roteiro bloco a bloco com as imagens de cada bloco, num link sem login para a equipe técnica acompanhar o
+            âncora e os comentaristas. Quem estiver com o link marca o bloco no ar (botões ou PageDown/PageUp) e as outras
+            telas seguem em segundos. Para pôr uma imagem num bloco, escolha o bloco em Materiais.
+          </p>
+          {!b ? (
+            <p className="text-white/50 text-sm mt-3">Gere o roteiro primeiro: o espelho sai dos blocos da pauta.</p>
+          ) : espelho ? (
+            <div className="mt-4 space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <code className="text-xs text-gold-300 bg-black/40 border border-[#2a2a2a] rounded-lg px-2.5 py-1.5 break-all">{espelho}</code>
+                <CopyButton value={espelho} className={btn2} />
+                <a href={espelho} target="_blank" className={btn2}>Abrir ↗</a>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-white/50">
+                <span>Tela para o OBS (fonte de navegador, 1920×1080), só com a imagem do bloco no ar:</span>
+                <CopyButton value={`${espelho}/tela`} label="Copiar" className={btn2} />
+                <CopyButton value={`${espelho}/tela?fundo=transparente`} label="Copiar com fundo transparente" className={btn2} />
+              </div>
+              <p className="text-white/50 text-xs">
+                {blocos.length} blocos · {noEspelho} {noEspelho === 1 ? "imagem" : "imagens"} no espelho
+                {ep.espelho_atual != null && <> · no ar: bloco {ep.espelho_atual + 1}</>}
+              </p>
+              <details>
+                <summary className="text-xs text-white/30 hover:text-white/60 cursor-pointer">Trocar o link</summary>
+                <ProducaoForm action={espelhoAction} label="Gerar link novo" pending="Gerando..." className="mt-2" buttonClassName="text-xs border border-red-500/40 text-red-400 hover:bg-red-500/10 rounded-lg px-3 py-1.5">
+                  <input type="hidden" name="id" value={ep.id} />
+                  <input type="hidden" name="trocar" value="1" />
+                  <p className="text-white/30 text-xs mb-2">O link atual para de abrir para quem já tem.</p>
+                </ProducaoForm>
+              </details>
+            </div>
+          ) : (
+            <ProducaoForm action={espelhoAction} label="Criar link do espelho" pending="Criando..." className="mt-4" buttonClassName="btn-primary px-4 py-2 rounded-lg text-sm font-bold">
+              <input type="hidden" name="id" value={ep.id} />
             </ProducaoForm>
           )}
         </section>

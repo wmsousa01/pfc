@@ -218,6 +218,8 @@ export type IgPostPublico = {
   timestamp: string;
   permalink: string;
   mediaType: string;
+  /** Imagem do post (no carrossel, a capa). Vídeo e Reel ficam sem: a URL seria do vídeo. URL temporária da CDN. */
+  imageUrl: string | null;
   likes: number | null;
   comments: number | null;
 };
@@ -229,7 +231,7 @@ export type IgPostPublico = {
  */
 export async function igBusinessMedia(igId: string, token: string, username: string, limit = 25): Promise<IgPostPublico[]> {
   const r = await graph<{ business_discovery?: any }>(`/${igId}`, {
-    fields: `business_discovery.username(${username}){media.limit(${limit}){id,caption,timestamp,permalink,media_type,like_count,comments_count}}`,
+    fields: `business_discovery.username(${username}){media.limit(${limit}){id,caption,timestamp,permalink,media_type,media_url,like_count,comments_count}}`,
     access_token: token,
   });
   const items: any[] = r.business_discovery?.media?.data ?? [];
@@ -239,6 +241,7 @@ export async function igBusinessMedia(igId: string, token: string, username: str
     timestamp: String(m.timestamp ?? ""),
     permalink: String(m.permalink ?? ""),
     mediaType: String(m.media_type ?? ""),
+    imageUrl: m.media_type !== "VIDEO" && typeof m.media_url === "string" ? m.media_url : null,
     likes: typeof m.like_count === "number" ? m.like_count : null,
     comments: typeof m.comments_count === "number" ? m.comments_count : null,
   }));
