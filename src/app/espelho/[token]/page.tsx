@@ -14,7 +14,7 @@ export default async function EspelhoPage({ params }: { params: { token: string 
   const ep = await episodioPorEspelho(params.token);
   if (!ep) notFound();
   const [materiais, hosts] = await Promise.all([materiaisDoEspelho(ep.id), apresentadoresDoEpisodio(ep)]);
-  const blocos = blocosDoEspelho(ep.briefing);
+  const blocos = blocosDoEspelho(ep.briefing, ep.roteiro);
 
   return (
     <EspelhoAoVivo
