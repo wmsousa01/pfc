@@ -34,6 +34,26 @@ export type Briefing = {
   noticias?: { titulo: string; resumo: string; fontes: { handle: string; url: string; data: string }[] }[];
 };
 
+/** Uma matéria do roteiro do apresentador, com o texto dele como está no documento. */
+export type Materia = {
+  tipo: "abertura" | "materia" | "encerramento";
+  /** Bloco do programa em que ele agrupou a matéria ("BLOCO 1 — Abertura e panorama regional"). */
+  bloco: string | null;
+  titulo: string;
+  /** A manchete, que vai no GC. */
+  manchete: string | null;
+  leitura: string | null;
+  comentario: string | null;
+  /** A piada marcada com ":::: H". */
+  humor: string | null;
+  reflexao: string | null;
+  pontos: string[];
+  /** "Serviço ao telespectador": prazo, site, endereço. */
+  servico: string | null;
+};
+
+export type Roteiro = { arquivo: string | null; importado_em: string; materias: Materia[] };
+
 export type Slot = {
   id: number;
   quadro: string;
@@ -84,6 +104,8 @@ export type Episodio = {
   espelho_atual: number | null;
   /** Imagem na tela do OBS: null = a primeira do bloco no ar, id do material, ou "nenhuma". */
   espelho_imagem: string | null;
+  /** Roteiro do apresentador: quando existe, o espelho segue ele, não a pauta da IA. */
+  roteiro: Roteiro | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

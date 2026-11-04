@@ -23,6 +23,7 @@ import {
   sincronizarLive,
 } from "@/lib/agenda/fluxo";
 import { abrirEspelho } from "@/lib/agenda/espelho";
+import { importarRoteiro, tirarRoteiro } from "@/lib/agenda/roteiro";
 import { disconnectCalendar } from "@/lib/agenda/gcal";
 import { pedirUpload, registrarMaterial, removerMaterial } from "@/lib/agenda/materiais";
 import { FONTES_KEY, gerarPautaNews } from "@/lib/agenda/noticias";
@@ -563,6 +564,18 @@ export async function pastaDriveAction(_prev: ActionState, form: FormData): Prom
 
 export async function espelhoAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   return run((a) => abrirEspelho(str(form, "id"), a, form.get("trocar") === "1"));
+}
+
+/** O roteiro do apresentador: um PDF dos materiais (`material`) ou o texto colado (`texto`). */
+export async function importarRoteiroAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const material = str(form, "material");
+  return run((a) => importarRoteiro(str(form, "id"), material ? { materialId: material } : { texto: str(form, "texto") }, a));
+}
+
+export async function tirarRoteiroAction(form: FormData): Promise<void> {
+  const role = await requireAdmin();
+  await tirarRoteiro(str(form, "id"), actorOf(role));
+  refresh();
 }
 
 // ---- PFC News: pauta com as notícias da semana no Instagram ----

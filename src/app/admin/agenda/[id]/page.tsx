@@ -38,6 +38,7 @@ import {
   ligarVideoAction,
   cargoConvidadoAction,
   espelhoAction,
+  importarRoteiroAction,
   materialAction,
   materialRemoverAction,
   pedirUploadAction,
@@ -58,6 +59,7 @@ import {
   remarcarAction,
   removerConvidadoAction,
   salvarBriefingAction,
+  tirarRoteiroAction,
 } from "../actions";
 import { STATUS_EP } from "../shared";
 
@@ -137,7 +139,7 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
   const ativo = ep.status === "solicitado" || ep.status === "confirmado";
   const handles = convidados.filter((c) => c.instagram).map((c) => `@${c.instagram}`);
   const st = STATUS_EP[ep.status];
-  const blocos = blocosDoEspelho(b).map((x, i) => ({ value: String(i), label: `Espelho ${i + 1}: ${x.titulo}`.slice(0, 60) }));
+  const blocos = blocosDoEspelho(b, ep.roteiro).map((x, i) => ({ value: String(i), label: `Espelho ${i + 1}: ${x.titulo}`.slice(0, 60) }));
   const espelho = ep.espelho_token ? linkEspelho(ep.espelho_token) : null;
   const noEspelho = materiais.filter((m) => m.bloco != null).length;
 
@@ -395,6 +397,12 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
                         <input type="checkbox" name="usar" value="1" defaultChecked={m.usar_na_arte} /> usar na arte
                       </label>
                     </ProducaoForm>
+                    {m.mime === "application/pdf" && (
+                      <ProducaoForm action={importarRoteiroAction} label="Usar como roteiro do espelho" pending="Lendo o roteiro (~1 min)..." className="mt-1" buttonClassName="text-[11px] text-gold-400 hover:text-gold-300 text-left">
+                        <input type="hidden" name="id" value={ep.id} />
+                        <input type="hidden" name="material" value={m.id} />
+                      </ProducaoForm>
+                    )}
                     <form action={materialRemoverAction}>
                       <input type="hidden" name="material" value={m.id} />
                       <button className="text-[11px] text-white/30 hover:text-red-400">apagar</button>
@@ -510,8 +518,36 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
             âncora e os comentaristas. Quem estiver com o link marca o bloco no ar (botões ou PageDown/PageUp) e as outras
             telas seguem em segundos. Para pôr uma imagem num bloco, escolha o bloco em Materiais.
           </p>
-          {!b ? (
-            <p className="text-white/50 text-sm mt-3">Gere o roteiro primeiro: o espelho sai dos blocos da pauta.</p>
+          <div className="mt-4 rounded-xl border border-[#2a2a2a] bg-black/30 p-4">
+            {ep.roteiro ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-sm text-white/80 flex-1">
+                  <strong className="text-white">Segue o roteiro do apresentador</strong>
+                  {ep.roteiro.arquivo && <> ({ep.roteiro.arquivo})</>}: {ep.roteiro.materias.length} blocos, lido em{" "}
+                  {quando(ep.roteiro.importado_em)}. Gerar a pauta da IA de novo não apaga o roteiro dele.
+                </p>
+                <form action={tirarRoteiroAction}>
+                  <input type="hidden" name="id" value={ep.id} />
+                  <button className={btn2}>Voltar para a pauta da IA</button>
+                </form>
+              </div>
+            ) : (
+              <p className="text-sm text-white/60">
+                <strong className="text-white">Roteiro do apresentador:</strong> suba o PDF dele em Materiais e clique em
+                &quot;Usar como roteiro do espelho&quot;, ou cole o texto abaixo. O espelho passa a ter um bloco por matéria dele, com
+                manchete (GC), leitura, comentário, a piada e a pergunta para reflexão, sem a IA mudar o texto.
+              </p>
+            )}
+            <details className="mt-2">
+              <summary className="text-xs text-white/40 hover:text-white/70 cursor-pointer">{ep.roteiro ? "Trocar pelo texto colado" : "Colar o texto do roteiro"}</summary>
+              <ProducaoForm action={importarRoteiroAction} label="Usar no espelho" pending="Lendo o roteiro (~1 min)..." className="mt-2 space-y-2" buttonClassName={btn2}>
+                <input type="hidden" name="id" value={ep.id} />
+                <textarea name="texto" rows={8} placeholder="Cole aqui o roteiro inteiro (do Word ou Docs)" className={area} />
+              </ProducaoForm>
+            </details>
+          </div>
+          {!b && !ep.roteiro ? (
+            <p className="text-white/50 text-sm mt-3">Gere o roteiro ou use o do apresentador primeiro: o espelho sai dos blocos.</p>
           ) : espelho ? (
             <div className="mt-4 space-y-3">
               <div className="flex flex-wrap items-center gap-2">

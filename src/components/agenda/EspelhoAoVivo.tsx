@@ -5,7 +5,29 @@ import { useRouter } from "next/navigation";
 import CopyButton from "@/components/CopyButton";
 
 type Noticia = { titulo: string; resumo: string; fontes: { handle: string; url: string; data: string }[] };
-type Bloco = { titulo: string; texto: string | null; pontos: string[]; noticias: Noticia[] };
+type Materia = {
+  tipo: "abertura" | "materia" | "encerramento";
+  bloco: string | null;
+  titulo: string;
+  manchete: string | null;
+  leitura: string | null;
+  comentario: string | null;
+  humor: string | null;
+  reflexao: string | null;
+  pontos: string[];
+  servico: string | null;
+};
+type Bloco = { titulo: string; texto: string | null; pontos: string[]; noticias: Noticia[]; materia: Materia | null };
+
+/** Uma parte da matéria do apresentador, com o rótulo que ele usa no documento. */
+function Parte({ rotulo, className = "", children }: { rotulo: string; className?: string; children: React.ReactNode }) {
+  return (
+    <div className={`mt-4 ${className}`}>
+      <p className="text-[11px] font-black tracking-widest text-white/35">{rotulo}</p>
+      <div className="mt-1 whitespace-pre-line leading-relaxed">{children}</div>
+    </div>
+  );
+}
 type Imagem = { id: string; nome: string; mime: string; bloco: number };
 
 const POLL_MS = 3000;
@@ -239,7 +261,12 @@ export default function EspelhoAoVivo({
             const fotos = imagens.filter((m) => m.bloco === i);
             const noAr = i === atual;
             const feito = atual != null && i < atual;
+            const m = b.materia;
+            // Rótulo do bloco do apresentador ("BLOCO 3 — Saúde") quando muda de um bloco para o outro.
+            const grupo = m?.bloco && m.bloco !== blocos[i - 1]?.materia?.bloco ? m.bloco : null;
             return (
+              <div key={i}>
+              {grupo && <p className="mt-8 mb-3 text-xs font-black tracking-widest text-gold-400 uppercase">{grupo}</p>}
               <section
                 key={i}
                 ref={(el) => {
@@ -261,8 +288,62 @@ export default function EspelhoAoVivo({
                   </div>
                 </div>
 
+                {m && (
+                  <>
+                    {m.manchete && (
+                      <div className="mt-4 rounded-xl border border-[#2a2a2a] bg-black/40 p-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+                        <span className="text-[11px] font-black text-white/40">GC</span>
+                        <span className="font-bold uppercase">{m.manchete}</span>
+                        <CopyButton value={m.manchete.toUpperCase()} label="copiar" className="text-xs text-white/50 hover:text-white" />
+                        {b.noticias.some((n) => n.fontes.length) && (
+                          <>
+                            <span className="text-white/60">Fonte: {Array.from(new Set(b.noticias.map(fontes))).join(" · ")}</span>
+                            <CopyButton value={`Fonte: ${Array.from(new Set(b.noticias.map(fontes))).join(" · ")}`} label="copiar" className="text-xs text-white/50 hover:text-white" />
+                            <span className="flex gap-2">
+                              {b.noticias.flatMap((n) => n.fontes).map((f) => (
+                                <a key={f.url} href={f.url} target="_blank" rel="noreferrer" className="text-xs text-gold-400 hover:underline">post ↗</a>
+                              ))}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    )}
+                    {m.leitura && (
+                      <Parte rotulo={m.tipo === "materia" ? "NOTÍCIA PARA LEITURA" : "APRESENTADOR"} className="text-lg text-white/90">
+                        {m.leitura}
+                      </Parte>
+                    )}
+                    {m.comentario && <Parte rotulo="COMENTÁRIO DO APRESENTADOR" className="text-base text-white/75">{m.comentario}</Parte>}
+                    {m.humor && (
+                      <div className="mt-4 rounded-xl border border-gold-500/30 bg-gold-500/10 p-3 text-base text-gold-100 whitespace-pre-line">
+                        <span className="text-[11px] font-black text-gold-400 mr-2">H</span>
+                        {m.humor}
+                      </div>
+                    )}
+                    {(m.reflexao || m.pontos.length > 0) && (
+                      <Parte rotulo="PERGUNTA PARA REFLEXÃO" className="text-base text-white/85">
+                        {m.reflexao && <p className="font-bold text-white">{m.reflexao}</p>}
+                        {m.pontos.length > 0 && (
+                          <ul className="mt-2 space-y-1 whitespace-normal">
+                            {m.pontos.map((p, j) => (
+                              <li key={j} className="flex gap-2">
+                                <span className="text-gold-400">•</span>
+                                <span>{p}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </Parte>
+                    )}
+                    {m.servico && (
+                      <Parte rotulo="SERVIÇO AO TELESPECTADOR" className="text-base text-sky-200">
+                        {m.servico}
+                      </Parte>
+                    )}
+                  </>
+                )}
                 {b.texto && <p className="mt-3 text-lg leading-relaxed text-white/85 whitespace-pre-line">{b.texto}</p>}
-                {b.noticias.map((n, k) => (
+                {!m && b.noticias.map((n, k) => (
                   <div key={k} className="mt-4">
                     {b.noticias.length > 1 && <p className="text-base font-bold text-white/90">{n.titulo}</p>}
                     <p className="text-base leading-relaxed text-white/70">{n.resumo}</p>
@@ -336,6 +417,7 @@ export default function EspelhoAoVivo({
                   </div>
                 )}
               </section>
+              </div>
             );
           })}
         </main>
