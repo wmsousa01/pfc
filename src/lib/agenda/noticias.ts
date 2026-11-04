@@ -3,7 +3,7 @@ import { TEXT_MODEL, generate } from "@/lib/producao/gemini";
 import { BUCKET, getConfig } from "@/lib/producao/store";
 import { MetaError, igBusinessMedia, type IgPostPublico } from "@/lib/social/meta";
 import { activeConnection } from "@/lib/social/store";
-import { blocosDoEspelho } from "./espelho";
+import { blocosDoEspelho, codigoDoPost, type BlocoEspelho } from "./espelho";
 import { cleanInstagram, db, getEpisodio, logAgenda, quandoLongo, updateEpisodio, type Briefing } from "./store";
 
 /**
@@ -164,7 +164,7 @@ Não copie as legendas: reescreva com as suas palavras.`;
     noticias,
   };
   await updateEpisodio(ep.id, { briefing, tema: ep.tema || (r.tema ?? "").trim() || null, ig_legenda: briefing.legenda_ig });
-  const fotos = await fotosDasNoticias(ep.id, briefing, posts);
+  const fotos = await fotosDasNoticias(ep.id, blocosDoEspelho(briefing, ep.roteiro), posts);
   await logAgenda(ep.id, actor, "gerou a pauta com as notícias do Instagram", `${posts.length} posts, ${noticias.length} notícias, ${fotos} fotos no espelho`);
   if (erros.length) await logAgenda(ep.id, actor, "não conseguiu ler fontes", erros.join(" · "));
   return { usadas: noticias.length, erros };
@@ -179,13 +179,12 @@ const AUTOR_FOTOS = "pauta-news";
  * caçar no Instagram. A URL da Meta é temporária: a foto é copiada para o
  * Storage. Foto que não baixa só fica de fora.
  */
-async function fotosDasNoticias(epId: string, b: Briefing, posts: PostFonte[]): Promise<number> {
+async function fotosDasNoticias(epId: string, blocos: BlocoEspelho[], posts: PostFonte[]): Promise<number> {
   const { data: velhas } = await db().from("agenda_materiais").delete().eq("episodio_id", epId).eq("enviado_por", AUTOR_FOTOS).select("path");
   if (velhas?.length) await db().storage.from(BUCKET).remove(velhas.map((v) => v.path as string));
 
   const porUrl = new Map(posts.map((p) => [p.permalink, p]));
   let n = 0;
-  const blocos = blocosDoEspelho(b);
   for (let bloco = 0; bloco < blocos.length; bloco++) {
     const x = blocos[bloco];
     // Até duas fotos por notícia; bloco que junta várias notícias fica com uma de cada.
@@ -202,7 +201,8 @@ async function fotosDasNoticias(epId: string, b: Briefing, posts: PostFonte[]): 
         const mime = r.headers.get("content-type")?.split(";")[0] ?? "";
         if (!r.ok || !mime.startsWith("image/")) continue;
         const buf = Buffer.from(await r.arrayBuffer());
-        const nome = `${p.handle}-${p.id}.${mime === "image/png" ? "png" : "jpg"}`;
+        // O código do post no nome: é por ele que a foto acha a notícia quando o espelho muda de blocos.
+        const nome = `${p.handle}-${codigoDoPost(p.permalink) ?? p.id}.${mime === "image/png" ? "png" : "jpg"}`;
         const path = `agenda/${epId}/materiais/news-${nome}`;
         const { error } = await db().storage.from(BUCKET).upload(path, buf, { contentType: mime, upsert: true });
         if (error) continue;
