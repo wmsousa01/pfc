@@ -23,12 +23,14 @@ const BUDGET_MS = 150_000;
 
 /**
  * Ritmo do Instagram, bem abaixo do teto da API (100/24h) para a conta não
- * parecer robô: no máximo 4 por 24h, 2h30 entre um e outro, horário com folga
- * aleatória. Vale para todo Reel, de teste ou não.
+ * parecer robô: no máximo 12 por 24h, 1h30 entre um e outro, horário com folga
+ * aleatória. Vale para todo Reel, de teste ou não. O Instagram não documenta
+ * limite próprio para reel de teste; os relatos (nov/2026) falam em ~20–25 por
+ * dia e bloqueio de 30 dias de quem passa, então 12 deixa folga.
  */
-export const IG_DAILY_MAX = 4;
-const IG_GAP_MS = 150 * 60_000;
-const IG_JITTER_MS = 20 * 60_000;
+export const IG_DAILY_MAX = 12;
+const IG_GAP_MS = 90 * 60_000;
+const IG_JITTER_MS = 15 * 60_000;
 /** Uso da API (inclui outras ferramentas) a partir do qual a fila para. */
 const IG_API_STOP = 25;
 

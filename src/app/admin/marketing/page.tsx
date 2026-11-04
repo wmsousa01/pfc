@@ -484,7 +484,7 @@ export default async function MarketingPage({
                     </label>
                     <label className="text-xs text-white/50">
                       A cada (horas)
-                      <input type="number" name="interval" defaultValue={6} min={1} max={168} className={`${input} block mt-1 w-24`} />
+                      <input type="number" name="interval" defaultValue={2} min={1} max={168} className={`${input} block mt-1 w-24`} />
                     </label>
                   </ProducaoForm>
                 </div>
