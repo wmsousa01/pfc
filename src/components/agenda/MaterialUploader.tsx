@@ -17,22 +17,28 @@ export default function MaterialUploader({
   pedir,
   registrar,
   tipos,
+  tipoInicial,
   alvos,
+  blocos,
   inputCls,
   buttonCls,
 }: {
   pedir: (nome: string, mime: string, tamanho: number) => Promise<Upload>;
-  registrar: (path: string, nome: string, mime: string, tipo: string, alvo: string | null) => Promise<ActionState>;
+  registrar: (path: string, nome: string, mime: string, tipo: string, alvo: string | null, bloco: number | null) => Promise<ActionState>;
   tipos: Opcao[];
+  tipoInicial?: string;
   /** De quem é o arquivo (admin): convidado ou apresentador. */
   alvos?: Opcao[];
+  /** Em que bloco do espelho da transmissão o arquivo entra (admin). */
+  blocos?: Opcao[];
   inputCls: string;
   buttonCls: string;
 }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [tipo, setTipo] = useState(tipos[0]?.value ?? "foto");
+  const [tipo, setTipo] = useState(tipoInicial ?? tipos[0]?.value ?? "foto");
   const [alvo, setAlvo] = useState(alvos?.[0]?.value ?? "");
+  const [bloco, setBloco] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -55,7 +61,7 @@ export default function MaterialUploader({
         if (!p.ok) throw new Error(`${f.name}: ${p.error}`);
         const { error } = await supabase.storage.from("producao").uploadToSignedUrl(p.path, p.token, f, { contentType: mime });
         if (error) throw new Error(`${f.name}: ${error.message}`);
-        const r = await registrar(p.path, f.name, mime, tipo, alvo || null);
+        const r = await registrar(p.path, f.name, mime, tipo, alvo || null, bloco === "" ? null : Number(bloco));
         if (!r.ok) throw new Error(`${f.name}: ${r.error}`);
         feitos++;
       }
@@ -81,6 +87,14 @@ export default function MaterialUploader({
         {alvos && alvos.length > 0 && (
           <select value={alvo} onChange={(e) => setAlvo(e.target.value)} className={inputCls}>
             {alvos.map((t) => (
+              <option key={t.value} value={t.value}>{t.label}</option>
+            ))}
+          </select>
+        )}
+        {blocos && blocos.length > 0 && (
+          <select value={bloco} onChange={(e) => setBloco(e.target.value)} className={inputCls}>
+            <option value="">Fora do espelho</option>
+            {blocos.map((t) => (
               <option key={t.value} value={t.value}>{t.label}</option>
             ))}
           </select>

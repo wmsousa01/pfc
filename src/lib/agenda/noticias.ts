@@ -1,9 +1,10 @@
 import "server-only";
 import { TEXT_MODEL, generate } from "@/lib/producao/gemini";
-import { getConfig } from "@/lib/producao/store";
+import { BUCKET, getConfig } from "@/lib/producao/store";
 import { MetaError, igBusinessMedia, type IgPostPublico } from "@/lib/social/meta";
 import { activeConnection } from "@/lib/social/store";
-import { cleanInstagram, getEpisodio, logAgenda, quandoLongo, updateEpisodio, type Briefing } from "./store";
+import { blocosDoEspelho } from "./espelho";
+import { cleanInstagram, db, getEpisodio, logAgenda, quandoLongo, updateEpisodio, type Briefing } from "./store";
 
 /**
  * Pauta do PFC News a partir do que os perfis de notícia da região postaram
@@ -163,7 +164,58 @@ Não copie as legendas: reescreva com as suas palavras.`;
     noticias,
   };
   await updateEpisodio(ep.id, { briefing, tema: ep.tema || (r.tema ?? "").trim() || null, ig_legenda: briefing.legenda_ig });
-  await logAgenda(ep.id, actor, "gerou a pauta com as notícias do Instagram", `${posts.length} posts, ${noticias.length} notícias`);
+  const fotos = await fotosDasNoticias(ep.id, briefing, posts);
+  await logAgenda(ep.id, actor, "gerou a pauta com as notícias do Instagram", `${posts.length} posts, ${noticias.length} notícias, ${fotos} fotos no espelho`);
   if (erros.length) await logAgenda(ep.id, actor, "não conseguiu ler fontes", erros.join(" · "));
   return { usadas: noticias.length, erros };
+}
+
+/** Quem "enviou" as fotos que vêm dos posts: é por ele que a pauta seguinte apaga as da anterior. */
+const AUTOR_FOTOS = "pauta-news";
+
+/**
+ * A foto do post de origem de cada notícia vai para o bloco dela no
+ * espelho da transmissão, para a equipe técnica ter a imagem na hora sem
+ * caçar no Instagram. A URL da Meta é temporária: a foto é copiada para o
+ * Storage. Foto que não baixa só fica de fora.
+ */
+async function fotosDasNoticias(epId: string, b: Briefing, posts: PostFonte[]): Promise<number> {
+  const { data: velhas } = await db().from("agenda_materiais").delete().eq("episodio_id", epId).eq("enviado_por", AUTOR_FOTOS).select("path");
+  if (velhas?.length) await db().storage.from(BUCKET).remove(velhas.map((v) => v.path as string));
+
+  const porUrl = new Map(posts.map((p) => [p.permalink, p]));
+  let n = 0;
+  const blocos = blocosDoEspelho(b);
+  for (let bloco = 0; bloco < blocos.length; bloco++) {
+    const x = blocos[bloco];
+    // Até duas fotos por notícia, de perfis diferentes quando houver.
+    const fontes = (x.noticia?.fontes ?? []).map((f) => porUrl.get(f.url)).filter((p): p is PostFonte => !!p?.imageUrl);
+    for (const p of fontes.slice(0, 2)) {
+      try {
+        const r = await fetch(p.imageUrl!);
+        const mime = r.headers.get("content-type")?.split(";")[0] ?? "";
+        if (!r.ok || !mime.startsWith("image/")) continue;
+        const buf = Buffer.from(await r.arrayBuffer());
+        const nome = `${p.handle}-${p.id}.${mime === "image/png" ? "png" : "jpg"}`;
+        const path = `agenda/${epId}/materiais/news-${nome}`;
+        const { error } = await db().storage.from(BUCKET).upload(path, buf, { contentType: mime, upsert: true });
+        if (error) continue;
+        await db().from("agenda_materiais").insert({
+          episodio_id: epId,
+          tipo: "outro",
+          path,
+          nome: `@${nome}`,
+          mime,
+          tamanho: buf.length,
+          usar_na_arte: false,
+          bloco,
+          enviado_por: AUTOR_FOTOS,
+        });
+        n++;
+      } catch {
+        // Sem a foto, a notícia continua no espelho com o link do post.
+      }
+    }
+  }
+  return n;
 }
