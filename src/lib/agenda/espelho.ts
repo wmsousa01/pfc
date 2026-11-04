@@ -2,6 +2,7 @@ import "server-only";
 import { createHash } from "crypto";
 import { site } from "@/lib/config";
 import { BUCKET } from "@/lib/producao/store";
+import { casarNoticias } from "./casar-noticias";
 import { db, getEpisodio, logAgenda, materiaisDe, newToken, type Briefing, type Episodio, type Material } from "./store";
 
 /**
@@ -18,35 +19,23 @@ export type BlocoEspelho = {
   /** Abertura: o texto corrido do resumo. */
   texto: string | null;
   pontos: string[];
-  /** PFC News: a notícia do bloco, com as fontes para o crédito do GC. */
-  noticia: Noticia | null;
+  /** PFC News: as notícias do bloco, com as fontes para o crédito do GC. */
+  noticias: Noticia[];
 };
 
-const norm = (s: string) =>
-  s
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-
 /**
- * Abertura (o resumo) e depois um bloco por item da pauta. No PFC News a
- * pauta sai com um bloco por notícia, na mesma ordem, e um de fechamento:
- * a notícia vem pelo título e, se a equipe mudou o título, pela posição.
+ * Abertura (o resumo) e depois um bloco por item da pauta. No PFC News cada
+ * notícia vai para o bloco que fala dela (ver casarNoticias); a que não
+ * casou com nenhum fica na abertura, para não sumir do GC.
  */
 export function blocosDoEspelho(b: Briefing | null): BlocoEspelho[] {
   if (!b) return [];
   const noticias = b.noticias ?? [];
-  const alinhado = b.pauta.length === noticias.length + 1;
+  const onde = casarNoticias(b.pauta, noticias);
+  const doBloco = (i: number) => noticias.filter((_, k) => onde[k] === i);
   return [
-    { titulo: "Abertura", texto: b.resumo || null, pontos: [], noticia: null },
-    ...b.pauta.map((p, i) => ({
-      titulo: p.bloco,
-      texto: null,
-      pontos: p.perguntas,
-      noticia: noticias.find((n) => norm(n.titulo) === norm(p.bloco)) ?? (alinhado ? noticias[i] ?? null : null),
-    })),
+    { titulo: "Abertura", texto: b.resumo || null, pontos: [], noticias: doBloco(-1) },
+    ...b.pauta.map((p, i) => ({ titulo: p.bloco, texto: null, pontos: p.perguntas, noticias: doBloco(i) })),
   ];
 }
 

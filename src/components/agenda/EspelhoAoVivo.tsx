@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import CopyButton from "@/components/CopyButton";
 
 type Noticia = { titulo: string; resumo: string; fontes: { handle: string; url: string; data: string }[] };
-type Bloco = { titulo: string; texto: string | null; pontos: string[]; noticia: Noticia | null };
+type Bloco = { titulo: string; texto: string | null; pontos: string[]; noticias: Noticia[] };
 type Imagem = { id: string; nome: string; mime: string; bloco: number };
 
 const POLL_MS = 3000;
@@ -262,9 +262,30 @@ export default function EspelhoAoVivo({
                 </div>
 
                 {b.texto && <p className="mt-3 text-lg leading-relaxed text-white/85 whitespace-pre-line">{b.texto}</p>}
-                {b.noticia && <p className="mt-3 text-base leading-relaxed text-white/70">{b.noticia.resumo}</p>}
+                {b.noticias.map((n, k) => (
+                  <div key={k} className="mt-4">
+                    {b.noticias.length > 1 && <p className="text-base font-bold text-white/90">{n.titulo}</p>}
+                    <p className="text-base leading-relaxed text-white/70">{n.resumo}</p>
+                    <div className="mt-2 rounded-xl border border-[#2a2a2a] bg-black/40 p-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+                      <span className="text-[11px] font-black text-white/40">GC</span>
+                      <span className="font-bold uppercase">{n.titulo}</span>
+                      <CopyButton value={n.titulo.toUpperCase()} label="copiar" className="text-xs text-white/50 hover:text-white" />
+                      {n.fontes.length > 0 && (
+                        <>
+                          <span className="text-white/60">Fonte: {fontes(n)}</span>
+                          <CopyButton value={`Fonte: ${fontes(n)}`} label="copiar" className="text-xs text-white/50 hover:text-white" />
+                          <span className="flex gap-2">
+                            {n.fontes.map((f) => (
+                              <a key={f.url} href={f.url} target="_blank" rel="noreferrer" className="text-xs text-gold-400 hover:underline">post ↗</a>
+                            ))}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
                 {b.pontos.length > 0 && (
-                  <ul className="mt-3 space-y-1.5 text-lg text-white/90">
+                  <ul className="mt-4 space-y-1.5 text-lg text-white/90">
                     {b.pontos.map((p, j) => (
                       <li key={j} className="flex gap-2">
                         <span className="text-gold-400">•</span>
@@ -272,25 +293,6 @@ export default function EspelhoAoVivo({
                       </li>
                     ))}
                   </ul>
-                )}
-
-                {b.noticia && (
-                  <div className="mt-4 rounded-xl border border-[#2a2a2a] bg-black/40 p-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-                    <span className="text-[11px] font-black text-white/40">GC</span>
-                    <span className="font-bold uppercase">{b.noticia.titulo}</span>
-                    <CopyButton value={b.noticia.titulo.toUpperCase()} label="copiar" className="text-xs text-white/50 hover:text-white" />
-                    {b.noticia.fontes.length > 0 && (
-                      <>
-                        <span className="text-white/60">Fonte: {fontes(b.noticia)}</span>
-                        <CopyButton value={`Fonte: ${fontes(b.noticia)}`} label="copiar" className="text-xs text-white/50 hover:text-white" />
-                        <span className="flex gap-2">
-                          {b.noticia.fontes.map((f) => (
-                            <a key={f.url} href={f.url} target="_blank" rel="noreferrer" className="text-xs text-gold-400 hover:underline">post ↗</a>
-                          ))}
-                        </span>
-                      </>
-                    )}
-                  </div>
                 )}
 
                 {noAr && fotos.length > 0 && (

@@ -188,9 +188,15 @@ async function fotosDasNoticias(epId: string, b: Briefing, posts: PostFonte[]): 
   const blocos = blocosDoEspelho(b);
   for (let bloco = 0; bloco < blocos.length; bloco++) {
     const x = blocos[bloco];
-    // Até duas fotos por notícia, de perfis diferentes quando houver.
-    const fontes = (x.noticia?.fontes ?? []).map((f) => porUrl.get(f.url)).filter((p): p is PostFonte => !!p?.imageUrl);
-    for (const p of fontes.slice(0, 2)) {
+    // Até duas fotos por notícia; bloco que junta várias notícias fica com uma de cada.
+    const porNoticia = x.noticias.length > 1 ? 1 : 2;
+    const fontes = x.noticias.flatMap((n) =>
+      n.fontes
+        .map((f) => porUrl.get(f.url))
+        .filter((p): p is PostFonte => !!p?.imageUrl)
+        .slice(0, porNoticia)
+    );
+    for (const p of fontes) {
       try {
         const r = await fetch(p.imageUrl!);
         const mime = r.headers.get("content-type")?.split(";")[0] ?? "";
