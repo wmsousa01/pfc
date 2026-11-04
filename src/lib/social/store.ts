@@ -54,6 +54,10 @@ export type SocialPost = {
   metrics_at: string | null;
   /** A equipe promoveu o teste para os seguidores (no app). */
   graduated_at: string | null;
+  /** Perfis convidados para o collab (sem @). */
+  collaborators: string[];
+  /** A Meta recusou collab no reel de teste: saiu sem o convite. */
+  collab_dropped: boolean;
   created_at: string;
   updated_at: string;
 };

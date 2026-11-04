@@ -142,7 +142,8 @@ export async function igCreateReel(
   token: string,
   videoUrl: string,
   caption: string,
-  trial = false
+  trial = false,
+  collaborators: string[] = []
 ): Promise<string> {
   const r = await graph<{ id: string }>(
     `/${igId}/media`,
@@ -151,6 +152,8 @@ export async function igCreateReel(
       video_url: videoUrl,
       caption: caption.slice(0, 2200),
       ...(trial ? { trial_params: JSON.stringify({ graduation_strategy: "MANUAL" }) } : { share_to_feed: "true" }),
+      // Convite de collab (até 3): o perfil aceita no app e o Reel aparece nos dois.
+      ...(collaborators.length ? { collaborators: JSON.stringify(collaborators.slice(0, 3)) } : {}),
       access_token: token,
     },
     "POST"
