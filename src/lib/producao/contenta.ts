@@ -22,9 +22,26 @@ export type ContentaJob = {
 
 export type CutMode = "shorts" | "long";
 
-export const MODES: Record<CutMode, { label: string; cutMode: string; outputFormat: string; subtitles?: boolean }> = {
-  shorts: { label: "Shorts 9:16", cutMode: "shorts", outputFormat: "portrait", subtitles: true },
-  long: { label: "Longos 16:9", cutMode: "long", outputFormat: "landscape" },
+/** Opções de edição do Contenta. Remover pausas e b-roll só existem no 9:16 (o worker ignora no 16:9). */
+type EditOptions = { coldOpen?: boolean; removePauses?: boolean; broll?: boolean; audioPolish?: boolean };
+
+export const MODES: Record<
+  CutMode,
+  { label: string; cutMode: string; outputFormat: string; subtitles?: boolean } & EditOptions
+> = {
+  // Gancho no início, sem pausas, b-roll e áudio tratado.
+  shorts: {
+    label: "Shorts 9:16",
+    cutMode: "shorts",
+    outputFormat: "portrait",
+    subtitles: true,
+    coldOpen: true,
+    removePauses: true,
+    broll: true,
+    audioPolish: true,
+  },
+  // Gancho no início (trailer com as falas mais fortes antes do corte).
+  long: { label: "Longos 16:9", cutMode: "long", outputFormat: "landscape", coldOpen: true },
 };
 
 /** Run que terminou sem entregar o meta.json — o job morreu. */
@@ -83,6 +100,10 @@ export async function startCuts(youtubeId: string, jobId: string, mode: CutMode)
       cutMode: m.cutMode,
       outputFormat: m.outputFormat,
       subtitles: m.subtitles,
+      coldOpen: m.coldOpen,
+      removePauses: m.removePauses,
+      broll: m.broll,
+      audioPolish: m.audioPolish,
     }),
   });
   return r.runId;
