@@ -47,6 +47,18 @@ export type Slot = {
 
 export type Bloqueio = { id: number; data: string; quadro: string | null; motivo: string | null };
 
+/** Gravação fora do horário fixo numa data só (mudança de dia ou segunda vez na semana). */
+export type Avulso = {
+  id: number;
+  quadro: string;
+  data: string;
+  hora: string;
+  duracao_min: number;
+  motivo: string | null;
+  /** Bloqueio da data original, quando o avulso substitui o horário fixo. */
+  bloqueio_id: number | null;
+};
+
 export type Episodio = {
   id: string;
   quadro: string;
@@ -258,23 +270,39 @@ export async function listSlots(quadro?: QuadroId): Promise<Slot[]> {
   return (data ?? []) as Slot[];
 }
 
-/** Quadros que aceitam auto-agendamento (têm horário fixo ativo). */
+/** Avulsos de hoje em diante, em ordem de data. */
+export async function listAvulsos(quadro?: QuadroId): Promise<Avulso[]> {
+  let q = db()
+    .from("agenda_avulsos")
+    .select("*")
+    .gte("data", brtDate(new Date()))
+    .order("data")
+    .order("hora");
+  if (quadro) q = q.eq("quadro", quadro);
+  const { data } = await q;
+  return (data ?? []) as Avulso[];
+}
+
+/** Quadros que aceitam auto-agendamento (têm horário fixo ativo ou avulso pela frente). */
 export async function quadrosAbertos(): Promise<QuadroId[]> {
-  const slots = (await listSlots()).filter((s) => s.ativo);
-  return Array.from(new Set(slots.map((s) => s.quadro))).filter(isQuadroId);
+  const [slots, avulsos] = await Promise.all([listSlots(), listAvulsos()]);
+  const quadros = [...slots.filter((s) => s.ativo).map((s) => s.quadro), ...avulsos.map((a) => a.quadro)];
+  return Array.from(new Set(quadros)).filter(isQuadroId);
 }
 
 export type Vaga = { inicio: string; duracao_min: number };
 
 /**
  * Horários livres do quadro: as datas dos horários fixos dentro da janela,
- * tirando bloqueios e o que já tem episódio (pedido ou confirmado).
+ * tirando bloqueios, mais os avulsos (que valem mesmo em data bloqueada,
+ * porque foram abertos à mão), tirando o que já tem episódio.
  */
 export async function vagasLivres(quadro: QuadroId): Promise<Vaga[]> {
-  const slots = (await listSlots(quadro)).filter((s) => s.ativo);
-  if (slots.length === 0) return [];
+  const [todos, avulsos] = await Promise.all([listSlots(quadro), listAvulsos(quadro)]);
+  const slots = todos.filter((s) => s.ativo);
+  if (slots.length === 0 && avulsos.length === 0) return [];
   const hoje = brtDate(new Date());
-  const ate = addDays(hoje, Math.max(...slots.map((s) => s.janela_dias)));
+  const ate = addDays(hoje, Math.max(0, ...slots.map((s) => s.janela_dias)));
 
   const [{ data: bloq }, { data: ocupados }] = await Promise.all([
     db().from("agenda_bloqueios").select("data, quadro").gte("data", hoje).lte("data", ate),
@@ -285,6 +313,7 @@ export async function vagasLivres(quadro: QuadroId): Promise<Vaga[]> {
       .neq("status", "cancelado")
       .gte("inicio", new Date().toISOString()),
   ]);
+  const agora = Date.now();
   const bloqueado = new Set(
     (bloq ?? []).filter((b) => !b.quadro || b.quadro === quadro).map((b) => b.data as string)
   );
@@ -299,6 +328,12 @@ export async function vagasLivres(quadro: QuadroId): Promise<Vaga[]> {
       if (ocupado.has(inicio.getTime())) continue;
       out.push({ inicio: inicio.toISOString(), duracao_min: s.duracao_min });
     }
+  }
+  for (const a of avulsos) {
+    const inicio = brt(a.data, a.hora);
+    if (inicio.getTime() <= agora || ocupado.has(inicio.getTime())) continue;
+    if (out.some((v) => v.inicio === inicio.toISOString())) continue;
+    out.push({ inicio: inicio.toISOString(), duracao_min: a.duracao_min });
   }
   return out.sort((a, b) => a.inicio.localeCompare(b.inicio));
 }

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { WEEKDAYS, listSlots, quadrosAbertos } from "@/lib/agenda/store";
+import { WEEKDAYS, brt, listAvulsos, listSlots, quadrosAbertos, quandoLongo } from "@/lib/agenda/store";
 import { QUADROS } from "@/lib/producao/quadros";
 
 export const metadata: Metadata = {
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 /** Entrada do link público: o convidado escolhe o quadro e segue para os horários. */
 export default async function ConvidadoPage() {
-  const [quadros, slots] = await Promise.all([quadrosAbertos(), listSlots()]);
+  const [quadros, slots, avulsos] = await Promise.all([quadrosAbertos(), listSlots(), listAvulsos()]);
 
   return (
     <>
@@ -38,6 +38,11 @@ export default async function ConvidadoPage() {
                 const dias = slots
                   .filter((s) => s.quadro === q && s.ativo)
                   .map((s) => `${WEEKDAYS[s.weekday]}s, ${s.hora.replace(":00", "h")}`);
+                const extras = avulsos
+                  .filter((a) => a.quadro === q && brt(a.data, a.hora).getTime() > Date.now())
+                  .slice(0, 2)
+                  .map((a) => quandoLongo(brt(a.data, a.hora).toISOString()));
+                if (extras.length) dias.push(`também ${extras.join(" e ")}`);
                 return (
                   <a
                     key={q}
