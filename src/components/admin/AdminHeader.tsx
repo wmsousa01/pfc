@@ -17,7 +17,7 @@ const NAV = [
 export default function AdminHeader() {
   return (
     <header className="border-b border-[#1a1a1a] bg-[#0d0d0d] sticky top-0 z-40">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
         <a href="/admin" className="flex items-center gap-2.5 shrink-0">
           <div className="flex items-center justify-center w-8 h-8 bg-gold-500 rounded-lg">
             <MicIcon className="w-4 h-4 text-black" />
