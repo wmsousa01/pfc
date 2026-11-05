@@ -5,7 +5,7 @@ import { YT_STREAM_KEY } from "@/lib/agenda/fluxo";
 import { fontesNews } from "@/lib/agenda/noticias";
 import { pastaDrive } from "@/lib/agenda/video";
 import { calendarAccount, calendarId, equipeEmails } from "@/lib/agenda/gcal";
-import { WEEKDAYS, db, listSlots, type Apresentador, type Bloqueio } from "@/lib/agenda/store";
+import { WEEKDAYS, brt, db, listAvulsos, listSlots, quandoLongo, type Apresentador, type Bloqueio } from "@/lib/agenda/store";
 import { QUADROS, QUADRO_IDS, isQuadroId } from "@/lib/producao/quadros";
 import { getConfig, signedUrls } from "@/lib/producao/store";
 import { connectedChannel, isYouTubeOAuthConfigured, listLiveStreams } from "@/lib/producao/youtube-api";
@@ -14,6 +14,8 @@ import {
   apresentadorEditarAction,
   apresentadorRemoverAction,
   apresentadorToggleAction,
+  avulsoAction,
+  avulsoRemoverAction,
   bloqueioAction,
   bloqueioRemoverAction,
   gcalConfigAction,
@@ -46,7 +48,7 @@ export default async function AgendaConfigPage({ searchParams }: { searchParams:
     getConfig(YT_STREAM_KEY),
     db().from("agenda_apresentadores").select("*").order("quadro").order("ordem").order("created_at"),
   ]);
-  const [pasta, fontes] = await Promise.all([pastaDrive(), fontesNews()]);
+  const [pasta, fontes, avulsos] = await Promise.all([pastaDrive(), fontesNews(), listAvulsos()]);
   const hosts = (hostRows ?? []) as Apresentador[];
   const fotos = await signedUrls(hosts.map((h) => h.foto_path).filter((p): p is string => !!p));
   const bloqueios = (bloqRows ?? []) as Bloqueio[];
@@ -108,6 +110,56 @@ export default async function AgendaConfigPage({ searchParams }: { searchParams:
             <input type="number" name="antecedencia" defaultValue={2} min={0} className={`${input} w-16`} title="Antecedência mínima (dias)" />
             <input type="number" name="janela" defaultValue={42} min={7} className={`${input} w-16`} title="Janela (dias)" />
           </ProducaoForm>
+
+          <div className="mt-6 pt-5 border-t border-[#222]">
+            <h3 className="text-white text-sm font-semibold">Mudanças pontuais</h3>
+            <p className="text-white/40 text-xs mt-1">
+              O quadro mudou de dia numa semana ou vai gravar duas vezes: abra um horário avulso. Preenchendo “no lugar
+              de”, o horário fixo dessa data sai do link (só dá se ninguém estiver marcado nela). Remover o avulso volta
+              tudo como era.
+            </p>
+            <div className="mt-3 space-y-1.5">
+              {avulsos.map((a) => (
+                <div key={a.id} className="flex flex-wrap items-center gap-3 text-sm text-white/80">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: isQuadroId(a.quadro) ? QUADROS[a.quadro].accent[1] : "#666" }} />
+                  <span className="w-36">{isQuadroId(a.quadro) ? QUADROS[a.quadro].name : a.quadro}</span>
+                  <span>{quandoLongo(brt(a.data, a.hora).toISOString())}</span>
+                  <span className="text-white/40 text-xs">
+                    {a.duracao_min} min · {a.bloqueio_id ? "mudança de dia" : "extra"}
+                    {a.motivo ? ` · ${a.motivo}` : ""}
+                  </span>
+                  <form action={avulsoRemoverAction}>
+                    <input type="hidden" name="avulso" value={a.id} />
+                    <button className="text-xs text-white/30 hover:text-red-400">Remover</button>
+                  </form>
+                </div>
+              ))}
+              {avulsos.length === 0 && <p className="text-white/30 text-xs">Nenhum horário avulso pela frente.</p>}
+            </div>
+            <ProducaoForm action={avulsoAction} label="Adicionar avulso" pending="Salvando..." className="mt-3 flex flex-wrap items-end gap-2" buttonClassName={btn2}>
+              <select name="quadro" required defaultValue="" className={input}>
+                <option value="" disabled>Quadro</option>
+                {QUADRO_IDS.map((q) => <option key={q} value={q}>{QUADROS[q].name}</option>)}
+              </select>
+              <label className="text-white/40 text-[11px] flex flex-col gap-1">
+                Data
+                <input type="date" name="data" required min={hoje} className={input} />
+              </label>
+              <label className="text-white/40 text-[11px] flex flex-col gap-1">
+                Hora
+                <input type="time" name="hora" required defaultValue="19:00" className={input} />
+              </label>
+              <label className="text-white/40 text-[11px] flex flex-col gap-1">
+                Min
+                <input type="number" name="duracao" defaultValue={90} min={15} step={15} className={`${input} w-20`} />
+              </label>
+              <label className="text-white/40 text-[11px] flex flex-col gap-1">
+                No lugar de (opcional)
+                <input type="date" name="original" min={hoje} className={input} />
+              </label>
+              <input name="motivo" placeholder="Motivo" className={`${input} w-40`} />
+            </ProducaoForm>
+          </div>
         </section>
 
         <section className={card}>

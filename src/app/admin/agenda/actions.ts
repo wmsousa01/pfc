@@ -340,6 +340,76 @@ export async function bloqueioAction(_prev: ActionState, form: FormData): Promis
   });
 }
 
+/**
+ * Horário avulso: o quadro grava numa data fora do fixo. Com "no lugar de",
+ * é mudança de dia: a data original fica bloqueada para o quadro, desde que
+ * ninguém esteja marcado nela (senão o convidado ficaria sem aviso).
+ */
+export async function avulsoAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  return run(async () => {
+    const quadro = str(form, "quadro");
+    if (!isQuadroId(quadro)) throw new Error("Escolha o quadro.");
+    const data = str(form, "data");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) throw new Error("Data inválida.");
+    const hora = str(form, "hora");
+    if (!/^\d{2}:\d{2}$/.test(hora)) throw new Error("Hora inválida.");
+    if (brt(data, hora).getTime() <= Date.now()) throw new Error("Esse horário já passou.");
+    const original = str(form, "original");
+    if (original && !/^\d{4}-\d{2}-\d{2}$/.test(original)) throw new Error("Data original inválida.");
+    if (original === data) throw new Error("A data original é a mesma do avulso.");
+    const motivo = opt(form, "motivo");
+    const fmt = (d: string) => d.split("-").reverse().slice(0, 2).join("/");
+
+    let bloqueioId: number | null = null;
+    if (original) {
+      const { data: marcados } = await db()
+        .from("agenda_episodios")
+        .select("id, inicio")
+        .eq("quadro", quadro)
+        .neq("status", "cancelado")
+        .gte("inicio", brt(original, "00:00").toISOString())
+        .lt("inicio", brt(original, "23:59").toISOString());
+      if (marcados?.length) {
+        throw new Error(
+          `Já tem episódio marcado em ${fmt(original)}. Remarque ou cancele o episódio antes de mudar o dia.`
+        );
+      }
+      const { data: bl, error } = await db()
+        .from("agenda_bloqueios")
+        .insert({ data: original, quadro, motivo: `mudou para ${fmt(data)}${motivo ? ` · ${motivo}` : ""}` })
+        .select("id")
+        .single();
+      if (error) throw new Error(error.message);
+      bloqueioId = bl.id as number;
+    }
+
+    const { error } = await db()
+      .from("agenda_avulsos")
+      .insert({
+        quadro,
+        data,
+        hora,
+        duracao_min: Math.max(15, Number(str(form, "duracao")) || 90),
+        motivo,
+        bloqueio_id: bloqueioId,
+      });
+    if (error) {
+      if (bloqueioId) await db().from("agenda_bloqueios").delete().eq("id", bloqueioId);
+      throw new Error(error.code === "23505" ? "Esse horário avulso já existe." : error.message);
+    }
+  });
+}
+
+/** Remove o avulso e, se era mudança de dia, libera a data original. */
+export async function avulsoRemoverAction(form: FormData): Promise<void> {
+  await requireAdmin();
+  const id = Number(str(form, "avulso"));
+  const { data: av } = await db().from("agenda_avulsos").select("bloqueio_id").eq("id", id).maybeSingle();
+  await db().from("agenda_avulsos").delete().eq("id", id);
+  if (av?.bloqueio_id) await db().from("agenda_bloqueios").delete().eq("id", av.bloqueio_id);
+  refresh();
+}
+
 export async function bloqueioRemoverAction(form: FormData): Promise<void> {
   await requireAdmin();
   await db().from("agenda_bloqueios").delete().eq("id", Number(str(form, "bloqueio")));
