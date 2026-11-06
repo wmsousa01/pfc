@@ -300,9 +300,9 @@ export async function escolherContaGoogleAction(form: FormData): Promise<void> {
   await requireAdmin();
   let destino: string;
   try {
-    destino = `${BASE}?ok=${encodeURIComponent(`Google Ads conectado: ${await escolherConta(str(form, "conta"))}`)}`;
+    destino = `${BASE}?view=contas&ok=${encodeURIComponent(`Google Ads conectado: ${await escolherConta(str(form, "conta"))}`)}`;
   } catch (e) {
-    destino = `${BASE}?erro=${encodeURIComponent(e instanceof Error ? e.message : String(e))}`;
+    destino = `${BASE}?view=contas&erro=${encodeURIComponent(e instanceof Error ? e.message : String(e))}`;
   }
   refresh();
   redirect(destino);

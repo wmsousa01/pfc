@@ -191,3 +191,41 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #FFD700;
 }
+
+/* ---- Admin: menu lateral (AdminSidebar) ---- */
+:root {
+  --admin-side-w: 248px;
+}
+html[data-admin-side="mini"] {
+  --admin-side-w: 64px;
+}
+@media (min-width: 1024px) {
+  /* O conteúdo das páginas do admin começa depois do menu fixo. */
+  body:has(#admin-side) {
+    padding-left: var(--admin-side-w);
+  }
+}
+#admin-side .admin-side-mini-only {
+  display: none;
+}
+html[data-admin-side="mini"] #admin-side .admin-side-label {
+  display: none;
+}
+html[data-admin-side="mini"] #admin-side .admin-side-mini-only {
+  display: inline;
+}
+html[data-admin-side="mini"] #admin-side .admin-side-top {
+  flex-direction: column;
+  gap: 10px;
+}
+html[data-admin-side="mini"] #admin-side .admin-side-item {
+  justify-content: center;
+  padding: 0;
+}
+html[data-admin-side="mini"] #admin-side .admin-side-count {
+  position: absolute;
+  top: 0;
+  right: 2px;
+  min-width: 0;
+  padding: 0 4px;
+}

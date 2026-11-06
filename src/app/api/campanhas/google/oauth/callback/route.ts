@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   await requireAdmin();
-  const back = new URL("/admin/campanhas", req.nextUrl.origin);
+  const back = new URL("/admin/campanhas?view=contas", req.nextUrl.origin);
   const code = req.nextUrl.searchParams.get("code");
   const state = req.nextUrl.searchParams.get("state");
 

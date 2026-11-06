@@ -1,5 +1,6 @@
 import AdminHeader from "@/components/admin/AdminHeader";
-import { AnaliseView, Miniatura, Nota, SubNav, btnPri, btnSec, card, input } from "@/components/admin/Campanhas";
+import { AnaliseView, Miniatura, Nota, abasCampanhas, btnPri, btnSec, card, input } from "@/components/admin/Campanhas";
+import { EspacoHeader } from "@/components/admin/Espaco";
 import ProducaoForm from "@/components/admin/ProducaoForm";
 import MaterialUploader from "@/components/agenda/MaterialUploader";
 import { requireAdmin } from "@/lib/auth";
@@ -112,11 +113,10 @@ export default async function CriativosPage({ searchParams }: { searchParams: { 
   return (
     <div className="min-h-screen bg-[#0a0a0a] pb-20">
       <AdminHeader />
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 space-y-8">
         <div>
-          <SubNav atual="criativos" />
-          <h1 className="text-2xl font-bold text-white">Biblioteca de criativos</h1>
-          <p className="text-white/40 text-sm mt-1">
+          <EspacoHeader area="Campanhas" titulo="Biblioteca de criativos" abas={abasCampanhas("criativos")} />
+          <p className="text-white/40 text-sm mt-4">
             As peças gravadas e editadas, de onde estiverem. Daqui elas são analisadas pela IA e entregues às estratégias.
           </p>
         </div>

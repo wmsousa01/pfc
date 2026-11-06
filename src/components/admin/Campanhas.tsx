@@ -1,4 +1,5 @@
 import type { Analise, Criativo, EntregaStatus, EstrategiaStatus, Metricas } from "@/lib/campanhas/store";
+import type { Aba } from "@/components/admin/Espaco";
 
 export const STATUS_ESTRATEGIA: Record<EstrategiaStatus, { label: string; cls: string }> = {
   rascunho: { label: "Rascunho", cls: "bg-white/5 border-white/10 text-white/50" },
@@ -146,12 +147,32 @@ export function Flash({ ok, erro }: { ok?: string; erro?: string }) {
   );
 }
 
-export function SubNav({ atual }: { atual: "estrategias" | "criativos" }) {
-  const cls = (on: boolean) => `text-sm px-3 py-1.5 rounded-lg ${on ? "bg-gold-500/10 text-gold-400 border border-gold-500/30" : "text-white/50 hover:text-white border border-transparent"}`;
+export type AbaCampanhas = "estrategias" | "criativos" | "gerenciadores" | "contas";
+
+/** Abas da área de Campanhas, as mesmas em todas as páginas dela. */
+export function abasCampanhas(atual: AbaCampanhas, alertaContas = false): Aba[] {
+  return [
+    { href: "/admin/campanhas", label: "Estratégias", ativa: atual === "estrategias" },
+    { href: "/admin/campanhas/criativos", label: "Biblioteca de criativos", ativa: atual === "criativos" },
+    { href: "/admin/campanhas?view=gerenciadores", label: "Nos gerenciadores", ativa: atual === "gerenciadores" },
+    { href: "/admin/campanhas?view=contas", label: "Contas", ativa: atual === "contas", alerta: alertaContas },
+  ];
+}
+
+export function SubNav({ atual }: { atual: AbaCampanhas }) {
   return (
-    <div className="flex gap-2 mb-6">
-      <a href="/admin/campanhas" className={cls(atual === "estrategias")}>Estratégias e contas</a>
-      <a href="/admin/campanhas/criativos" className={cls(atual === "criativos")}>Biblioteca de criativos</a>
-    </div>
+    <nav className="flex gap-1 mb-6 border-b border-[#1f1f1f] overflow-x-auto">
+      {abasCampanhas(atual).map((t) => (
+        <a
+          key={t.href}
+          href={t.href}
+          className={`px-3 py-2 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors ${
+            t.ativa ? "border-gold-500 text-gold-400" : "border-transparent text-white/55 hover:text-white hover:border-white/20"
+          }`}
+        >
+          {t.label}
+        </a>
+      ))}
+    </nav>
   );
 }
