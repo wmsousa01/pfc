@@ -85,7 +85,7 @@ export default async function CampanhasPage({ searchParams }: { searchParams: { 
   return (
     <div className="min-h-screen bg-[#0a0a0a] pb-20">
       <AdminHeader />
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 pt-6">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 pt-4 sm:pt-6">
         <EspacoHeader
           area="Campanhas"
           titulo="Campanhas pagas"
@@ -151,7 +151,12 @@ export default async function CampanhasPage({ searchParams }: { searchParams: { 
               <p className="text-white/40 text-sm mt-3">Nenhuma estratégia ainda. Comece por um modelo: ele vem dos playbooks em docs/.</p>
             )}
 
-            <Quadro>
+            <Quadro
+              colunas={COLUNAS.map((c) => ({
+                titulo: c.titulo,
+                count: (estrategias ?? []).filter((e) => e.status === c.s).length,
+              }))}
+            >
               {COLUNAS.map((col) => {
                 const lista = (estrategias ?? []).filter((e) => e.status === col.s);
                 return (

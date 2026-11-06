@@ -273,7 +273,7 @@ export default async function ProducaoPage({ searchParams }: { searchParams: { v
   return (
     <div className="min-h-screen bg-[#0a0a0a] pb-20">
       <AdminHeader />
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 pt-6">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 pt-4 sm:pt-6">
         <EspacoHeader
           area="Produção"
           titulo="Produção de cortes"
@@ -330,7 +330,14 @@ export default async function ProducaoPage({ searchParams }: { searchParams: { v
               Live encerrada vai sozinha para o Contenta. O corte sobe privado e entra na fila; a IA sugere a headline e
               gera as thumbs; alguém aprova uma, e o vídeo é publicado ou agendado com ela.
             </p>
-            <Quadro>
+            <Quadro
+              colunas={[
+                { titulo: "Na fila", count: fila.length, alerta: erros > 0 },
+                { titulo: "Para revisar", count: revisar.length },
+                { titulo: "Agendadas", count: agendadas.length },
+                { titulo: "Publicadas", count: publicadas.length },
+              ]}
+            >
               <Coluna titulo="Na fila" count={fila.length} alerta={erros > 0} vazio="Fila vazia.">
                 {fila.map((v) => (
                   <div key={v.id} className={`${cartao} ${v.status === "erro" ? "border-red-500/30" : ""}`}>

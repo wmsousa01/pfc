@@ -1,5 +1,6 @@
 import AdminHeader from "@/components/admin/AdminHeader";
 import { Coluna, EspacoHeader, GrupoColuna, Quadro, diaKey, diaLabel, porDia, selo } from "@/components/admin/Espaco";
+import CardAcoes from "@/components/admin/CardAcoes";
 import ProducaoForm from "@/components/admin/ProducaoForm";
 import { requireAdmin } from "@/lib/auth";
 import {
@@ -335,9 +336,14 @@ export default async function MarketingPage({
           {hora(dataDo(p))} · {quem(p.created_by)}
           {p.attempts > 0 && p.status !== "publicado" ? ` · ${p.attempts}ª tentativa` : ""}
         </span>
-        <div className="flex items-center gap-2.5">
-          <Acoes p={p} />
-        </div>
+        {(p.post_url || p.status === "erro" || p.status === "agendado") && (
+          <CardAcoes
+            titulo={p.title}
+            detalhe={`${PLATFORMS[p.platform].label} · ${STATUS[p.status].label} · ${quando(dataDo(p))} · ${quem(p.created_by)}`}
+          >
+            <Acoes p={p} />
+          </CardAcoes>
+        )}
       </div>
     </div>
   );
@@ -383,7 +389,7 @@ export default async function MarketingPage({
   return (
     <div className="min-h-screen bg-[#0a0a0a] pb-20">
       <AdminHeader />
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 pt-6">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 pt-4 sm:pt-6">
         <EspacoHeader
           area="Marketing"
           titulo="Marketing"
@@ -431,14 +437,14 @@ export default async function MarketingPage({
         {/* Barra de filtros (Quadro e Lista) */}
         {(view === "quadro" || view === "lista") && (
           <div className="flex flex-wrap items-center gap-2 mt-4">
-            <form action="/admin/marketing" className="flex items-center">
+            <form action="/admin/marketing" className="flex items-center w-full sm:w-auto">
               {view !== "quadro" && <input type="hidden" name="view" value={view} />}
               {rede && <input type="hidden" name="rede" value={rede} />}
               <input
                 name="q"
                 defaultValue={q}
                 placeholder="Pesquisar cortes"
-                className="bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg px-3 py-1.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-gold-500/50 w-56"
+                className="bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg px-3 py-1.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-gold-500/50 w-full sm:w-56 h-10 sm:h-auto"
               />
             </form>
             <a
@@ -473,7 +479,7 @@ export default async function MarketingPage({
 
         {/* Quadro */}
         {view === "quadro" && (
-          <Quadro>
+          <Quadro colunas={COLUNAS.map((c) => ({ titulo: c.titulo, count: c.posts.length, alerta: c.key === "erro" }))}>
             {COLUNAS.map((col) => (
               <Coluna key={col.key} titulo={col.titulo} count={col.posts.length} alerta={col.key === "erro"} vazio={col.vazio}>
                 {col.porDia

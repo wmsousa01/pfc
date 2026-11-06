@@ -3,6 +3,9 @@
  * que rolam por conta própria (a página não cresce com a quantidade de itens).
  */
 
+import { grupoDaArea } from "./nav";
+import QuadroCliente, { type ColunaInfo } from "./QuadroCliente";
+
 const TZ = "America/Sao_Paulo";
 
 /** Dia em Brasília como AAAA-MM-DD, para agrupar e ordenar. */
@@ -60,24 +63,28 @@ export function EspacoHeader({
   extra?: React.ReactNode;
   /** À direita (botões da área). */
   acoes?: React.ReactNode;
-  abas: Aba[];
+  /** Sem abas (página de uma tela só), o cabeçalho termina no título. */
+  abas?: Aba[];
 }) {
   return (
     <>
-      <p className="text-white/40 text-xs">Admin / {area}</p>
-      <div className="flex flex-wrap items-center justify-between gap-3 mt-1">
+      <p className="text-white/40 text-xs hidden sm:block">
+        {grupoDaArea(area)} / {area}
+      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3 sm:mt-1">
         <div className="flex flex-wrap items-center gap-3 min-w-0">
-          <h1 className="text-2xl font-bold text-white">{titulo}</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-white">{titulo}</h1>
           {extra}
         </div>
         {acoes && <div className="flex flex-wrap items-center gap-2">{acoes}</div>}
       </div>
-      <nav className="flex gap-1 mt-4 border-b border-[#1f1f1f] overflow-x-auto">
+      {abas && abas.length > 0 && (
+      <nav className="flex gap-1 mt-4 -mx-4 px-4 sm:mx-0 sm:px-0 border-b border-[#1f1f1f] overflow-x-auto">
         {abas.map((t) => (
           <a
             key={t.href}
             href={t.href}
-            className={`flex items-center gap-1.5 px-3 py-2 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors ${
+            className={`flex items-center gap-1.5 px-3 h-11 sm:h-auto sm:py-2 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors ${
               t.ativa
                 ? "border-gold-500 text-gold-400"
                 : "border-transparent text-white/55 hover:text-white hover:border-white/20"
@@ -97,14 +104,30 @@ export function EspacoHeader({
           </a>
         ))}
       </nav>
+      )}
     </>
   );
 }
 
-/** Grade do quadro: 1 coluna no celular, 2 no tablet, `cols` no desktop. */
-export function Quadro({ cols = 4, children }: { cols?: 3 | 4 | 5; children: React.ReactNode }) {
+/**
+ * Grade do quadro: no celular, uma coluna por vez (escolhida pelos botões com
+ * `colunas`, na ordem dos filhos); 2 lado a lado no tablet, `cols` no desktop.
+ */
+export function Quadro({
+  cols = 4,
+  colunas,
+  children,
+}: {
+  cols?: 3 | 4 | 5;
+  colunas: ColunaInfo[];
+  children: React.ReactNode;
+}) {
   const xl = { 3: "xl:grid-cols-3", 4: "xl:grid-cols-4", 5: "xl:grid-cols-5" }[cols];
-  return <div className={`grid gap-3 mt-4 md:grid-cols-2 ${xl} items-start`}>{children}</div>;
+  return (
+    <QuadroCliente colunas={colunas} gridCls={`grid gap-3 mt-3 md:mt-4 md:grid-cols-2 ${xl} items-start`}>
+      {children}
+    </QuadroCliente>
+  );
 }
 
 export function Coluna({
@@ -122,12 +145,13 @@ export function Coluna({
   children?: React.ReactNode;
 }) {
   return (
-    <section className="bg-[#0f0f0f] border border-[#1c1c1c] rounded-xl flex flex-col min-w-0">
-      <h2 className="px-3 pt-3 pb-2 text-[11px] font-bold uppercase tracking-wide text-white/60 flex items-center gap-2">
+    <section className="md:bg-[#0f0f0f] md:border md:border-[#1c1c1c] md:rounded-xl flex flex-col min-w-0">
+      {/* No celular o nome e o número da coluna já estão nos botões do quadro. */}
+      <h2 className="hidden md:flex px-3 pt-3 pb-2 text-[11px] font-bold uppercase tracking-wide text-white/60 items-center gap-2">
         {titulo}
         <span className={alerta && count > 0 ? "text-red-400" : "text-white/30"}>{count}</span>
       </h2>
-      <div className="px-2 pb-2 space-y-2 overflow-y-auto max-h-[calc(100vh-290px)] min-h-[80px]">
+      <div className="md:px-2 pb-2 space-y-2 md:overflow-y-auto md:max-h-[calc(100vh-290px)] min-h-[80px]">
         {count === 0 ? (
           <p className="text-white/30 text-xs px-1 py-6 text-center border border-dashed border-[#222] rounded-lg">{vazio}</p>
         ) : (
@@ -141,11 +165,11 @@ export function Coluna({
 /** Rótulo de grupo dentro da coluna (dia, mês), fixo no topo enquanto a coluna rola. */
 export function GrupoColuna({ label, count }: { label: string; count: number }) {
   return (
-    <p className="sticky top-0 z-10 bg-[#0f0f0f] text-[11px] text-white/40 px-1 pt-1 pb-0.5 capitalize">
+    <p className="sticky top-14 md:top-0 z-10 bg-[#0a0a0a] md:bg-[#0f0f0f] text-xs md:text-[11px] text-white/45 px-1 pt-1.5 pb-1 md:pb-0.5 capitalize">
       {label} <span className="text-white/25">· {count}</span>
     </p>
   );
 }
 
-export const cartao = "block bg-[#161616] border border-[#242424] hover:border-[#333] rounded-lg p-3 transition-colors";
+export const cartao = "block bg-[#161616] border border-[#242424] hover:border-[#333] rounded-xl md:rounded-lg p-3 transition-colors";
 export const selo = "text-[11px] font-bold px-2 py-0.5 rounded border whitespace-nowrap";

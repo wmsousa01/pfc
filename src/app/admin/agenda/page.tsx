@@ -148,7 +148,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: { mes
   return (
     <div className="min-h-screen bg-[#0a0a0a] pb-20">
       <AdminHeader />
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 pt-6">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 pt-4 sm:pt-6">
         <EspacoHeader
           area="Agenda"
           titulo="Agenda de convidados"
@@ -183,7 +183,14 @@ export default async function AgendaPage({ searchParams }: { searchParams: { mes
               O convidado pede o horário pelo link público e preenche o briefing. Ao confirmar, sai o convite no Google
               Calendar e o roteiro da IA; depois vêm a arte, o post collab no Instagram e a live agendada no YouTube.
             </p>
-            <Quadro cols={3}>
+            <Quadro
+              cols={3}
+              colunas={[
+                { titulo: "Pedidos", count: pedidos.length },
+                { titulo: "Confirmados", count: proximos.length },
+                { titulo: "Encerrados", count: recentes.length },
+              ]}
+            >
               <Coluna titulo="Pedidos para confirmar" count={pedidos.length} vazio="Nenhum pedido novo.">
                 {pedidos.map((e) => (
                   <div key={e.id} className={`${cartao} border-gold-500/25`}>
