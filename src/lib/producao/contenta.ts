@@ -22,19 +22,20 @@ export type ContentaJob = {
 
 export type CutMode = "shorts" | "long";
 
-/** Opções de edição do Contenta. Remover pausas e b-roll só existem no 9:16 (o worker ignora no 16:9). */
-type EditOptions = { coldOpen?: boolean; removePauses?: boolean; broll?: boolean; audioPolish?: boolean };
+/** Opções de edição do Contenta. Reframe, remover pausas e b-roll só existem no 9:16 (o worker ignora no 16:9). */
+type EditOptions = { reframe?: boolean; coldOpen?: boolean; removePauses?: boolean; broll?: boolean; audioPolish?: boolean };
 
 export const MODES: Record<
   CutMode,
   { label: string; cutMode: string; outputFormat: string; subtitles?: boolean } & EditOptions
 > = {
-  // Gancho no início, sem pausas, b-roll e áudio tratado.
+  // Reenquadramento automático em quem fala, gancho no início, sem pausas, b-roll e áudio tratado.
   shorts: {
     label: "Shorts 9:16",
     cutMode: "shorts",
     outputFormat: "portrait",
     subtitles: true,
+    reframe: true,
     coldOpen: true,
     removePauses: true,
     broll: true,
@@ -100,6 +101,7 @@ export async function startCuts(youtubeId: string, jobId: string, mode: CutMode)
       cutMode: m.cutMode,
       outputFormat: m.outputFormat,
       subtitles: m.subtitles,
+      reframe: m.reframe,
       coldOpen: m.coldOpen,
       removePauses: m.removePauses,
       broll: m.broll,
