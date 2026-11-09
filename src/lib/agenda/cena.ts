@@ -23,7 +23,10 @@ export type Img = { buf: Buffer; mime: string };
  * perfil é o escudo). Vai como logotipo no lugar do convidado; chamado de
  * "fotografia", o modelo inventava uma pessoa com a camisa do time.
  */
-export type PessoaCena = { nome: string; papel: string; host: boolean; img: Img | null; marca?: boolean };
+export type PessoaCena = { nome: string; papel: string; host: boolean; img: Img | null; marca?: boolean; semNome?: boolean };
+// `semNome`: pessoa que só existe nos frames (PFC Visita sem apresentador
+// cadastrado, ou o dono do lugar quando o convidado é a marca). Entra
+// recortada do frame, sem identificação escrita.
 export type RefCena = { legenda: string; img: Img };
 
 export type CenaInput = {
@@ -128,6 +131,8 @@ function montar(c: CenaInput, f: FormatoCena): { prompt: string; refs: ImagemRef
   // O logo do convidado ocupa o lugar dele na composição, mas não conta como pessoa.
   const n = c.pessoas.length - marcas.length;
   const marcaTxt = marcas.map((m) => m.nome).join(" e ");
+  // Com alguém do lugar nos frames, o logo vai junto dele; sem ninguém, ocupa o lugar do convidado.
+  const marcaNoLugar = marcas.length > 0 && !c.pessoas.some((p) => !p.host && !p.marca);
 
   const framesI = c.frames.slice(0, 3).map((fr) => add("FRAME DO EPISÓDIO GRAVADO — as pessoas reais e o lugar.", fr));
   const nosFrames = framesI.length ? `IMAGEM ${framesI.join(", ")}` : null;
@@ -137,9 +142,13 @@ function montar(c: CenaInput, f: FormatoCena): { prompt: string; refs: ImagemRef
     const lado = solo ? "à DIREITA, grande, da cintura ou do peito para cima" : p.host ? "à ESQUERDA" : "à DIREITA, em primeiro plano, com presença dominante";
     if (p.marca) {
       const i = add(`LOGOTIPO de ${p.nome} (convidado: clube/empresa — NÃO é uma pessoa).`, p.img!);
-      return `- IMAGEM ${i}: logotipo de ${p.nome} — ${p.papel}. ${p.nome} é um clube/empresa, NÃO uma pessoa: o logotipo, grande e fiel à imagem, ocupa o lugar do convidado ${lado}. Não desenhar nenhuma pessoa para representá-lo, nem ninguém com o uniforme ou o escudo dele.`;
+      return `- IMAGEM ${i}: logotipo de ${p.nome} — ${p.papel}. ${p.nome} é um clube/empresa, NÃO uma pessoa: o logotipo, grande e fiel à imagem, ${marcaNoLugar ? `ocupa o lugar do convidado ${lado}` : "fica em destaque ao lado do convidado, junto do nome"}. Não desenhar nenhuma pessoa para representá-lo, nem ninguém com o uniforme ou o escudo dele.`;
     }
     if (!p.img) return `- ${p.nome} — ${p.papel}: sem foto própria; é ${p.host ? "o apresentador" : "o convidado (o dono ou responsável pelo lugar)"} que aparece nos frames do episódio (${nosFrames}). Recorte dele dos frames. Posicionar ${lado}.`;
+    if (p.semNome) {
+      const i = add(`FOTOGRAFIA ${p.host ? "do apresentador" : "do convidado"} (recorte do frame do episódio).`, p.img);
+      return `- IMAGEM ${i}: ${p.host ? "o apresentador" : `o convidado, responsável pelo ${marcaTxt || "lugar"}`}. Posicionar ${lado}.`;
+    }
     const i = add(`FOTOGRAFIA de ${p.nome} (${p.host ? "apresentador" : "convidado"}).`, p.img);
     return `- IMAGEM ${i}: ${p.nome} — ${p.papel}. Posicionar ${lado}.`;
   });
@@ -160,7 +169,7 @@ function montar(c: CenaInput, f: FormatoCena): { prompt: string; refs: ImagemRef
     textos.push(`HORÁRIO: "${hora}"`);
     textos.push(`"NO YOUTUBE" com o ícone vermelho oficial do YouTube`);
     if (!solo || convidados.length)
-      for (const p of c.pessoas)
+      for (const p of c.pessoas.filter((x) => !x.semNome))
         textos.push(`IDENTIFICAÇÃO${p.marca ? " (embaixo do logotipo, não de uma pessoa)" : ""}: "${p.nome.toUpperCase()}" e, menor, "${p.papel.toUpperCase()}"`);
     if (c.topicos) textos.push(`TÓPICOS (linha abaixo da headline): "${c.topicos.toUpperCase()}"`);
     if (c.sub) textos.push(`FRASE DE APOIO (menor, abaixo dos tópicos): "${c.sub.toUpperCase()}"`);
@@ -170,7 +179,7 @@ function montar(c: CenaInput, f: FormatoCena): { prompt: string; refs: ImagemRef
   const composicao =
     f === "thumb"
       ? `COMPOSIÇÃO 16:9
-- Região superior (~60%): ${marcas.length ? `o apresentador à esquerda e o logotipo de ${marcaTxt} grande à direita, no lugar do convidado (sem pessoa desse lado)` : solo ? "a pessoa grande à direita" : "as pessoas lado a lado, rostos grandes, nítidos e expressivos"}; fundo de estúdio desfocado.
+- Região superior (~60%): ${marcaNoLugar ? `o apresentador à esquerda e o logotipo de ${marcaTxt} grande à direita, no lugar do convidado (sem pessoa desse lado)` : solo ? "a pessoa grande à direita" : "as pessoas lado a lado, rostos grandes, nítidos e expressivos"}; fundo de estúdio desfocado.
 ${c.logo ? "- Logotipo oficial na região superior central, entre as pessoas.\n" : ""}- Região inferior (~40%): a headline gigante, tipografia pesada, condensada e tridimensional, ocupando quase toda a largura útil.
 - SEM nomes, SEM data, SEM horário, SEM tópicos nesta versão.`
       : solo
@@ -178,7 +187,7 @@ ${c.logo ? "- Logotipo oficial na região superior central, entre as pessoas.\n"
 - A pessoa domina o lado DIREITO; a headline e a chamada dominam o lado ESQUERDO.
 ${c.logo ? "- Logotipo oficial no canto superior esquerdo.\n" : ""}- "${hora.replace("ÀS ", "")}" e o dia com enorme destaque: a pessoa precisa entender em menos de 2 segundos o programa, o dia e o horário.`
         : `COMPOSIÇÃO
-- ${hosts.length ? "Apresentador à esquerda, convidado à direita" : "As pessoas lado a lado"}, enquadramento cinematográfico de meio corpo, rostos grandes na metade de cima.${marcas.length ? ` O convidado é o logotipo de ${marcaTxt}, grande, sem nenhuma pessoa desse lado.` : ""}
+- ${hosts.length ? "Apresentador à esquerda, convidado à direita" : "As pessoas lado a lado"}, enquadramento cinematográfico de meio corpo, rostos grandes na metade de cima.${marcaNoLugar ? ` O convidado é o logotipo de ${marcaTxt}, grande, sem nenhuma pessoa desse lado.` : ""}
 ${c.logo ? "- Logotipo oficial no topo, centralizado.\n" : ""}- Selo ${c.gravado ? "ESTREIA" : "AO VIVO"}, data, horário e "NO YOUTUBE" na região central, entre as pessoas, sem cobrir rostos.
 - Identificação de cada pessoa ao lado dela, discreta, sem disputar com a headline.
 - Headline gigante na metade de baixo, ocupando 55% a 90% da largura, sem cobrir rostos; tópicos logo abaixo.`;
@@ -258,7 +267,10 @@ export async function fotosDosFrames(pessoas: PessoaCena[], frames: Img[]): Prom
     if (faltam().length === 0) break;
     const achadas = await detectPeople(frame.buf, hostsComFoto).catch(() => []);
     // As maiores primeiro: quem está mais perto da câmera é quem conversa.
-    const ordem = achadas.sort((a, b) => (b.box[2] - b.box[0]) * (b.box[3] - b.box[1]) - (a.box[2] - a.box[0]) * (a.box[3] - a.box[1]));
+    const maiores = achadas.sort((a, b) => (b.box[2] - b.box[0]) * (b.box[3] - b.box[1]) - (a.box[2] - a.box[0]) * (a.box[3] - a.box[1]));
+    // Sem foto do apresentador para comparar, vale a posição: no PFC Visita ele fica à esquerda
+    // do convidado (por tamanho, o chef da D'Parma virava o apresentador).
+    const ordem = hostsComFoto.length ? maiores : maiores.slice(0, faltam().length).sort((a, b) => a.box[1] - b.box[1]);
     const livres = [...ordem];
     for (const p of faltam()) {
       // Sem foto do apresentador não dá para saber quem é quem: vai na ordem.

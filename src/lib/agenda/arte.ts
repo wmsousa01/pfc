@@ -348,11 +348,16 @@ export async function pessoasDaArte(ep: Episodio, convidados: Convidado[], mater
     const img = path ? await imagemDe(path) : null;
     if (img || comFrames) out.push({ nome: a.nome, papel: a.papel, host: true, img });
   }
+  // Quadro sem apresentador cadastrado (PFC Visita): quem conduz aparece nos frames.
+  if (!hosts.length && comFrames) out.push({ nome: "Apresentador", papel: "HOST", host: true, img: null, semNome: true });
   for (const c of convidados.slice(0, 3)) {
     const img = await imagemConvidado(c, materiais);
     // Clube ou empresa: a "foto" é o escudo. Entra como logo, não como pessoa.
     const marca = !!img && isGeminiConfigured() && !(await ehFotoDePessoa(img.buf, img.mime));
     if (img || comFrames) out.push({ nome: c.nome, papel: c.cargo || "CONVIDADO", host: false, img, ...(marca ? { marca } : {}) });
+    // Convidado que é a marca (pizzaria, loja): quem fala por ela está nos frames. Sem isso a
+    // arte ficava com 0 pessoas e o modelo inventava duas (D'Parma, 09/11).
+    if (marca && comFrames) out.push({ nome: c.nome, papel: c.cargo || "CONVIDADO", host: false, img: null, semNome: true });
   }
   return out;
 }
