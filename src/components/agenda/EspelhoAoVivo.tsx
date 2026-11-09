@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import CopyButton from "@/components/CopyButton";
 
-type Noticia = { titulo: string; resumo: string; fontes: { handle: string; url: string; data: string }[] };
+type Noticia = { titulo: string; resumo: string; fontes: { handle: string; url: string; data: string; rotulo?: string }[] };
 type Materia = {
   tipo: "abertura" | "materia" | "encerramento";
   bloco: string | null;
@@ -179,7 +179,7 @@ export default function EspelhoAoVivo({
   });
 
   // Perfil do Instagram leva "@"; site ("mogimirim.sp.gov.br") vai como está.
-  const fontes = (n: Noticia) => Array.from(new Set(n.fontes.map((f) => (f.handle.includes(".") ? f.handle : `@${f.handle}`)))).join(" · ");
+  const fontes = (n: Noticia) => Array.from(new Set(n.fontes.map((f) => f.rotulo ?? (f.handle.includes(".") ? f.handle : `@${f.handle}`)))).join(" · ");
   const btn = "border border-[#333] hover:border-gold-500/60 text-white/80 hover:text-white rounded-lg px-3 py-2 text-sm font-bold disabled:opacity-30";
 
   return (
@@ -301,7 +301,7 @@ export default function EspelhoAoVivo({
                             <span className="text-white/60">Fonte: {Array.from(new Set(b.noticias.map(fontes))).join(" · ")}</span>
                             <CopyButton value={`Fonte: ${Array.from(new Set(b.noticias.map(fontes))).join(" · ")}`} label="copiar" className="text-xs text-white/50 hover:text-white" />
                             <span className="flex gap-2">
-                              {b.noticias.flatMap((n) => n.fontes).map((f) => (
+                              {b.noticias.flatMap((n) => n.fontes).filter((f) => f.url).map((f) => (
                                 <a key={f.url} href={f.url} target="_blank" rel="noreferrer" className="text-xs text-gold-400 hover:underline">post ↗</a>
                               ))}
                             </span>
@@ -357,7 +357,7 @@ export default function EspelhoAoVivo({
                           <span className="text-white/60">Fonte: {fontes(n)}</span>
                           <CopyButton value={`Fonte: ${fontes(n)}`} label="copiar" className="text-xs text-white/50 hover:text-white" />
                           <span className="flex gap-2">
-                            {n.fontes.map((f) => (
+                            {n.fontes.filter((f) => f.url).map((f) => (
                               <a key={f.url} href={f.url} target="_blank" rel="noreferrer" className="text-xs text-gold-400 hover:underline">post ↗</a>
                             ))}
                           </span>

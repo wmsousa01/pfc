@@ -60,6 +60,8 @@ import {
   removerConvidadoAction,
   salvarBriefingAction,
   tirarRoteiroAction,
+  extraAction,
+  removerExtraAction,
 } from "../actions";
 import { STATUS_EP } from "../shared";
 
@@ -456,7 +458,11 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
                       <p className="text-white/55 ml-5">{n.resumo}</p>
                       <p className="ml-5 text-xs flex flex-wrap gap-x-3">
                         {n.fontes.map((f) => (
-                          <a key={f.url} href={f.url} target="_blank" className="text-gold-400 hover:underline">{f.handle.includes(".") ? f.handle : `@${f.handle}`} ↗</a>
+                          f.url ? (
+                            <a key={f.url} href={f.url} target="_blank" className="text-gold-400 hover:underline">{f.rotulo ?? (f.handle.includes(".") ? f.handle : `@${f.handle}`)} ↗</a>
+                          ) : (
+                            <span key={f.handle} className="text-white/50">{f.rotulo ?? f.handle}</span>
+                          )
                         ))}
                       </p>
                     </li>
@@ -556,6 +562,49 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
                 <textarea name="texto" rows={8} placeholder="Cole aqui o roteiro inteiro (do Word ou Docs)" className={area} />
               </ProducaoForm>
             </details>
+            {ep.roteiro && (
+              <div className="mt-4 border-t border-[#2a2a2a] pt-4">
+                <p className="text-sm text-white">Notícias de outras fontes</p>
+                <p className="text-white/40 text-xs mt-1">
+                  Uma notícia que não veio dos perfis nem dos sites das prefeituras (um portal, a EPTV, um release do
+                  WhatsApp). A IA escreve a matéria no formato do apresentador e ela entra no roteiro na posição escolhida, com
+                  a foto da página. Ela fica guardada: se a pauta for gerada de novo, entra de novo.
+                </p>
+                {(ep.roteiro.extras ?? []).length > 0 && (
+                  <ul className="mt-3 space-y-1">
+                    {ep.roteiro.extras!.map((x, i) => (
+                      <li key={i} className="flex flex-wrap items-center gap-2 text-xs text-white/70">
+                        <span className="text-white">{x.materia}</span>
+                        <span className="text-white/40">· {x.fonte}</span>
+                        {x.url && <a href={x.url} target="_blank" className="text-gold-400 hover:underline">link ↗</a>}
+                        <form action={removerExtraAction}>
+                          <input type="hidden" name="id" value={ep.id} />
+                          <input type="hidden" name="indice" value={i} />
+                          <button className="text-white/30 hover:text-red-400">tirar do roteiro</button>
+                        </form>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <ProducaoForm action={extraAction} label="Escrever e pôr no roteiro" pending="Escrevendo a matéria (~30 s)..." okMessage="Pronto: está no roteiro e no espelho." className="mt-3 space-y-2" buttonClassName={btn2}>
+                  <input type="hidden" name="id" value={ep.id} />
+                  <div className="flex flex-wrap gap-2">
+                    <input name="url" type="url" placeholder="Link da notícia (opcional se colar o texto)" className={`${input} flex-1 min-w-[16rem]`} />
+                    <input name="fonte" placeholder="Fonte no GC (ex.: EPTV)" className={`${input} w-44`} />
+                  </div>
+                  <textarea name="texto" rows={4} placeholder="Texto da notícia: cole quando o site não deixar ler ou quando ela veio pelo WhatsApp" className={area} />
+                  <label className="block text-white/50 text-xs">
+                    Entra
+                    <select name="posicao" defaultValue="" className={`${input} ml-2`}>
+                      <option value="">antes do encerramento</option>
+                      {ep.roteiro.materias.slice(0, -1).map((m, i) => (
+                        <option key={i} value={i + 1}>depois de {i + 1}. {m.titulo.slice(0, 50)}</option>
+                      ))}
+                    </select>
+                  </label>
+                </ProducaoForm>
+              </div>
+            )}
           </div>
           {!b && !ep.roteiro ? (
             <p className="text-white/50 text-sm mt-3">Gere o roteiro ou use o do apresentador primeiro: o espelho sai dos blocos.</p>

@@ -51,6 +51,8 @@ export type ItemFonte = {
   texto: string;
   imagem: string | null;
   engajamento: string | null;
+  /** Notícia que a equipe acrescentou de outra fonte: entra no programa de qualquer jeito. */
+  extra?: boolean;
 };
 
 /** Posts e notícias dos últimos `dias`. Fonte que falha não derruba as outras. */
@@ -154,7 +156,7 @@ function promptPlano(quando: string, tema: string | null, dias: number, lista: s
   return `${QUEM_SOMOS}
 O programa vai ao ar ao vivo no YouTube em ${quando}.${tema ? `\nA equipe já indicou o tema: ${tema}` : ""}
 
-Abaixo estão as fontes dos últimos ${dias} dias, numeradas entre colchetes: posts dos perfis de notícia e das prefeituras no Instagram (@perfil) e notícias dos sites das prefeituras (site ...).
+Abaixo estão as fontes dos últimos ${dias} dias, numeradas entre colchetes: posts dos perfis de notícia e das prefeituras no Instagram (@perfil), notícias dos sites das prefeituras (site ...) e notícias que a equipe acrescentou de outras fontes (EXTRA). Cada fonte EXTRA entra obrigatoriamente no programa, como matéria própria ou junto da matéria do mesmo assunto.
 
 ${lista}
 
@@ -227,19 +229,59 @@ const SCHEMA_MATERIA = {
   required: ["leitura", "comentario", "reflexao", "pontos"],
 };
 
-/** As fontes que falam mesmo da matéria, a mais parecida primeiro (é dela a foto). */
+/** Matéria avulsa: a IA também dá o título e a manchete. */
+const SCHEMA_EXTRA = {
+  type: "OBJECT",
+  properties: { titulo: STR, manchete: STR, ...SCHEMA_MATERIA.properties },
+  required: ["titulo", "manchete", ...SCHEMA_MATERIA.required],
+};
+
+/**
+ * Uma matéria no formato do apresentador a partir de uma notícia que a
+ * equipe trouxe de outra fonte (link lido ou texto colado).
+ */
+export async function escreverMateriaExtra(texto: string, rotulo: string, bloco: string | null): Promise<Materia> {
+  const m = {
+    titulo: '(escreva em "titulo": "Assunto: o fato", ex.: "Mobilidade: a chegada da Rota Mogiana")',
+    manchete: '(escreva em "manchete": uma frase de manchete de jornal, que vai no GC)',
+    bloco: bloco ?? "",
+    fontes: [],
+  };
+  const t = await pedirJson<Partial<Texto & { titulo: string; manchete: string }>>(promptMateria(m, `${rotulo}\n${texto.slice(0, 8000)}`), SCHEMA_EXTRA, 8_192);
+  if (!t.titulo?.trim() || !t.leitura?.trim()) throw new Error("A IA não conseguiu escrever a matéria. Confira o texto da notícia e tente de novo.");
+  return {
+    tipo: "materia",
+    bloco,
+    titulo: t.titulo.trim(),
+    manchete: limpo(t.manchete),
+    leitura: limpo(t.leitura),
+    comentario: limpo(t.comentario),
+    humor: limpo(t.humor),
+    reflexao: limpo(t.reflexao),
+    pontos: (t.pontos ?? []).map((x) => x.trim()).filter(Boolean),
+    servico: limpo(t.servico),
+  };
+}
+
+/** Como a fonte aparece no GC: "@perfil", o site ou o nome que a equipe deu. */
+const rotuloDa = (p: ItemFonte) => (p.site || p.extra ? p.handle : `@${p.handle}`);
+
+/**
+ * As fontes que falam mesmo da matéria, a mais parecida primeiro (é dela a
+ * foto). A fonte que a equipe trouxe vale sempre: foi ela que escolheu.
+ */
 function fontesDaMateria(m: Materia, indices: number[], itens: ItemFonte[]) {
   const daMateria = palavras([m.titulo, m.manchete, m.leitura].join(" "));
   return Array.from(new Set(indices))
     .map((i) => itens[i])
     .filter((p): p is ItemFonte => !!p)
-    .map((p) => ({ p, nota: comuns(daMateria, palavras(p.texto)) }))
+    .map((p) => ({ p, nota: p.extra ? Infinity : comuns(daMateria, palavras(p.texto)) }))
     .filter((x) => x.nota >= FONTE_MIN)
-    .sort((a, b) => b.nota - a.nota)
-    .map(({ p }) => ({ handle: p.handle, url: p.url, data: p.data }));
+    .sort((a, b) => (a.nota === b.nota ? 0 : b.nota > a.nota ? 1 : -1))
+    .map(({ p }) => ({ handle: p.handle, url: p.url, data: p.data, rotulo: rotuloDa(p) }));
 }
 
-const quemDa = (p: ItemFonte) => (p.site ? `site ${p.handle}` : `@${p.handle}`);
+const quemDa = (p: ItemFonte) => (p.extra ? `EXTRA (${p.handle})` : p.site ? `site ${p.handle}` : `@${p.handle}`);
 const diaDa = (p: ItemFonte) => new Date(p.data).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" });
 
 /** Roda `fn` em todos os itens, `n` de cada vez, na ordem. */
@@ -260,7 +302,7 @@ export async function escreverRoteiro(
   tema: string | null,
   dias: number,
   itens: ItemFonte[]
-): Promise<{ materias: Materia[]; briefing: Briefing; tema: string }> {
+): Promise<{ materias: Materia[]; briefing: Briefing; tema: string; fontesDe: Map<string, number[]> }> {
   // Uma fonte por item, numerada: o modelo devolve os números das fontes de cada matéria.
   const lista = itens
     .map((p, i) => `[${i}] ${quemDa(p)} · ${diaDa(p)}${p.engajamento ? ` · ${p.engajamento}` : ""}\n${p.texto.slice(0, p.site ? 1500 : 1000).replace(/\s+\n/g, "\n")}`)
@@ -268,6 +310,12 @@ export async function escreverRoteiro(
   const r = await pedirJson<Partial<Plano>>(promptPlano(quando, tema, dias, lista), SCHEMA_PLANO, 16_384);
   const plano = (r.materias ?? []).filter((m) => m.titulo?.trim() && m.manchete?.trim());
   if (plano.length === 0 || !r.arte?.l1) throw new Error("O Gemini não devolveu o plano do programa.");
+  // A notícia que a equipe trouxe entra mesmo se o plano esqueceu dela: vira matéria no último bloco.
+  itens.forEach((p, i) => {
+    if (!p.extra || plano.some((m) => m.fontes?.includes(i))) return;
+    const titulo = p.texto.split("\n")[0].slice(0, 120);
+    plano.push({ bloco: plano[plano.length - 1].bloco, titulo, manchete: titulo, fontes: [i] });
+  });
 
   const textos = await emLotes(plano, PARALELO, async (m) => {
     const fontes = Array.from(new Set(m.fontes))
@@ -287,6 +335,7 @@ export async function escreverRoteiro(
     { tipo: "abertura", bloco: bloco1, titulo: "Abertura", manchete: null, leitura: limpo(r.abertura), comentario: null, humor: null, reflexao: null, pontos: [], servico: null },
   ];
   const noticias: NonNullable<Briefing["noticias"]> = [];
+  const fontesDe = new Map<string, number[]>();
   plano.forEach((m, k) => {
     const t = textos[k];
     const mat: Materia = {
@@ -303,6 +352,7 @@ export async function escreverRoteiro(
       servico: limpo(t?.servico),
     };
     materias.push(mat);
+    fontesDe.set(mat.titulo, m.fontes ?? []);
     noticias.push({ titulo: mat.titulo, resumo: (mat.leitura ?? "").split("\n\n")[0].slice(0, 400), fontes: fontesDaMateria(mat, m.fontes ?? [], itens) });
   });
   materias.push({
@@ -338,7 +388,7 @@ export async function escreverRoteiro(
     },
     noticias,
   };
-  return { materias, briefing, tema: (r.tema ?? "").trim() };
+  return { materias, briefing, tema: (r.tema ?? "").trim(), fontesDe };
 }
 
 /** Busca as notícias da semana e grava tema, roteiro e fotos no episódio. */
@@ -347,14 +397,36 @@ export async function gerarPautaNews(epId: string, dias: number, actor: string):
   if (!ep) throw new Error("Episódio não encontrado.");
   const { itens: todos, erros } = await coletarNoticias(dias);
   if (todos.length === 0) throw new Error(`Nenhuma notícia nos últimos ${dias} dias.${erros.length ? ` ${erros.join(" · ")}` : ""}`);
-  const itens = todos.slice(0, 180);
+  // As notícias que a equipe trouxe de outras fontes vão na frente: não podem ficar de fora do corte.
+  const extras = ep.roteiro?.extras ?? [];
+  const itens: ItemFonte[] = [
+    ...extras.map((e, k) => ({
+      id: `extra-${k}`,
+      handle: e.fonte,
+      site: true,
+      extra: true,
+      url: e.url ?? "",
+      data: e.adicionada_em,
+      texto: `${e.materia}\n${e.texto}`,
+      imagem: e.imagem,
+      engajamento: null,
+    })),
+    ...todos.slice(0, 180 - extras.length),
+  ];
   // "Giro de Notícias" é o nome do quadro, não um tema.
   const temaDado = ep.tema && !/giro de not/i.test(ep.tema) ? ep.tema : null;
-  const { materias, briefing, tema } = await escreverRoteiro(quandoLongo(ep.inicio), temaDado, dias, itens);
+  const { materias, briefing, tema, fontesDe } = await escreverRoteiro(quandoLongo(ep.inicio), temaDado, dias, itens);
 
   // O roteiro que o apresentador mandou fica; o que a IA gerou antes é trocado.
   const doApresentador = !!ep.roteiro && ep.roteiro.origem !== "ia";
-  const roteiro: Roteiro = doApresentador ? ep.roteiro! : { arquivo: null, importado_em: new Date().toISOString(), origem: "ia", materias };
+  // Cada notícia extra passa a apontar para a matéria nova que saiu dela.
+  const extrasNovos = extras.map((e, k) => {
+    const titulo = Array.from(fontesDe.entries()).find(([, fs]) => fs.includes(k))?.[0];
+    return titulo ? { ...e, materia: titulo } : e;
+  });
+  const roteiro: Roteiro = doApresentador
+    ? ep.roteiro!
+    : { arquivo: null, importado_em: new Date().toISOString(), origem: "ia", materias, ...(extras.length ? { extras: extrasNovos } : {}) };
   await updateEpisodio(ep.id, {
     briefing,
     roteiro,
