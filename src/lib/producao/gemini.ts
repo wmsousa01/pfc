@@ -134,46 +134,6 @@ export async function ehFotoDePessoa(img: Buffer, mime: string): Promise<boolean
   }
 }
 
-/**
- * Confere a arte gerada contra as fotos: quantas pessoas aparecem e se alguém
- * foi inventado ou repetido (o modelo chegou a pôr o apresentador duas vezes,
- * uma delas com a camisa do clube convidado). `ok` false pede outra tentativa.
- * Na dúvida (erro), aprova — a conferência não pode travar a geração.
- */
-export async function conferirPessoas(
-  arte: Buffer,
-  fotos: { nome: string; data: Buffer; mime: string }[],
-  proibido: string | null
-): Promise<{ ok: boolean; motivo: string }> {
-  try {
-    const parts: unknown[] = [
-      {
-        text: `A IMAGEM 1 é uma arte de divulgação. As seguintes são as fotos das ÚNICAS ${fotos.length} pessoas que podem aparecer nela: ${fotos.map((f, i) => `IMAGEM ${i + 2} = ${f.nome}`).join("; ")}.
-Responda ok=false se a arte tiver: mais ou menos que ${fotos.length} ${fotos.length === 1 ? "pessoa" : "pessoas"}; a mesma pessoa duas vezes; alguém que não está nas fotos${proibido ? `; ${proibido}` : ""}. Primeiro conte em rostos quantos rostos humanos nítidos a arte tem (ignore silhuetas pequenas e escuras ao fundo); depois compare cada rosto com as fotos. Em motivo, diga o problema em poucas palavras.`,
-      },
-      { inlineData: { mimeType: "image/jpeg", data: arte.toString("base64") } },
-      ...fotos.map((f) => ({ inlineData: { mimeType: f.mime, data: f.data.toString("base64") } })),
-    ];
-    const json = await generate(TEXT_MODEL, {
-      contents: [{ parts }],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "OBJECT",
-          properties: { rostos: { type: "INTEGER" }, ok: { type: "BOOLEAN" }, motivo: { type: "STRING" } },
-          required: ["rostos", "ok", "motivo"],
-        },
-      },
-    });
-    const parsed = JSON.parse(json.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}") as { rostos?: number; ok?: boolean; motivo?: string };
-    const aMais = typeof parsed.rostos === "number" && parsed.rostos !== fotos.length;
-    const motivo = parsed.motivo?.trim() || (aMais ? `${parsed.rostos} rostos na arte, esperados ${fotos.length}` : "");
-    return { ok: parsed.ok !== false && !aMais, motivo };
-  } catch {
-    return { ok: true, motivo: "" };
-  }
-}
-
 export type PessoaNoFrame = { box: [number, number, number, number]; apresentador: boolean };
 
 /**

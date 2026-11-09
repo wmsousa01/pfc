@@ -1,7 +1,6 @@
 import "server-only";
 import sharp from "sharp";
-import { CAP, anton, fit } from "@/lib/producao/compose";
-import { conferirPessoas, detectPeople, renderWithRefs, type AspectRatio, type ImagemRef } from "@/lib/producao/gemini";
+import { detectPeople, renderWithRefs, type AspectRatio, type ImagemRef } from "@/lib/producao/gemini";
 import type { QuadroId, QuadroTheme } from "@/lib/producao/quadros";
 import type { Headline } from "@/lib/producao/store";
 import { TZ, WEEKDAYS, brtDate } from "./store";
@@ -18,10 +17,11 @@ import { TZ, WEEKDAYS, brtDate } from "./store";
  */
 
 export type Img = { buf: Buffer; mime: string };
+/** `img` null: a pessoa não tem foto própria e aparece nos frames do episódio. */
 /**
- * `img` null: a pessoa não tem foto própria e aparece nos frames do episódio.
- * `marca`: o convidado é clube, empresa ou instituição e `img` é o logo dele —
- * entra na arte como logo com o nome, nunca como uma pessoa desenhada.
+ * `marca`: o convidado é clube ou empresa e `img` é o logo dele (a foto do
+ * perfil é o escudo). Vai como logotipo no lugar do convidado; chamado de
+ * "fotografia", o modelo inventava uma pessoa com a camisa do time.
  */
 export type PessoaCena = { nome: string; papel: string; host: boolean; img: Img | null; marca?: boolean };
 export type RefCena = { legenda: string; img: Img };
@@ -109,27 +109,6 @@ const FORMATO: Record<FormatoCena, { aspect: AspectRatio; w: number; h: number; 
   thumb: { aspect: "16:9", w: 1280, h: 720, texto: "Thumbnail do YouTube horizontal 16:9, alto CTR, margem de segurança de 60 px, legível em tela pequena." },
 };
 
-/**
- * Onde entra o escudo do convidado que é clube ou empresa (px do tamanho
- * final). O modelo não recebe o escudo — com ele, insistia em pôr alguém com
- * a camisa do clube ou repetir o apresentador (três tentativas seguidas em
- * 09/11, todas rejeitadas pela conferência). Ele só deixa o espaço vazio e o
- * escudo real entra por cima, em `aplicarMarca`.
- */
-const VAGA: Record<FormatoCena, { cx: number; cy: number; d: number; nome: boolean }> = {
-  feed: { cx: 820, cy: 560, d: 380, nome: true },
-  story: { cx: 810, cy: 900, d: 400, nome: true },
-  thumb: { cx: 1010, cy: 250, d: 360, nome: false },
-};
-
-function vagaTexto(f: FormatoCena, nome: string): string {
-  const { w, h } = FORMATO[f];
-  const v = VAGA[f];
-  const pct = (n: number, t: number) => Math.round((n / t) * 100);
-  const fim = v.cy + v.d / 2 + (v.nome ? 110 : 0);
-  return `ESPAÇO RESERVADO PARA O ESCUDO DE ${nome.toUpperCase()}: a região de ${pct(v.cx - v.d / 2, w)}% a ${pct(v.cx + v.d / 2, w)}% da largura e de ${pct(v.cy - v.d / 2, h)}% a ${pct(fim, h)}% da altura fica VAZIA — só o cenário desfocado e escuro, sem pessoa, sem objeto, sem texto, sem logotipo. O escudo e o nome do convidado serão aplicados ali depois, por cima.`;
-}
-
 function quadroNome(t: QuadroTheme) {
   return t.name === "Fora da Caixa" ? "PFC — PAPO FORA DA CAIXA" : `${t.name.toUpperCase()} — PFC | PAPO FORA DA CAIXA`;
 }
@@ -143,27 +122,27 @@ function montar(c: CenaInput, f: FormatoCena): { prompt: string; refs: ImagemRef
   };
 
   const marcas = c.pessoas.filter((p) => p.marca);
-  const pessoas = c.pessoas.filter((p) => !p.marca);
-  const hosts = pessoas.filter((p) => p.host);
-  const convidados = pessoas.filter((p) => !p.host);
-  const solo = pessoas.length === 1;
-  const n = pessoas.length;
+  const hosts = c.pessoas.filter((p) => p.host);
+  const convidados = c.pessoas.filter((p) => !p.host);
+  const solo = c.pessoas.length === 1;
+  // O logo do convidado ocupa o lugar dele na composição, mas não conta como pessoa.
+  const n = c.pessoas.length - marcas.length;
+  const marcaTxt = marcas.map((m) => m.nome).join(" e ");
 
   const framesI = c.frames.slice(0, 3).map((fr) => add("FRAME DO EPISÓDIO GRAVADO — as pessoas reais e o lugar.", fr));
   const nosFrames = framesI.length ? `IMAGEM ${framesI.join(", ")}` : null;
 
   // Posições: apresentador(es) à esquerda, convidado(s) à direita. Sozinho, à direita com o texto à esquerda.
-  const descPessoas = pessoas.map((p) => {
+  const descPessoas = c.pessoas.map((p) => {
     const lado = solo ? "à DIREITA, grande, da cintura ou do peito para cima" : p.host ? "à ESQUERDA" : "à DIREITA, em primeiro plano, com presença dominante";
+    if (p.marca) {
+      const i = add(`LOGOTIPO de ${p.nome} (convidado: clube/empresa — NÃO é uma pessoa).`, p.img!);
+      return `- IMAGEM ${i}: logotipo de ${p.nome} — ${p.papel}. ${p.nome} é um clube/empresa, NÃO uma pessoa: o logotipo, grande e fiel à imagem, ocupa o lugar do convidado ${lado}. Não desenhar nenhuma pessoa para representá-lo, nem ninguém com o uniforme ou o escudo dele.`;
+    }
     if (!p.img) return `- ${p.nome} — ${p.papel}: sem foto própria; é ${p.host ? "o apresentador" : "o convidado (o dono ou responsável pelo lugar)"} que aparece nos frames do episódio (${nosFrames}). Recorte dele dos frames. Posicionar ${lado}.`;
     const i = add(`FOTOGRAFIA de ${p.nome} (${p.host ? "apresentador" : "convidado"}).`, p.img);
     return `- IMAGEM ${i}: ${p.nome} — ${p.papel}. Posicionar ${lado}.`;
   });
-  // O escudo não vai para o modelo (ver VAGA): ele só reserva o espaço.
-  const descMarcas = marcas.slice(0, 1).map(
-    (m) =>
-      `- ${m.nome} — ${m.papel}: é um clube/empresa, NÃO uma pessoa. ${vagaTexto(f, m.nome)} NÃO desenhar nenhuma pessoa para representar ${m.nome} — nem jogador, nem torcedor, nem alguém com o uniforme ou as cores dele. Ninguém da arte veste uniforme de time nem leva escudo na roupa: cada pessoa usa exatamente a roupa da própria fotografia.`
-  );
   const logoI = c.logo ? add(`LOGOTIPO OFICIAL do ${c.quadro.name}. Usar exatamente como está.`, c.logo) : null;
   const refsI = c.refs.map((r) => `- IMAGEM ${add(r.legenda, r.img)}: ${r.legenda}`);
 
@@ -180,9 +159,9 @@ function montar(c: CenaInput, f: FormatoCena): { prompt: string; refs: ImagemRef
     textos.push(`DATA: "${dia}"`);
     textos.push(`HORÁRIO: "${hora}"`);
     textos.push(`"NO YOUTUBE" com o ícone vermelho oficial do YouTube`);
-    if (!solo || convidados.length || marcas.length)
-      // O nome do clube/empresa entra junto com o escudo, em aplicarMarca.
-      for (const p of pessoas) textos.push(`IDENTIFICAÇÃO: "${p.nome.toUpperCase()}" e, menor, "${p.papel.toUpperCase()}"`);
+    if (!solo || convidados.length)
+      for (const p of c.pessoas)
+        textos.push(`IDENTIFICAÇÃO${p.marca ? " (embaixo do logotipo, não de uma pessoa)" : ""}: "${p.nome.toUpperCase()}" e, menor, "${p.papel.toUpperCase()}"`);
     if (c.topicos) textos.push(`TÓPICOS (linha abaixo da headline): "${c.topicos.toUpperCase()}"`);
     if (c.sub) textos.push(`FRASE DE APOIO (menor, abaixo dos tópicos): "${c.sub.toUpperCase()}"`);
   }
@@ -190,34 +169,16 @@ function montar(c: CenaInput, f: FormatoCena): { prompt: string; refs: ImagemRef
 
   const composicao =
     f === "thumb"
-      ? // No padrão das thumbs que a equipe usa de referência (A×B, GOC, Empreendedorismo Feminino).
-        `COMPOSIÇÃO 16:9 — THUMB DE ALTO CTR, LEGÍVEL EM MINIATURA
-- ${
-          marcas.length
-            ? `${solo ? `${pessoas[0].nome} grande à ESQUERDA, UMA única vez, até no máximo 55% da largura` : "As pessoas à esquerda, até no máximo 55% da largura"}. À DIREITA fica o espaço reservado do escudo (ver PESSOAS): sem pessoa, não repetir ${solo ? pessoas[0].nome : "ninguém"}.`
-            : solo && !hosts.length
-              ? "A pessoa ENORME do lado DIREITO, rosto ocupando quase metade da altura, olhando para a câmera; a headline alinhada à esquerda, no lado oposto."
-              : n >= 3
-                ? `As ${n} pessoas lado a lado numa fileira, ombro a ombro, cabeças grandes e na mesma altura, ocupando os ~55% de cima.`
-                : "Apresentador à ESQUERDA e convidado à DIREITA, cada um ocupando quase um terço da largura, enquadrados do peito para cima, cabeças grandes perto do topo, os dois quase se encostando no centro."
-        }
-- ${solo ? "Rosto" : "Rostos"} com pelo menos 30% da altura da imagem, ${solo ? "nítido" : "nítidos"}, contraste alto e luz de recorte no contorno${solo ? "" : " (azul de um lado, âmbar do outro)"}. Os ombros podem passar por trás da headline.
-- Fundo temático, não um estúdio genérico: ${solo ? "um universo ligado ao tema" : "atrás de cada pessoa um universo ligado ao tema ou ao que ela representa (ex.: servidores e fibra óptica de um lado, cosmos do outro)"}, desfocado e fundido no centro. Nos cantos inferiores, silhuetas escuras de elementos do tema, sem chamar atenção.
-${c.logo ? "- Logotipo oficial pequeno-médio no topo, centralizado entre as cabeças, sem tocar nos rostos.\n" : ""}- Headline ocupando os ~40% de baixo, centralizada e quase de borda a borda (90% da largura), em ${h.l3 ? "três" : "duas"} linhas: ${h.l3 ? "a primeira menor, a do meio a MAIOR e na cor de destaque com brilho, a terceira grande" : "a primeira menor, a segunda a MAIOR e na cor de destaque com brilho"}; letras grossas, sombra forte, legível num celular.
-- Faixa fina de luz na base da imagem. Nada de cartela, moldura ou caixa atrás da headline.
+      ? `COMPOSIÇÃO 16:9
+- Região superior (~60%): ${marcas.length ? `o apresentador à esquerda e o logotipo de ${marcaTxt} grande à direita, no lugar do convidado (sem pessoa desse lado)` : solo ? "a pessoa grande à direita" : "as pessoas lado a lado, rostos grandes, nítidos e expressivos"}; fundo de estúdio desfocado.
+${c.logo ? "- Logotipo oficial na região superior central, entre as pessoas.\n" : ""}- Região inferior (~40%): a headline gigante, tipografia pesada, condensada e tridimensional, ocupando quase toda a largura útil.
 - SEM nomes, SEM data, SEM horário, SEM tópicos nesta versão.`
-      : marcas.length
-        ? `COMPOSIÇÃO
-- ${solo ? `${pessoas[0].nome} à ESQUERDA, UMA única vez, até no máximo 55% da largura, com a identificação dele embaixo` : "As pessoas à esquerda, até no máximo 55% da largura, cada uma com a identificação embaixo"}.
-- À DIREITA, o espaço reservado do escudo (ver PESSOAS), vazio. Nesse lado NÃO há pessoa nenhuma.
-${c.logo ? "- Logotipo oficial no topo, centralizado.\n" : ""}- Selo ${c.gravado ? "ESTREIA" : "AO VIVO"}, data, horário e "NO YOUTUBE" no alto, centralizados, logo abaixo do logotipo do programa e ACIMA do espaço reservado, sem cobrir o rosto.
-- Headline gigante na metade de baixo, ocupando 55% a 90% da largura; tópicos logo abaixo.`
-        : solo
+      : solo
         ? `COMPOSIÇÃO
 - A pessoa domina o lado DIREITO; a headline e a chamada dominam o lado ESQUERDO.
 ${c.logo ? "- Logotipo oficial no canto superior esquerdo.\n" : ""}- "${hora.replace("ÀS ", "")}" e o dia com enorme destaque: a pessoa precisa entender em menos de 2 segundos o programa, o dia e o horário.`
         : `COMPOSIÇÃO
-- ${hosts.length ? "Apresentador à esquerda, convidado à direita" : "As pessoas lado a lado"}, enquadramento cinematográfico de meio corpo, rostos grandes na metade de cima.
+- ${hosts.length ? "Apresentador à esquerda, convidado à direita" : "As pessoas lado a lado"}, enquadramento cinematográfico de meio corpo, rostos grandes na metade de cima.${marcas.length ? ` O convidado é o logotipo de ${marcaTxt}, grande, sem nenhuma pessoa desse lado.` : ""}
 ${c.logo ? "- Logotipo oficial no topo, centralizado.\n" : ""}- Selo ${c.gravado ? "ESTREIA" : "AO VIVO"}, data, horário e "NO YOUTUBE" na região central, entre as pessoas, sem cobrir rostos.
 - Identificação de cada pessoa ao lado dela, discreta, sem disputar com a headline.
 - Headline gigante na metade de baixo, ocupando 55% a 90% da largura, sem cobrir rostos; tópicos logo abaixo.`;
@@ -231,10 +192,10 @@ A arte ocupa a tela inteira, de borda a borda: sem faixas vazias, molduras ou ba
 
 PESSOAS — exatamente ${n} ${n === 1 ? "pessoa" : "pessoas"} na arte, nem mais nem menos:
 ${descPessoas.join("\n")}
-${descMarcas.length ? `\nCONVIDADO SEM PESSOA (${n} ${n === 1 ? "pessoa" : "pessoas"} acima é o total — esta parte não conta como pessoa):\n${descMarcas.join("\n")}\n` : ""}${nosFrames ? `
+${nosFrames ? `
 FRAMES DO EPISÓDIO (${nosFrames}): imagens reais do episódio gravado. O cenário parte do lugar real que eles mostram (fachada, salão, produtos), com o tratamento cinematográfico abaixo. As pessoas dos frames são as mesmas das fotografias: os rostos vêm das fotografias, sem misturar nem inventar.
 ` : ""}${PRESERVAR}
-${logoI ? `\nLOGOTIPO: IMAGEM ${logoI}. Preservar símbolo, tipografia, cores e proporções; não redesenhar nem criar outra versão (as letras mantêm a cor original da imagem, sem escurecer, dourar ou metalizar). Nenhum texto a mais junto do logotipo (nada de slogan ou nome do programa embaixo). Aparece UMA vez só, no lugar indicado — não estampar em bola, camisa, troféu ou outro objeto. Só integrar com luz e sombra suaves.` : "\nNão há logotipo enviado: não desenhe nenhum símbolo ou logo."}
+${logoI ? `\nLOGOTIPO: IMAGEM ${logoI}. Preservar símbolo, tipografia, cores e proporções; não redesenhar nem criar outra versão. Só integrar com luz e sombra suaves.` : "\nNão há logotipo enviado: não desenhe nenhum símbolo ou logo."}
 ${refsI.length ? `\nREFERÊNCIAS DO EPISÓDIO (use como elementos do cenário, sem copiar textos delas):\n${refsI.join("\n")}` : ""}
 
 IDENTIDADE VISUAL
@@ -254,59 +215,9 @@ ${PROIBIDO}
 
 REVISÃO ANTES DE ENTREGAR
 ${f === "thumb" ? "" : `✓ "${dia}" e "${hora}" exatamente assim — não troque o dia da semana nem a data.\n`}✓ ${n} ${n === 1 ? "pessoa" : "pessoas"}, os rostos idênticos às fotografias: quem conhece a pessoa a reconhece na hora, sem cara de IA.
-${marcas.length ? `✓ ${marcas.map((m) => m.nome).join(" e ")} aparece só como logotipo — se houver uma pessoa a mais representando o convidado, apague e coloque o logotipo no lugar.\n` : ""}✓ Ortografia perfeita.`;
+✓ Ortografia perfeita.`;
 
   return { prompt, refs };
-}
-
-/**
- * O escudo real do clube/empresa como um selo redondo (o perfil do Instagram
- * vem quadrado, com fundo), aro branco e brilho na cor do quadro, no espaço
- * que o modelo deixou vazio. No feed e no story, o nome e o papel embaixo.
- */
-async function aplicarMarca(arte: Buffer, f: FormatoCena, m: PessoaCena, t: QuadroTheme): Promise<Buffer> {
-  const { w, h } = FORMATO[f];
-  const { cx, cy, d, nome } = VAGA[f];
-  const aro = Math.round(d * 0.03);
-  const dentro = d - 2 * aro;
-  const circulo = (s: number) => Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}"><circle cx="${s / 2}" cy="${s / 2}" r="${s / 2}" fill="#fff"/></svg>`);
-  const escudo = await sharp(m.img!.buf)
-    .rotate()
-    .resize(dentro, dentro, { fit: "cover" })
-    .composite([{ input: circulo(dentro), blend: "dest-in" }])
-    .png()
-    .toBuffer();
-
-  const font = anton();
-  let texto = "";
-  if (nome) {
-    const n = m.nome.toUpperCase();
-    const p = m.papel.toUpperCase();
-    const fn = fit(n, d + 160, 62);
-    const fp = fit(p, d + 160, 34);
-    const y1 = cy + d / 2 + 34 + fn.size * CAP;
-    const y2 = y1 + 14 + fp.size * CAP;
-    texto = `<path d="${font.getPath(n, cx - fn.width / 2, y1, fn.size).toPathData(2)}" fill="#fff" filter="url(#sombra)"/>
-<path d="${font.getPath(p, cx - fp.width / 2, y2, fp.size).toPathData(2)}" fill="${t.accent[1]}" filter="url(#sombra)"/>`;
-  }
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
-<defs>
-  <filter id="brilho" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="${Math.round(d * 0.07)}"/></filter>
-  <filter id="sombra" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.8"/></filter>
-</defs>
-<circle cx="${cx}" cy="${cy}" r="${d / 2 + aro * 2}" fill="${t.glow}" opacity="0.55" filter="url(#brilho)"/>
-<circle cx="${cx}" cy="${cy + 8}" r="${d / 2}" fill="#000" opacity="0.6" filter="url(#brilho)"/>
-<circle cx="${cx}" cy="${cy}" r="${d / 2}" fill="#fff"/>
-${texto}
-</svg>`;
-  const flat = await sharp(arte)
-    .composite([
-      { input: Buffer.from(svg), left: 0, top: 0 },
-      { input: escudo, left: Math.round(cx - dentro / 2), top: Math.round(cy - dentro / 2) },
-    ])
-    .png()
-    .toBuffer();
-  return jpegFinal(flat, w, h);
 }
 
 /** Redimensiona para o tamanho final e comprime: Instagram só publica JPEG; a thumb do YouTube aceita até 2 MB. */
@@ -371,34 +282,10 @@ export async function gerarCenas(c: CenaInput): Promise<{ feed: Buffer; story: B
     throw new Error("Sem foto de ninguém: suba a foto do apresentador ou do convidado, ou tire frames do vídeo.");
   }
   if (c.frames.length && c.pessoas.some((p) => !p.img)) c = { ...c, pessoas: await fotosDosFrames(c.pessoas, c.frames) };
-  // Conferência só com quem tem foto (quem vem dos frames sem recorte não dá para comparar).
-  const comFoto = c.pessoas.filter((p) => !p.marca && p.img);
-  const conferir = comFoto.length === c.pessoas.filter((p) => !p.marca).length;
-  const marcas = c.pessoas.filter((p) => p.marca).map((p) => p.nome);
-  const proibido = marcas.length ? `alguém vestindo o uniforme ou a camisa de ${marcas.join(" ou ")}, ou com o escudo dele na roupa` : null;
   const um = async (f: FormatoCena) => {
     const { prompt, refs } = montar(c, f);
-    let img = await renderWithRefs(prompt, refs, FORMATO[f].aspect);
-    if (conferir) {
-      const fotos = comFoto.map((p) => ({ nome: p.nome, data: p.img!.buf, mime: p.img!.mime }));
-      // Até duas novas tentativas; cabe no maxDuration de 300 s da página.
-      for (let tentativa = 1; tentativa <= 2; tentativa++) {
-        const r = await conferirPessoas(img, fotos, proibido);
-        if (r.ok) break;
-        console.warn(`[agenda/arte] ${f} rejeitada (tentativa ${tentativa}): ${r.motivo}`);
-        const extra = `\n\nATENÇÃO — a tentativa anterior foi rejeitada por: ${r.motivo || "pessoa a mais ou repetida"}. Corrija isso: só ${fotos.map((p) => p.nome).join(" e ")}, uma vez cada${marcas.length ? `, e ${marcas.join(" e ")} só como escudo` : ""}.`;
-        // Se a nova tentativa falhar, fica a anterior: melhor uma arte para revisar do que nenhuma.
-        const nova = await renderWithRefs(prompt + extra, refs, FORMATO[f].aspect).catch((e) => {
-          console.warn(`[agenda/arte] ${f}: nova tentativa falhou: ${e instanceof Error ? e.message : e}`);
-          return null;
-        });
-        if (!nova) break;
-        img = nova;
-      }
-    }
-    const final = await jpegFinal(img, FORMATO[f].w, FORMATO[f].h);
-    const marca = c.pessoas.find((p) => p.marca && p.img);
-    return marca ? aplicarMarca(final, f, marca, c.quadro) : final;
+    const img = await renderWithRefs(prompt, refs, FORMATO[f].aspect);
+    return jpegFinal(img, FORMATO[f].w, FORMATO[f].h);
   };
   const [feed, story, thumb] = await Promise.all([um("feed"), um("story"), um("thumb")]);
   return { feed, story, thumb };
@@ -445,7 +332,7 @@ export async function gerarCenaSemana(cards: CardSemana[], logoPfc: Img | null, 
     else {
       for (const pe of k.pessoas.filter((x): x is PessoaCena & { img: Img } => !!x.img)) imgs.push(
           pe.marca
-            ? `IMAGEM ${add(`LOGOTIPO de ${pe.nome} (convidado — instituição, NÃO é uma pessoa) — card ${idx + 1}.`, pe.img)} (logotipo de ${pe.nome}: usar como logo, sem desenhar pessoa para representá-lo)`
+            ? `IMAGEM ${add(`LOGOTIPO de ${pe.nome} (convidado — clube/empresa, NÃO é uma pessoa) — card ${idx + 1}.`, pe.img)} (logotipo de ${pe.nome}, sem desenhar pessoa para representá-lo)`
             : `IMAGEM ${add(`FOTOGRAFIA de ${pe.nome} (${pe.host ? "apresentador" : "convidado"}) — card ${idx + 1}.`, pe.img)} (${pe.nome}, ${pe.papel})`
         );
       if (k.logo) imgs.push(`IMAGEM ${add(`LOGOTIPO OFICIAL do ${k.quadro.name}.`, k.logo)} (logotipo do ${k.quadro.name})`);
