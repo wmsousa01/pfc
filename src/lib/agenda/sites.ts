@@ -135,7 +135,7 @@ async function baixar(url: string): Promise<string> {
   const corpo = decodificar(new Uint8Array(r.corpo).buffer, (r.headers["content-type"] as string | undefined) ?? null);
   if (r.status === 403 || r.status === 503) {
     if (/Just a moment|cf-chl|challenge-platform/i.test(corpo) || String(r.headers.server).toLowerCase() === "cloudflare") {
-      throw new Bloqueado("o site está atrás de proteção anti-robô (Cloudflare) e não deixa a leitura automática; use o Instagram oficial da prefeitura");
+      throw new Bloqueado("o site está atrás de proteção anti-robô (Cloudflare) e não deixa a leitura automática");
     }
   }
   if (r.status >= 300 && r.status < 400 && r.headers.location) return baixar(new URL(r.headers.location, url).toString());
@@ -162,6 +162,29 @@ const semTags = (s: string) =>
     .replace(/&#0?39;/g, "'")
     .replace(/\s+/g, " ")
     .trim();
+
+const meta = (html: string, nome: string) =>
+  html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${nome}["'][^>]*content=["']([^"']*)["']`, "i"))?.[1] ??
+  html.match(new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]*(?:property|name)=["']${nome}["']`, "i"))?.[1] ??
+  null;
+
+/**
+ * Uma notícia avulsa de qualquer site, para a equipe pôr no roteiro: título,
+ * foto (og:image) e o texto dos parágrafos. Mesma regra dos sites das
+ * prefeituras: o que o site mostra para qualquer visitante, e site com
+ * bloqueio anti-robô vira erro pedindo para colar o texto.
+ */
+export async function lerPagina(url: string): Promise<{ titulo: string | null; imagem: string | null; texto: string }> {
+  const html = await baixar(url);
+  const titulo = semTags(meta(html, "og:title") ?? html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? "") || null;
+  const img = meta(html, "og:image");
+  const corpo = html.replace(/<(script|style|nav|header|footer|aside)[\s\S]*?<\/\1>/gi, " ");
+  const paragrafos = Array.from(corpo.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi))
+    .map((m) => semTags(m[1]))
+    .filter((p) => p.length > 40);
+  const texto = (paragrafos.join("\n\n") || semTags(meta(html, "og:description") ?? "")).slice(0, 8000);
+  return { titulo, imagem: img ? new URL(img, url).toString() : null, texto };
+}
 
 /**
  * Portal DynamikaWeb (o de Mogi Mirim e de várias prefeituras paulistas):
@@ -220,7 +243,7 @@ export async function coletarSites(dias: number): Promise<{ artigos: ArtigoSite[
     try {
       artigos.push(...(await dynamika(base, desde)));
     } catch (e) {
-      erros.push(`${nomeDoSite(base)}: ${msg(e)}`);
+      erros.push(`${nomeDoSite(base)}: ${msg(e)}${e instanceof Bloqueado ? "; a fonte dessa prefeitura fica sendo o Instagram oficial" : ""}`);
     }
   }
   return { artigos, erros };

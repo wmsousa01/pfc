@@ -30,8 +30,12 @@ export type Briefing = {
    * apoio opcional e o cenário temático que a IA desenha atrás das pessoas.
    */
   arte: { l1: string; l2: string; l3?: string; topicos?: string; sub?: string; cena?: string };
-  /** PFC News: as notícias da semana que viraram pauta, com o post de origem de cada uma. */
-  noticias?: { titulo: string; resumo: string; fontes: { handle: string; url: string; data: string }[] }[];
+  /**
+   * PFC News: as notícias da semana que viraram pauta, com a origem de cada
+   * uma. `rotulo` é como a fonte aparece no GC ("@guacuagora",
+   * "mogimirim.sp.gov.br", "EPTV"); sem ele, "@" + handle.
+   */
+  noticias?: { titulo: string; resumo: string; fontes: { handle: string; url: string; data: string; rotulo?: string }[] }[];
 };
 
 /** Uma matéria do roteiro do apresentador, com o texto dele como está no documento. */
@@ -57,7 +61,28 @@ export type Materia = {
  * geração substitui. Sem origem (ou "apresentador"): o que ele mandou, que
  * gerar a pauta de novo não apaga.
  */
-export type Roteiro = { arquivo: string | null; importado_em: string; origem?: "ia" | "apresentador"; materias: Materia[] };
+/**
+ * Notícia que a equipe acrescentou de outra fonte (link, texto colado ou os
+ * dois). Fica no roteiro e entra de novo, obrigatória, quando a pauta é
+ * gerada outra vez. `materia`: o título da matéria que ela virou.
+ */
+export type Extra = {
+  fonte: string;
+  url: string | null;
+  texto: string;
+  imagem: string | null;
+  materia: string;
+  adicionada_em: string;
+  por: string;
+};
+
+export type Roteiro = {
+  arquivo: string | null;
+  importado_em: string;
+  origem?: "ia" | "apresentador";
+  materias: Materia[];
+  extras?: Extra[];
+};
 
 export type Slot = {
   id: number;

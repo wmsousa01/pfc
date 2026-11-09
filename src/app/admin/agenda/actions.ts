@@ -23,6 +23,7 @@ import {
   sincronizarLive,
 } from "@/lib/agenda/fluxo";
 import { abrirEspelho } from "@/lib/agenda/espelho";
+import { adicionarExtra, removerExtra } from "@/lib/agenda/extras";
 import { importarRoteiro, tirarRoteiro } from "@/lib/agenda/roteiro";
 import { disconnectCalendar } from "@/lib/agenda/gcal";
 import { pedirUpload, registrarMaterial, removerMaterial } from "@/lib/agenda/materiais";
@@ -646,6 +647,24 @@ export async function importarRoteiroAction(_prev: ActionState, form: FormData):
 export async function tirarRoteiroAction(form: FormData): Promise<void> {
   const role = await requireAdmin();
   await tirarRoteiro(str(form, "id"), actorOf(role));
+  refresh();
+}
+
+/** Notícia de outra fonte no roteiro: link, nome da fonte para o GC, texto colado e a posição. */
+export async function extraAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const posicao = str(form, "posicao");
+  return run((a) =>
+    adicionarExtra(
+      str(form, "id"),
+      { url: opt(form, "url"), fonte: opt(form, "fonte"), texto: opt(form, "texto"), posicao: posicao === "" ? null : Number(posicao) },
+      a
+    )
+  );
+}
+
+export async function removerExtraAction(form: FormData): Promise<void> {
+  const role = await requireAdmin();
+  await removerExtra(str(form, "id"), Number(str(form, "indice")), actorOf(role));
   refresh();
 }
 
