@@ -510,7 +510,7 @@ export default async function ProducaoPage({ searchParams }: { searchParams: { v
         {view === "lives" && (
           <section className="mt-4">
             <p className="text-white/40 text-xs mb-3">
-              Live nova é cortada sozinha na rodada diária, 30 min depois do fim. As anteriores ao recurso esperam um clique.
+              Live com episódio na agenda é cortada sozinha uns 30 min depois do fim. Live fora da agenda, e as anteriores ao recurso, esperam um clique.
             </p>
             {lives.length === 0 && <p className="text-white/40 text-sm">Nenhuma live encerrada encontrada.</p>}
             <div className="grid lg:grid-cols-2 gap-3">

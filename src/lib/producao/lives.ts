@@ -91,7 +91,7 @@ function refreshJobs(live: ProducaoLive, byId: Map<string, ContentaJob>): { jobs
 /**
  * Atualiza o andamento das lives que estão sendo cortadas. O painel chama ao
  * abrir: sem isso, um job pronto no Contenta só aparecia depois de alguém
- * clicar em "Buscar no canal" ou da rodada diária.
+ * clicar em "Buscar no canal" ou da rodada da agenda.
  */
 export async function refreshCuttingLives(): Promise<void> {
   const { data } = await db().from("producao_lives").select("*").in("status", ["cortando", "erro"]);
@@ -246,6 +246,49 @@ export async function triggerLiveCuts(liveId: string, actor: string, opts: { for
 
 export async function setLiveStatus(liveId: string, status: "ignorada" | "detectada" | "ja_cortada") {
   await patch(liveId, { status, error: null });
+}
+
+/** Depois do fim previsto, por quanto tempo a automação ainda procura a live (live que estica, VOD lento). */
+const JANELA_POS_LIVE_MS = 24 * 60 * 60_000;
+/** Status da live que já tiraram o episódio da espera: cortada, em corte ou dispensada. */
+const LIVE_RESOLVIDA: LiveStatus[] = ["cortando", "cortada", "ja_cortada", "ignorada"];
+
+/**
+ * Episódios ao vivo da agenda cuja transmissão já devia ter acabado (fim
+ * previsto até 24 h atrás) e ainda não foram cortados. Fora dessas janelas a
+ * automação nem consulta o YouTube. Episódio gravado (PFC Visita, com vídeo
+ * no Drive) fica de fora: quem corta é a fila do agenda-video.
+ */
+export async function transmissoesAguardandoCorte(agora = Date.now()): Promise<{ id: string; quadro: string; inicio: string }[]> {
+  // Margem de 1 dia na consulta; a janela exata depende da duração de cada um.
+  const { data, error } = await db()
+    .from("agenda_episodios")
+    .select("id, quadro, inicio, duracao_min, yt_broadcast_id")
+    .neq("status", "cancelado")
+    .is("video_drive_id", null)
+    .gte("inicio", new Date(agora - JANELA_POS_LIVE_MS - 2 * 86_400_000).toISOString())
+    .lte("inicio", new Date(agora).toISOString());
+  if (error) throw new Error(error.message);
+  const eps = ((data ?? []) as { id: string; quadro: string; inicio: string; duracao_min: number; yt_broadcast_id: string | null }[]).filter(
+    (e) => {
+      const fim = new Date(e.inicio).getTime() + e.duracao_min * 60_000;
+      return agora >= fim && agora - fim <= JANELA_POS_LIVE_MS;
+    }
+  );
+  if (eps.length === 0) return [];
+
+  // A live criada pelo hub tem o mesmo id do vídeo: se ela já foi resolvida, o episódio sai da espera.
+  const ids = eps.map((e) => e.yt_broadcast_id).filter((v): v is string => !!v);
+  const resolvidas = new Set<string>();
+  if (ids.length) {
+    const { data: lives } = await db().from("producao_lives").select("youtube_id, status").in("youtube_id", ids);
+    for (const l of (lives ?? []) as { youtube_id: string; status: LiveStatus }[]) {
+      if (LIVE_RESOLVIDA.includes(l.status)) resolvidas.add(l.youtube_id);
+    }
+  }
+  return eps
+    .filter((e) => !e.yt_broadcast_id || !resolvidas.has(e.yt_broadcast_id))
+    .map(({ id, quadro, inicio }) => ({ id, quadro, inicio }));
 }
 
 /** Rodada da automação: sincroniza e corta as lives novas, até AUTO_PER_RUN. */
