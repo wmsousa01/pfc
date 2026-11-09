@@ -49,7 +49,6 @@ export async function adicionarExtra(
 ): Promise<string> {
   const ep = await getEpisodio(epId);
   if (!ep) throw new Error("Episódio não encontrado.");
-  if (!ep.roteiro) throw new Error("Gere a pauta ou ponha o roteiro do apresentador primeiro: a notícia entra nele.");
   if (!dados.url && !dados.texto) throw new Error("Cole o link ou o texto da notícia.");
 
   let url: string | null = null;
@@ -71,6 +70,16 @@ export async function adicionarExtra(
   const texto = [lida?.titulo, dados.texto?.trim(), lida?.texto].filter(Boolean).join("\n\n");
   if (texto.length < 80) throw new Error("O link não trouxe o texto da notícia. Cole o texto junto.");
   const fonte = dados.fonte?.trim() || (url ? new URL(url).hostname.replace(/^www\./, "") : "Equipe PFC");
+
+  // Antes da pauta: só guarda. A geração lê as extras e escreve a matéria junto com as outras.
+  if (!ep.roteiro?.materias.length) {
+    const titulo = (lida?.titulo || texto.split("\n")[0]).slice(0, 120);
+    const guardada: Extra = { fonte, url, texto: texto.slice(0, 8000), imagem: lida?.imagem ?? null, materia: titulo, adicionada_em: new Date().toISOString(), por: actor };
+    const base = ep.roteiro ?? { arquivo: null, importado_em: guardada.adicionada_em, origem: "ia" as const, materias: [] };
+    await updateEpisodio(ep.id, { roteiro: { ...base, extras: [...(base.extras ?? []), guardada] } });
+    await logAgenda(ep.id, actor, "guardou notícia de outra fonte para a pauta", `${titulo} (${fonte})`);
+    return titulo;
+  }
 
   const materias = [...ep.roteiro.materias];
   const fim = materias.findIndex((m) => m.tipo === "encerramento");
@@ -143,7 +152,8 @@ export async function removerExtra(epId: string, indice: number, actor: string):
   const ep = await getEpisodio(epId);
   const extra = ep?.roteiro?.extras?.[indice];
   if (!ep?.roteiro || !extra) return;
-  const pos = ep.roteiro.materias.findIndex((m) => m.titulo === extra.materia);
+  // Guardada antes da pauta: ainda não virou matéria.
+  const pos = ep.roteiro.materias.length ? ep.roteiro.materias.findIndex((m) => m.titulo === extra.materia) : -1;
   const materias = ep.roteiro.materias.filter((_, i) => i !== pos);
   const atual = pos >= 0 ? await deslocar(ep, pos, -1) : ep.espelho_atual;
   await updateEpisodio(ep.id, {

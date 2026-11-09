@@ -126,7 +126,7 @@ export async function importarRoteiro(
   }
 
   const materias = await lerRoteiro(arquivo, texto);
-  const roteiro: Roteiro = { arquivo: nome, importado_em: new Date().toISOString(), origem: "apresentador", materias };
+  const roteiro: Roteiro = { arquivo: nome, importado_em: new Date().toISOString(), origem: "apresentador", materias, ...(ep.roteiro?.extras?.length ? { extras: ep.roteiro.extras } : {}) };
   const fora = await remapearImagens(ep.id, blocosDoEspelho(ep.briefing, ep.roteiro), blocosDoEspelho(ep.briefing, roteiro));
   await updateEpisodio(ep.id, { roteiro, espelho_atual: null, espelho_imagem: null });
   await logAgenda(ep.id, actor, "pôs o roteiro do apresentador no espelho", `${nome ?? "texto colado"}: ${materias.length} matérias`);
@@ -164,6 +164,9 @@ export async function tirarRoteiro(epId: string, actor: string): Promise<void> {
   const ep = await getEpisodio(epId);
   if (!ep?.roteiro) return;
   await remapearImagens(ep.id, blocosDoEspelho(ep.briefing, ep.roteiro), blocosDoEspelho(ep.briefing, null));
-  await updateEpisodio(ep.id, { roteiro: null, espelho_atual: null, espelho_imagem: null });
+  // As notícias extras ficam guardadas para a próxima pauta.
+  const extras = ep.roteiro.extras ?? [];
+  const roteiro: Roteiro | null = extras.length ? { arquivo: null, importado_em: new Date().toISOString(), origem: "ia", materias: [], extras } : null;
+  await updateEpisodio(ep.id, { roteiro, espelho_atual: null, espelho_imagem: null });
   await logAgenda(ep.id, actor, "tirou o roteiro do apresentador do espelho");
 }

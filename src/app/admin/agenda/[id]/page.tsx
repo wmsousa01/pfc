@@ -144,6 +144,9 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
   const blocos = blocosDoEspelho(b, ep.roteiro).map((x, i) => ({ value: String(i), label: `Espelho ${i + 1}: ${x.titulo}`.slice(0, 60) }));
   const espelho = ep.espelho_token ? linkEspelho(ep.espelho_token) : null;
   const noEspelho = materiais.filter((m) => m.bloco != null).length;
+  // O roteiro pode existir só guardando as notícias extras, antes da pauta.
+  const temRoteiro = (ep.roteiro?.materias.length ?? 0) > 0;
+  const extras = ep.roteiro?.extras ?? [];
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] pb-20">
@@ -437,10 +440,11 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
             <div className="mt-4 rounded-xl border border-gold-500/20 bg-gold-500/5 p-4">
               <p className="text-white/70 text-sm">
                 <strong className="text-white">Notícias da semana:</strong> lê os posts dos perfis de notícia e das prefeituras
-                da região (lista em <a href="/admin/agenda/config" className="text-gold-400 underline">Configurar</a>) pela
-                conta do Instagram conectada, escolhe as principais e monta o tema e o roteiro com a fonte de cada uma.
+                no Instagram e as notícias dos sites das prefeituras (listas em{" "}
+                <a href="/admin/agenda/config" className="text-gold-400 underline">Configurar</a>), mais as notícias de outras
+                fontes abaixo, e escreve o roteiro no formato do apresentador, com a fonte e a foto de cada matéria.
               </p>
-              <ProducaoForm action={pautaNewsAction} label="Buscar notícias e gerar roteiro" pending="Lendo os perfis e montando a pauta (~30 s)..." className="mt-3 flex flex-wrap items-center gap-2" buttonClassName="btn-primary px-4 py-2 rounded-lg text-sm font-bold">
+              <ProducaoForm action={pautaNewsAction} label="Buscar notícias e gerar roteiro" pending="Lendo as fontes e escrevendo o roteiro (~1 min)..." className="mt-3 flex flex-wrap items-center gap-2" buttonClassName="btn-primary px-4 py-2 rounded-lg text-sm font-bold">
                 <input type="hidden" name="id" value={ep.id} />
                 <label className="text-xs text-white/60">
                   dos últimos
@@ -469,6 +473,59 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
                   ))}
                 </ol>
               )}
+              <div className="mt-4 border-t border-gold-500/20 pt-4">
+                <p className="text-sm text-white font-bold">Notícias de outras fontes</p>
+                <p className="text-white/50 text-xs mt-1">
+                  Uma notícia que não veio dos perfis nem dos sites das prefeituras (um portal, a EPTV, um release do WhatsApp):
+                  cole o link e/ou o texto e dê o nome da fonte para o GC.{" "}
+                  {temRoteiro
+                    ? "A IA escreve a matéria no formato do apresentador e ela entra no roteiro na posição escolhida, com a foto da página."
+                    : "Ela fica guardada e entra no roteiro quando você clicar em \"Buscar notícias e gerar roteiro\"."}{" "}
+                  Fica guardada também se a pauta for gerada de novo.
+                </p>
+                {extras.length > 0 && (
+                  <ul className="mt-3 space-y-1">
+                    {extras.map((x, i) => (
+                      <li key={i} className="flex flex-wrap items-center gap-2 text-xs text-white/70">
+                        <span className="text-white">{x.materia}</span>
+                        <span className="text-white/40">· {x.fonte}</span>
+                        {x.url && <a href={x.url} target="_blank" className="text-gold-400 hover:underline">link ↗</a>}
+                        <form action={removerExtraAction}>
+                          <input type="hidden" name="id" value={ep.id} />
+                          <input type="hidden" name="indice" value={i} />
+                          <button className="text-white/30 hover:text-red-400">tirar</button>
+                        </form>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <ProducaoForm
+                  action={extraAction}
+                  label={temRoteiro ? "Escrever e pôr no roteiro" : "Guardar para a pauta"}
+                  pending={temRoteiro ? "Escrevendo a matéria (~30 s)..." : "Guardando..."}
+                  okMessage={temRoteiro ? "Pronto: está no roteiro e no espelho." : "Guardada: entra quando gerar a pauta."}
+                  className="mt-3 space-y-2"
+                  buttonClassName={btn2}
+                >
+                  <input type="hidden" name="id" value={ep.id} />
+                  <div className="flex flex-wrap gap-2">
+                    <input name="url" type="url" placeholder="Link da notícia (opcional se colar o texto)" className={`${input} flex-1 min-w-[16rem]`} />
+                    <input name="fonte" placeholder="Fonte no GC (ex.: EPTV)" className={`${input} w-44`} />
+                  </div>
+                  <textarea name="texto" rows={4} placeholder="Texto da notícia: cole quando o site não deixar ler ou quando ela veio pelo WhatsApp" className={area} />
+                  {temRoteiro && (
+                    <label className="block text-white/50 text-xs">
+                      Entra
+                      <select name="posicao" defaultValue="" className={`${input} ml-2`}>
+                        <option value="">antes do encerramento</option>
+                        {ep.roteiro!.materias.slice(0, -1).map((m, i) => (
+                          <option key={i} value={i + 1}>depois de {i + 1}. {m.titulo.slice(0, 50)}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                </ProducaoForm>
+              </div>
               <p className="text-white/30 text-xs mt-3">
                 Só entram perfis Business/Creator; perfil que não deu para ler aparece no histórico. Confira cada notícia no post
                 original antes de falar no ar.
@@ -525,23 +582,23 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
             telas seguem em segundos. Para pôr uma imagem num bloco, escolha o bloco em Materiais.
           </p>
           <div className="mt-4 rounded-xl border border-[#2a2a2a] bg-black/30 p-4">
-            {ep.roteiro ? (
+            {temRoteiro ? (
               <div className="flex flex-wrap items-center gap-3">
-                {ep.roteiro.origem === "ia" ? (
+                {ep.roteiro!.origem === "ia" ? (
                   <p className="text-sm text-white/80 flex-1">
                     <strong className="text-white">Roteiro gerado pela IA no formato do apresentador</strong>:{" "}
-                    {ep.roteiro.materias.length} blocos, em {quando(ep.roteiro.importado_em)}. Baixe em texto para ele ajustar no
+                    {ep.roteiro!.materias.length} blocos, em {quando(ep.roteiro!.importado_em)}. Baixe em texto para ele ajustar no
                     Word/Docs e suba de volta como PDF ou texto: aí passa a valer o dele.
                   </p>
                 ) : (
                   <p className="text-sm text-white/80 flex-1">
                     <strong className="text-white">Segue o roteiro do apresentador</strong>
-                    {ep.roteiro.arquivo && <> ({ep.roteiro.arquivo})</>}: {ep.roteiro.materias.length} blocos, lido em{" "}
-                    {quando(ep.roteiro.importado_em)}. Gerar a pauta de novo não apaga o roteiro dele.
+                    {ep.roteiro!.arquivo && <> ({ep.roteiro!.arquivo})</>}: {ep.roteiro!.materias.length} blocos, lido em{" "}
+                    {quando(ep.roteiro!.importado_em)}. Gerar a pauta de novo não apaga o roteiro dele.
                   </p>
                 )}
                 <a href={`/admin/agenda/${ep.id}/roteiro`} className={btn2}>Baixar em texto</a>
-                {ep.roteiro.origem !== "ia" && (
+                {ep.roteiro!.origem !== "ia" && (
                   <form action={tirarRoteiroAction}>
                     <input type="hidden" name="id" value={ep.id} />
                     <button className={btn2}>Voltar para a pauta da IA</button>
@@ -556,57 +613,14 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
               </p>
             )}
             <details className="mt-2">
-              <summary className="text-xs text-white/40 hover:text-white/70 cursor-pointer">{ep.roteiro ? "Trocar pelo texto colado" : "Colar o texto do roteiro"}</summary>
+              <summary className="text-xs text-white/40 hover:text-white/70 cursor-pointer">{temRoteiro ? "Trocar pelo texto colado" : "Colar o texto do roteiro"}</summary>
               <ProducaoForm action={importarRoteiroAction} label="Usar no espelho" pending="Lendo o roteiro (~1 min)..." className="mt-2 space-y-2" buttonClassName={btn2}>
                 <input type="hidden" name="id" value={ep.id} />
                 <textarea name="texto" rows={8} placeholder="Cole aqui o roteiro inteiro (do Word ou Docs)" className={area} />
               </ProducaoForm>
             </details>
-            {ep.roteiro && (
-              <div className="mt-4 border-t border-[#2a2a2a] pt-4">
-                <p className="text-sm text-white">Notícias de outras fontes</p>
-                <p className="text-white/40 text-xs mt-1">
-                  Uma notícia que não veio dos perfis nem dos sites das prefeituras (um portal, a EPTV, um release do
-                  WhatsApp). A IA escreve a matéria no formato do apresentador e ela entra no roteiro na posição escolhida, com
-                  a foto da página. Ela fica guardada: se a pauta for gerada de novo, entra de novo.
-                </p>
-                {(ep.roteiro.extras ?? []).length > 0 && (
-                  <ul className="mt-3 space-y-1">
-                    {ep.roteiro.extras!.map((x, i) => (
-                      <li key={i} className="flex flex-wrap items-center gap-2 text-xs text-white/70">
-                        <span className="text-white">{x.materia}</span>
-                        <span className="text-white/40">· {x.fonte}</span>
-                        {x.url && <a href={x.url} target="_blank" className="text-gold-400 hover:underline">link ↗</a>}
-                        <form action={removerExtraAction}>
-                          <input type="hidden" name="id" value={ep.id} />
-                          <input type="hidden" name="indice" value={i} />
-                          <button className="text-white/30 hover:text-red-400">tirar do roteiro</button>
-                        </form>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <ProducaoForm action={extraAction} label="Escrever e pôr no roteiro" pending="Escrevendo a matéria (~30 s)..." okMessage="Pronto: está no roteiro e no espelho." className="mt-3 space-y-2" buttonClassName={btn2}>
-                  <input type="hidden" name="id" value={ep.id} />
-                  <div className="flex flex-wrap gap-2">
-                    <input name="url" type="url" placeholder="Link da notícia (opcional se colar o texto)" className={`${input} flex-1 min-w-[16rem]`} />
-                    <input name="fonte" placeholder="Fonte no GC (ex.: EPTV)" className={`${input} w-44`} />
-                  </div>
-                  <textarea name="texto" rows={4} placeholder="Texto da notícia: cole quando o site não deixar ler ou quando ela veio pelo WhatsApp" className={area} />
-                  <label className="block text-white/50 text-xs">
-                    Entra
-                    <select name="posicao" defaultValue="" className={`${input} ml-2`}>
-                      <option value="">antes do encerramento</option>
-                      {ep.roteiro.materias.slice(0, -1).map((m, i) => (
-                        <option key={i} value={i + 1}>depois de {i + 1}. {m.titulo.slice(0, 50)}</option>
-                      ))}
-                    </select>
-                  </label>
-                </ProducaoForm>
-              </div>
-            )}
           </div>
-          {!b && !ep.roteiro ? (
+          {!b && !temRoteiro ? (
             <p className="text-white/50 text-sm mt-3">Gere o roteiro ou use o do apresentador primeiro: o espelho sai dos blocos.</p>
           ) : espelho ? (
             <div className="mt-4 space-y-3">
