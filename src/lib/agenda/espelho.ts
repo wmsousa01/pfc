@@ -3,7 +3,7 @@ import { createHash } from "crypto";
 import { site } from "@/lib/config";
 import { BUCKET } from "@/lib/producao/store";
 import { casarNoticias } from "./casar-noticias";
-import { db, getEpisodio, logAgenda, materiaisDe, newToken, type Briefing, type Episodio, type Material } from "./store";
+import { db, getEpisodio, logAgenda, materiaisDe, newToken, type Briefing, type Episodio, type Material, type Materia, type Roteiro } from "./store";
 
 /**
  * Espelho da transmissão: o roteiro bloco a bloco com as imagens de cada
@@ -21,22 +21,76 @@ export type BlocoEspelho = {
   pontos: string[];
   /** PFC News: as notícias do bloco, com as fontes para o crédito do GC. */
   noticias: Noticia[];
+  /** Roteiro do apresentador: a matéria inteira, como ele escreveu. */
+  materia: Materia | null;
 };
 
+/** Parte das palavras da notícia que a matéria do apresentador precisa ter para receber o GC e as fotos dela. */
+const MINIMO_MATERIA = 0.15;
+
 /**
- * Abertura (o resumo) e depois um bloco por item da pauta. No PFC News cada
- * notícia vai para o bloco que fala dela (ver casarNoticias); a que não
- * casou com nenhum fica na abertura, para não sumir do GC.
+ * Com roteiro do apresentador, um bloco por matéria dele, e cada notícia da
+ * pauta (fontes do GC e fotos) vai para a matéria que fala dela; a que ele
+ * não usou fica de fora. Sem roteiro, a abertura (o resumo) e um bloco por
+ * item da pauta da IA; a notícia que não casou fica na abertura, para não
+ * sumir do GC.
  */
-export function blocosDoEspelho(b: Briefing | null): BlocoEspelho[] {
+export function blocosDoEspelho(b: Briefing | null, roteiro: Roteiro | null = null): BlocoEspelho[] {
+  const noticias = b?.noticias ?? [];
+  if (roteiro?.materias.length) {
+    const ms = roteiro.materias;
+    const alvos = ms.map((m, i) => ({ i, m })).filter((x) => x.m.tipo === "materia");
+    const parecida = casarNoticias(
+      alvos.map(({ m }) => ({ bloco: [m.titulo, m.manchete].filter(Boolean).join(" "), perguntas: [m.leitura ?? ""] })),
+      noticias,
+      MINIMO_MATERIA
+    );
+    // A pauta gerada no formato dele tem uma notícia por matéria, com o mesmo título.
+    const onde = noticias.map((n, k) => {
+      const igual = ms.findIndex((m) => m.tipo === "materia" && m.titulo === n.titulo);
+      return igual >= 0 ? igual : parecida[k] < 0 ? -1 : alvos[parecida[k]].i;
+    });
+    return ms.map((m, i) => ({ titulo: m.titulo, texto: null, pontos: [], noticias: noticias.filter((_, k) => onde[k] === i), materia: m }));
+  }
   if (!b) return [];
-  const noticias = b.noticias ?? [];
   const onde = casarNoticias(b.pauta, noticias);
   const doBloco = (i: number) => noticias.filter((_, k) => onde[k] === i);
   return [
-    { titulo: "Abertura", texto: b.resumo || null, pontos: [], noticias: doBloco(-1) },
-    ...b.pauta.map((p, i) => ({ titulo: p.bloco, texto: null, pontos: p.perguntas, noticias: doBloco(i) })),
+    { titulo: "Abertura", texto: b.resumo || null, pontos: [], noticias: doBloco(-1), materia: null },
+    ...b.pauta.map((p, i) => ({ titulo: p.bloco, texto: null, pontos: p.perguntas, noticias: doBloco(i), materia: null })),
   ];
+}
+
+/**
+ * "DfHjCCtDty1" de https://www.instagram.com/p/DfHjCCtDty1/, "5108" de
+ * .../noticia/view/5108/...: vai no nome das fotos tiradas da fonte.
+ */
+export const codigoDoPost = (url: string) =>
+  url.match(/\/(?:p|reel|tv)\/([^/?#]+)/)?.[1] ?? url.match(/\/noticia\/view\/(\d+)/)?.[1] ?? null;
+
+/**
+ * O espelho mudou de blocos (entrou ou saiu o roteiro do apresentador):
+ * cada imagem segue a notícia do bloco em que estava — a foto do post pela
+ * notícia de onde veio. Abertura continua na abertura e o último bloco no
+ * último; imagem de bloco sem notícia sai do espelho e fica em Materiais.
+ */
+export async function remapearImagens(epId: string, antes: BlocoEspelho[], depois: BlocoEspelho[]): Promise<number> {
+  let fora = 0;
+  for (const m of await materiaisDe(epId)) {
+    if (m.bloco == null) continue;
+    const i = blocoDa(m, antes.length);
+    const doBloco = antes[i]?.noticias ?? [];
+    const daFoto = doBloco.find((n) => n.fontes.some((f) => {
+      const c = codigoDoPost(f.url);
+      return !!c && m.nome.includes(c);
+    }));
+    const titulos = new Set((daFoto ? [daFoto] : doBloco).map((n) => n.titulo));
+    let novo: number | null = depois.findIndex((d) => d.noticias.some((n) => titulos.has(n.titulo)));
+    if (novo < 0) novo = i === 0 ? 0 : i === antes.length - 1 ? depois.length - 1 : null;
+    if (novo == null) fora++;
+    if (novo !== m.bloco) await db().from("agenda_materiais").update({ bloco: novo }).eq("id", m.id);
+  }
+  return fora;
 }
 
 export const linkEspelho = (token: string) => `${site.url}/espelho/${token}`;
@@ -67,7 +121,7 @@ export async function abrirEspelho(epId: string, actor: string, trocar = false):
 export async function moverEspelho(token: string, atual: number | null): Promise<number | null> {
   const ep = await episodioPorEspelho(token);
   if (!ep) throw new Error("Link inválido.");
-  const total = blocosDoEspelho(ep.briefing).length;
+  const total = blocosDoEspelho(ep.briefing, ep.roteiro).length;
   const v = atual == null || total === 0 ? null : Math.min(total - 1, Math.max(0, Math.trunc(atual)));
   const { error } = await db().from("agenda_episodios").update({ espelho_atual: v, espelho_imagem: null }).eq("id", ep.id);
   if (error) throw new Error(error.message);
@@ -93,7 +147,7 @@ export const blocoDa = (m: Material, total: number) => Math.min(m.bloco ?? 0, Ma
 /** O que a tela do OBS mostra agora: a imagem escolhida do bloco no ar ou a primeira dele. */
 export function imagemNaTela(ep: Episodio, materiais: Material[]): { id: string; mime: string } | null {
   if (ep.espelho_atual == null || ep.espelho_imagem === SEM_IMAGEM) return null;
-  const total = blocosDoEspelho(ep.briefing).length;
+  const total = blocosDoEspelho(ep.briefing, ep.roteiro).length;
   const doBloco = materiais.filter((m) => blocoDa(m, total) === ep.espelho_atual);
   const m = doBloco.find((x) => x.id === ep.espelho_imagem) ?? doBloco[0];
   return m ? { id: m.id, mime: m.mime } : null;

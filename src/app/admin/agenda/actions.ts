@@ -23,9 +23,11 @@ import {
   sincronizarLive,
 } from "@/lib/agenda/fluxo";
 import { abrirEspelho } from "@/lib/agenda/espelho";
+import { importarRoteiro, tirarRoteiro } from "@/lib/agenda/roteiro";
 import { disconnectCalendar } from "@/lib/agenda/gcal";
 import { pedirUpload, registrarMaterial, removerMaterial } from "@/lib/agenda/materiais";
 import { FONTES_KEY, gerarPautaNews } from "@/lib/agenda/noticias";
+import { SITES_KEY } from "@/lib/agenda/sites";
 import { escolherArteSemana, gerarArteSemana, liberarSemana, programarSemana } from "@/lib/agenda/semana";
 import { PASTA_KEY, atualizarVideo, enviarVideo, liberarEnvio, ligarVideo, tirarFrames } from "@/lib/agenda/video";
 import {
@@ -635,6 +637,18 @@ export async function espelhoAction(_prev: ActionState, form: FormData): Promise
   return run((a) => abrirEspelho(str(form, "id"), a, form.get("trocar") === "1"));
 }
 
+/** O roteiro do apresentador: um PDF dos materiais (`material`) ou o texto colado (`texto`). */
+export async function importarRoteiroAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const material = str(form, "material");
+  return run((a) => importarRoteiro(str(form, "id"), material ? { materialId: material } : { texto: str(form, "texto") }, a));
+}
+
+export async function tirarRoteiroAction(form: FormData): Promise<void> {
+  const role = await requireAdmin();
+  await tirarRoteiro(str(form, "id"), actorOf(role));
+  refresh();
+}
+
 // ---- PFC News: pauta com as notícias da semana no Instagram ----
 
 export async function pautaNewsAction(_prev: ActionState, form: FormData): Promise<ActionState> {
@@ -650,5 +664,10 @@ export async function fontesNewsAction(_prev: ActionState, form: FormData): Prom
       .filter((h): h is string => !!h);
     if (handles.length === 0) throw new Error("Coloque pelo menos um @.");
     await setConfig(FONTES_KEY, handles.join(" "));
+    const sites = str(form, "sites")
+      .split(/[\s,]+/)
+      .filter(Boolean)
+      .map((u) => (/^https?:\/\//.test(u) ? u : `https://${u}`));
+    await setConfig(SITES_KEY, sites.join(" "));
   });
 }
