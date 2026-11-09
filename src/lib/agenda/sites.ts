@@ -176,7 +176,8 @@ const meta = (html: string, nome: string) =>
  */
 export async function lerPagina(url: string): Promise<{ titulo: string | null; imagem: string | null; texto: string }> {
   const html = await baixar(url);
-  const titulo = semTags(meta(html, "og:title") ?? html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? "") || null;
+  // Sem o nome do site no fim ("... | Mogi Mirim/SP", "... - g1").
+  const titulo = semTags(meta(html, "og:title") ?? html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? "").replace(/\s+[|–—-]\s+[^|–—-]{2,40}$/, "") || null;
   const img = meta(html, "og:image");
   const corpo = html.replace(/<(script|style|nav|header|footer|aside)[\s\S]*?<\/\1>/gi, " ");
   const paragrafos = Array.from(corpo.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi))

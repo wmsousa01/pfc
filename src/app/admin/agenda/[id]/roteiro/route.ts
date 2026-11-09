@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   await requireAdmin();
   const ep = await getEpisodio(params.id);
-  if (!ep?.roteiro) return new Response("Sem roteiro.", { status: 404 });
+  if (!ep?.roteiro?.materias.length) return new Response("Sem roteiro.", { status: 404 });
   const quadro = isQuadroId(ep.quadro) ? QUADROS[ep.quadro].name : ep.quadro;
   const titulo = `${quadro} – ${quandoLongo(ep.inicio)}`;
   const nome = `${quadro} ${ep.inicio.slice(0, 10)}.txt`;
