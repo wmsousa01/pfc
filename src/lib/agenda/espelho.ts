@@ -94,6 +94,8 @@ export async function remapearImagens(epId: string, antes: BlocoEspelho[], depoi
 }
 
 export const linkEspelho = (token: string) => `${site.url}/espelho/${token}`;
+/** O roteiro para o apresentador e a equipe sugerirem ajustes: o mesmo token do espelho. */
+export const linkRevisao = (token: string) => `${site.url}/roteiro/${token}`;
 
 export async function episodioPorEspelho(token: string): Promise<Episodio | null> {
   if (!/^[A-Za-z0-9_-]{20,40}$/.test(token)) return null;

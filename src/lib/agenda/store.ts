@@ -58,8 +58,9 @@ export type Materia = {
 
 /**
  * `origem` "ia": a pauta gerada no formato do apresentador, que a próxima
- * geração substitui. Sem origem (ou "apresentador"): o que ele mandou, que
- * gerar a pauta de novo não apaga.
+ * geração substitui. "editado": a da IA com sugestões aceitas na revisão.
+ * Sem origem (ou "apresentador"): o que ele mandou. Os dois últimos, gerar
+ * a pauta de novo não apaga.
  */
 /**
  * Notícia que a equipe acrescentou de outra fonte (link, texto colado ou os
@@ -79,7 +80,7 @@ export type Extra = {
 export type Roteiro = {
   arquivo: string | null;
   importado_em: string;
-  origem?: "ia" | "apresentador";
+  origem?: "ia" | "editado" | "apresentador";
   materias: Materia[];
   extras?: Extra[];
 };

@@ -2,10 +2,12 @@ import { notFound } from "next/navigation";
 import AdminHeader from "@/components/admin/AdminHeader";
 import CopyButton from "@/components/CopyButton";
 import ProducaoForm from "@/components/admin/ProducaoForm";
+import Diferenca from "@/components/agenda/Diferenca";
 import MaterialUploader from "@/components/agenda/MaterialUploader";
 import { requireAdmin } from "@/lib/auth";
 import { pautaTexto } from "@/lib/agenda/briefing";
-import { blocosDoEspelho, linkEspelho } from "@/lib/agenda/espelho";
+import { blocosDoEspelho, linkEspelho, linkRevisao } from "@/lib/agenda/espelho";
+import { CAMPOS, sugestoesDe, valorDoCampo } from "@/lib/agenda/sugestoes";
 import { youtubeUrl } from "@/lib/agenda/fluxo";
 import { calendarAccount } from "@/lib/agenda/gcal";
 import { listarPasta, pastaDrive, type ArquivoDrive } from "@/lib/agenda/video";
@@ -62,6 +64,7 @@ import {
   tirarRoteiroAction,
   extraAction,
   removerExtraAction,
+  sugestaoAction,
 } from "../actions";
 import { STATUS_EP } from "../shared";
 
@@ -91,7 +94,7 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
   if (!ep) notFound();
   const t = isQuadroId(ep.quadro) ? QUADROS[ep.quadro] : null;
 
-  const [convidados, { data: arteRows }, { data: evRows }, gcal, ig, hosts, materiais] = await Promise.all([
+  const [convidados, { data: arteRows }, { data: evRows }, gcal, ig, hosts, materiais, sugestoes] = await Promise.all([
     convidadosDe(ep.id),
     db().from("agenda_artes").select("*").eq("episodio_id", ep.id).order("created_at", { ascending: false }).limit(12),
     db().from("agenda_eventos").select("*").eq("episodio_id", ep.id).order("created_at", { ascending: false }).limit(40),
@@ -99,6 +102,7 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
     activeConnection("instagram").catch(() => null),
     apresentadoresDo(ep.quadro, false),
     materiaisDe(ep.id),
+    sugestoesDe(ep.id),
   ]);
   // Sem escolha no episódio, entram todos os ativos do quadro.
   const noEpisodio = (id: string) => (ep.apresentadores ? ep.apresentadores.includes(id) : hosts.find((h) => h.id === id)?.ativo);
@@ -147,6 +151,14 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
   // O roteiro pode existir só guardando as notícias extras, antes da pauta.
   const temRoteiro = (ep.roteiro?.materias.length ?? 0) > 0;
   const extras = ep.roteiro?.extras ?? [];
+  const revisao = ep.espelho_token ? linkRevisao(ep.espelho_token) : null;
+  const abertas = sugestoes.filter((s) => s.status === "aberta");
+  const decididas = sugestoes.filter((s) => s.status !== "aberta").reverse();
+  // O texto atual da parte, para avisar quando mudou depois da sugestão.
+  const atual = (materia: string, campo: (typeof sugestoes)[number]["campo"]) => {
+    const m = ep.roteiro?.materias.find((x) => x.titulo === materia);
+    return m ? valorDoCampo(m, campo) : undefined;
+  };
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] pb-20">
@@ -573,6 +585,82 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
           )}
         </section>
 
+        {/* ---- Revisão do roteiro ---- */}
+        {temRoteiro && (
+          <section className={card}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-white font-bold">
+                Revisão do roteiro
+                {abertas.length > 0 && <span className="ml-2 text-xs font-bold px-2 py-0.5 rounded-full bg-gold-500/15 text-gold-300">{abertas.length} em aberto</span>}
+              </h2>
+            </div>
+            <p className="text-white/40 text-sm mt-1">
+              Mande o link para o apresentador, os comentaristas e a régie: eles leem o roteiro e sugerem edição em cada parte
+              (manchete, leitura, comentário, H, reflexão, serviço) ou comentam a matéria. Aceita, a edição entra no roteiro e no
+              espelho na hora; o roteiro ajustado não é apagado se a pauta for gerada de novo.
+            </p>
+            {revisao ? (
+              <div className="flex flex-wrap items-center gap-2 mt-3">
+                <code className="text-xs text-gold-300 bg-black/40 border border-[#2a2a2a] rounded-lg px-2.5 py-1.5 break-all">{revisao}</code>
+                <CopyButton value={revisao} className={btn2} />
+                <a href={revisao} target="_blank" className={btn2}>Abrir ↗</a>
+              </div>
+            ) : (
+              <ProducaoForm action={espelhoAction} label="Criar link de revisão" pending="Criando..." className="mt-3" buttonClassName="btn-primary px-4 py-2 rounded-lg text-sm font-bold">
+                <input type="hidden" name="id" value={ep.id} />
+                <p className="text-white/30 text-xs mb-2">Usa o mesmo link do espelho da transmissão, com /roteiro no lugar de /espelho.</p>
+              </ProducaoForm>
+            )}
+            {abertas.length > 0 && (
+              <div className="mt-5 space-y-3">
+                {abertas.map((s) => {
+                  const agora = atual(s.materia, s.campo);
+                  const mudou = s.campo !== "geral" && agora !== undefined && (agora ?? "").trim() !== (s.original ?? "").trim();
+                  return (
+                    <div key={s.id} className="rounded-xl border border-[#2a2a2a] bg-black/30 p-4">
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <strong className="text-white">{s.autor}</strong>
+                        <span className="text-white/40">{quando(s.created_at)}</span>
+                        <span className="text-white/60">· {s.materia} · {CAMPOS[s.campo]}</span>
+                      </div>
+                      {s.proposta !== null && <Diferenca antes={s.original ?? ""} depois={s.proposta} className="mt-2 text-sm text-white/80" />}
+                      {s.comentario && <p className="mt-2 text-sm text-white/60 italic">“{s.comentario}”</p>}
+                      {agora === undefined && <p className="mt-2 text-xs text-red-400">Essa matéria não está mais no roteiro (mudou de título ou saiu).</p>}
+                      {mudou && <p className="mt-2 text-xs text-gold-400">O texto dessa parte mudou depois da sugestão: aceitar troca pelo texto sugerido inteiro.</p>}
+                      <div className="flex gap-2 mt-3">
+                        <ProducaoForm action={sugestaoAction} label={s.proposta !== null ? "Aceitar" : "Resolvido"} pending="..." buttonClassName="text-xs border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 rounded-lg px-3 py-1.5">
+                          <input type="hidden" name="sugestao" value={s.id} />
+                          <input type="hidden" name="aceitar" value="1" />
+                        </ProducaoForm>
+                        {s.proposta !== null && (
+                          <ProducaoForm action={sugestaoAction} label="Recusar" pending="..." buttonClassName={btn2}>
+                            <input type="hidden" name="sugestao" value={s.id} />
+                            <input type="hidden" name="aceitar" value="0" />
+                          </ProducaoForm>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {decididas.length > 0 && (
+              <details className="mt-4">
+                <summary className="text-xs text-white/40 hover:text-white/70 cursor-pointer">{decididas.length} já decididas</summary>
+                <ul className="mt-2 space-y-1 text-xs text-white/50">
+                  {decididas.map((s) => (
+                    <li key={s.id}>
+                      <span className={s.status === "aceita" ? "text-emerald-400" : "text-white/40"}>{s.status}</span> · {s.autor} · {s.materia} ·{" "}
+                      {CAMPOS[s.campo]}
+                      {s.decidida_por && <> · por {s.decidida_por.split("@")[0]}</>}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </section>
+        )}
+
         {/* ---- Espelho da transmissão ---- */}
         <section className={card}>
           <h2 className="text-white font-bold">Espelho da transmissão</h2>
@@ -584,7 +672,12 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
           <div className="mt-4 rounded-xl border border-[#2a2a2a] bg-black/30 p-4">
             {temRoteiro ? (
               <div className="flex flex-wrap items-center gap-3">
-                {ep.roteiro!.origem === "ia" ? (
+                {ep.roteiro!.origem === "editado" ? (
+                  <p className="text-sm text-white/80 flex-1">
+                    <strong className="text-white">Roteiro da IA ajustado na revisão</strong>: {ep.roteiro!.materias.length} blocos.
+                    Gerar a pauta de novo não apaga os ajustes.
+                  </p>
+                ) : ep.roteiro!.origem === "ia" ? (
                   <p className="text-sm text-white/80 flex-1">
                     <strong className="text-white">Roteiro gerado pela IA no formato do apresentador</strong>:{" "}
                     {ep.roteiro!.materias.length} blocos, em {quando(ep.roteiro!.importado_em)}. Baixe em texto para ele ajustar no
