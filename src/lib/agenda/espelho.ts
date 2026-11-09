@@ -40,11 +40,16 @@ export function blocosDoEspelho(b: Briefing | null, roteiro: Roteiro | null = nu
   if (roteiro?.materias.length) {
     const ms = roteiro.materias;
     const alvos = ms.map((m, i) => ({ i, m })).filter((x) => x.m.tipo === "materia");
-    const onde = casarNoticias(
+    const parecida = casarNoticias(
       alvos.map(({ m }) => ({ bloco: [m.titulo, m.manchete].filter(Boolean).join(" "), perguntas: [m.leitura ?? ""] })),
       noticias,
       MINIMO_MATERIA
-    ).map((k) => (k < 0 ? -1 : alvos[k].i));
+    );
+    // A pauta gerada no formato dele tem uma notícia por matéria, com o mesmo título.
+    const onde = noticias.map((n, k) => {
+      const igual = ms.findIndex((m) => m.tipo === "materia" && m.titulo === n.titulo);
+      return igual >= 0 ? igual : parecida[k] < 0 ? -1 : alvos[parecida[k]].i;
+    });
     return ms.map((m, i) => ({ titulo: m.titulo, texto: null, pontos: [], noticias: noticias.filter((_, k) => onde[k] === i), materia: m }));
   }
   if (!b) return [];
@@ -56,8 +61,12 @@ export function blocosDoEspelho(b: Briefing | null, roteiro: Roteiro | null = nu
   ];
 }
 
-/** "DfHjCCtDty1" de https://www.instagram.com/p/DfHjCCtDty1/: vai no nome das fotos tiradas do post. */
-export const codigoDoPost = (url: string) => url.match(/\/(?:p|reel|tv)\/([^/?#]+)/)?.[1] ?? null;
+/**
+ * "DfHjCCtDty1" de https://www.instagram.com/p/DfHjCCtDty1/, "5108" de
+ * .../noticia/view/5108/...: vai no nome das fotos tiradas da fonte.
+ */
+export const codigoDoPost = (url: string) =>
+  url.match(/\/(?:p|reel|tv)\/([^/?#]+)/)?.[1] ?? url.match(/\/noticia\/view\/(\d+)/)?.[1] ?? null;
 
 /**
  * O espelho mudou de blocos (entrou ou saiu o roteiro do apresentador):

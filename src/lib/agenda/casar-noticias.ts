@@ -21,7 +21,7 @@ function singular(w: string): string {
   return w;
 }
 
-function palavras(s: string): Set<string> {
+export function palavras(s: string): Set<string> {
   const out = new Set<string>();
   for (const w of s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().split(/[^a-z0-9]+/)) {
     const v = singular(w);
@@ -31,7 +31,7 @@ function palavras(s: string): Set<string> {
   return out;
 }
 
-const comuns = (a: Set<string>, b: Set<string>) => Array.from(a).filter((w) => b.has(w)).length;
+export const comuns = (a: Set<string>, b: Set<string>) => Array.from(a).filter((w) => b.has(w)).length;
 
 /**
  * Em que bloco da pauta entra cada notícia (índice na pauta; -1 = nenhum).

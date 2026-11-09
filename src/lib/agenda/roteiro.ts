@@ -126,11 +126,37 @@ export async function importarRoteiro(
   }
 
   const materias = await lerRoteiro(arquivo, texto);
-  const roteiro: Roteiro = { arquivo: nome, importado_em: new Date().toISOString(), materias };
+  const roteiro: Roteiro = { arquivo: nome, importado_em: new Date().toISOString(), origem: "apresentador", materias };
   const fora = await remapearImagens(ep.id, blocosDoEspelho(ep.briefing, ep.roteiro), blocosDoEspelho(ep.briefing, roteiro));
   await updateEpisodio(ep.id, { roteiro, espelho_atual: null, espelho_imagem: null });
   await logAgenda(ep.id, actor, "pôs o roteiro do apresentador no espelho", `${nome ?? "texto colado"}: ${materias.length} matérias`);
   return { materias: materias.length, fora };
+}
+
+/**
+ * O roteiro em texto, com os rótulos do documento do apresentador
+ * (MANCHETE, NOTÍCIA PARA LEITURA, COMENTÁRIO DO APRESENTADOR, ::::: H...),
+ * para ele ajustar no Word/Docs e subir de volta.
+ */
+export function roteiroTexto(titulo: string, materias: Materia[]): string {
+  const out: string[] = [titulo];
+  let bloco: string | null = null;
+  for (const m of materias) {
+    if (m.bloco && m.bloco !== bloco) out.push(m.bloco);
+    bloco = m.bloco ?? bloco;
+    if (m.tipo === "abertura") out.push("APRESENTADOR — ABERTURA", m.leitura ?? "");
+    else if (m.tipo === "encerramento") out.push("Final", "APRESENTADOR", m.leitura ?? "");
+    else {
+      out.push(m.titulo);
+      if (m.manchete) out.push("MANCHETE", m.manchete);
+      if (m.leitura) out.push("NOTÍCIA PARA LEITURA", m.leitura);
+      if (m.comentario) out.push("COMENTÁRIO DO APRESENTADOR", m.comentario);
+      if (m.humor) out.push("::::: H", m.humor);
+      if (m.reflexao || m.pontos.length) out.push("PERGUNTA PARA REFLEXÃO", [m.reflexao, ...m.pontos.map((p, i) => (i < m.pontos.length - 1 ? `● ${p}` : p))].filter(Boolean).join("\n"));
+      if (m.servico) out.push("SERVIÇO AO TELESPECTADOR", m.servico);
+    }
+  }
+  return out.join("\n\n") + "\n";
 }
 
 /** Volta o espelho para a pauta da IA. */

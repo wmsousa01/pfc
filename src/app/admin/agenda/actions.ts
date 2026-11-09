@@ -27,6 +27,7 @@ import { importarRoteiro, tirarRoteiro } from "@/lib/agenda/roteiro";
 import { disconnectCalendar } from "@/lib/agenda/gcal";
 import { pedirUpload, registrarMaterial, removerMaterial } from "@/lib/agenda/materiais";
 import { FONTES_KEY, gerarPautaNews } from "@/lib/agenda/noticias";
+import { SITES_KEY } from "@/lib/agenda/sites";
 import { escolherArteSemana, gerarArteSemana, liberarSemana, programarSemana } from "@/lib/agenda/semana";
 import { PASTA_KEY, atualizarVideo, enviarVideo, liberarEnvio, ligarVideo, tirarFrames } from "@/lib/agenda/video";
 import {
@@ -663,5 +664,10 @@ export async function fontesNewsAction(_prev: ActionState, form: FormData): Prom
       .filter((h): h is string => !!h);
     if (handles.length === 0) throw new Error("Coloque pelo menos um @.");
     await setConfig(FONTES_KEY, handles.join(" "));
+    const sites = str(form, "sites")
+      .split(/[\s,]+/)
+      .filter(Boolean)
+      .map((u) => (/^https?:\/\//.test(u) ? u : `https://${u}`));
+    await setConfig(SITES_KEY, sites.join(" "));
   });
 }

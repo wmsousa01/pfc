@@ -178,7 +178,8 @@ export default function EspelhoAoVivo({
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  const fontes = (n: Noticia) => Array.from(new Set(n.fontes.map((f) => `@${f.handle}`))).join(" · ");
+  // Perfil do Instagram leva "@"; site ("mogimirim.sp.gov.br") vai como está.
+  const fontes = (n: Noticia) => Array.from(new Set(n.fontes.map((f) => (f.handle.includes(".") ? f.handle : `@${f.handle}`)))).join(" · ");
   const btn = "border border-[#333] hover:border-gold-500/60 text-white/80 hover:text-white rounded-lg px-3 py-2 text-sm font-bold disabled:opacity-30";
 
   return (

@@ -52,7 +52,12 @@ export type Materia = {
   servico: string | null;
 };
 
-export type Roteiro = { arquivo: string | null; importado_em: string; materias: Materia[] };
+/**
+ * `origem` "ia": a pauta gerada no formato do apresentador, que a próxima
+ * geração substitui. Sem origem (ou "apresentador"): o que ele mandou, que
+ * gerar a pauta de novo não apaga.
+ */
+export type Roteiro = { arquivo: string | null; importado_em: string; origem?: "ia" | "apresentador"; materias: Materia[] };
 
 export type Slot = {
   id: number;

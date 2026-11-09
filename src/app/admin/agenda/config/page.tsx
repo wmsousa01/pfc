@@ -3,6 +3,7 @@ import ProducaoForm from "@/components/admin/ProducaoForm";
 import { requireAdmin } from "@/lib/auth";
 import { YT_STREAM_KEY } from "@/lib/agenda/fluxo";
 import { fontesNews } from "@/lib/agenda/noticias";
+import { sitesNews } from "@/lib/agenda/sites";
 import { pastaDrive } from "@/lib/agenda/video";
 import { calendarAccount, calendarId, equipeEmails } from "@/lib/agenda/gcal";
 import { WEEKDAYS, brt, db, listAvulsos, listSlots, quandoLongo, type Apresentador, type Bloqueio } from "@/lib/agenda/store";
@@ -48,7 +49,7 @@ export default async function AgendaConfigPage({ searchParams }: { searchParams:
     getConfig(YT_STREAM_KEY),
     db().from("agenda_apresentadores").select("*").order("quadro").order("ordem").order("created_at"),
   ]);
-  const [pasta, fontes, avulsos] = await Promise.all([pastaDrive(), fontesNews(), listAvulsos()]);
+  const [pasta, fontes, avulsos, sites] = await Promise.all([pastaDrive(), fontesNews(), listAvulsos(), sitesNews()]);
   const hosts = (hostRows ?? []) as Apresentador[];
   const fotos = await signedUrls(hosts.map((h) => h.foto_path).filter((p): p is string => !!p));
   const bloqueios = (bloqRows ?? []) as Bloqueio[];
@@ -313,6 +314,12 @@ export default async function AgendaConfigPage({ searchParams }: { searchParams:
           </p>
           <ProducaoForm action={fontesNewsAction} label="Salvar" pending="Salvando..." okMessage="Salvo." className="mt-3 space-y-2" buttonClassName={btn2}>
             <textarea name="fontes" rows={4} defaultValue={fontes.map((h) => `@${h}`).join("\n")} className={`${input} w-full font-mono`} />
+            <p className="text-white/40 text-sm pt-2">
+              Sites das prefeituras: a lista de notícias e a foto oficial de cada uma entram na pauta. Funciona com o portal
+              de notícias que Mogi Mirim usa (/noticia/index). Site atrás de proteção anti-robô, como o de Mogi Guaçu hoje,
+              não é lido: o erro aparece no histórico do episódio e a fonte dessa prefeitura fica sendo o Instagram dela.
+            </p>
+            <textarea name="sites" rows={2} defaultValue={sites.join("\n")} className={`${input} w-full font-mono`} />
           </ProducaoForm>
         </section>
       </div>

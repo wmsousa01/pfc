@@ -456,7 +456,7 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
                       <p className="text-white/55 ml-5">{n.resumo}</p>
                       <p className="ml-5 text-xs flex flex-wrap gap-x-3">
                         {n.fontes.map((f) => (
-                          <a key={f.url} href={f.url} target="_blank" className="text-gold-400 hover:underline">@{f.handle} ↗</a>
+                          <a key={f.url} href={f.url} target="_blank" className="text-gold-400 hover:underline">{f.handle.includes(".") ? f.handle : `@${f.handle}`} ↗</a>
                         ))}
                       </p>
                     </li>
@@ -521,15 +521,26 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
           <div className="mt-4 rounded-xl border border-[#2a2a2a] bg-black/30 p-4">
             {ep.roteiro ? (
               <div className="flex flex-wrap items-center gap-3">
-                <p className="text-sm text-white/80 flex-1">
-                  <strong className="text-white">Segue o roteiro do apresentador</strong>
-                  {ep.roteiro.arquivo && <> ({ep.roteiro.arquivo})</>}: {ep.roteiro.materias.length} blocos, lido em{" "}
-                  {quando(ep.roteiro.importado_em)}. Gerar a pauta da IA de novo não apaga o roteiro dele.
-                </p>
-                <form action={tirarRoteiroAction}>
-                  <input type="hidden" name="id" value={ep.id} />
-                  <button className={btn2}>Voltar para a pauta da IA</button>
-                </form>
+                {ep.roteiro.origem === "ia" ? (
+                  <p className="text-sm text-white/80 flex-1">
+                    <strong className="text-white">Roteiro gerado pela IA no formato do apresentador</strong>:{" "}
+                    {ep.roteiro.materias.length} blocos, em {quando(ep.roteiro.importado_em)}. Baixe em texto para ele ajustar no
+                    Word/Docs e suba de volta como PDF ou texto: aí passa a valer o dele.
+                  </p>
+                ) : (
+                  <p className="text-sm text-white/80 flex-1">
+                    <strong className="text-white">Segue o roteiro do apresentador</strong>
+                    {ep.roteiro.arquivo && <> ({ep.roteiro.arquivo})</>}: {ep.roteiro.materias.length} blocos, lido em{" "}
+                    {quando(ep.roteiro.importado_em)}. Gerar a pauta de novo não apaga o roteiro dele.
+                  </p>
+                )}
+                <a href={`/admin/agenda/${ep.id}/roteiro`} className={btn2}>Baixar em texto</a>
+                {ep.roteiro.origem !== "ia" && (
+                  <form action={tirarRoteiroAction}>
+                    <input type="hidden" name="id" value={ep.id} />
+                    <button className={btn2}>Voltar para a pauta da IA</button>
+                  </form>
+                )}
               </div>
             ) : (
               <p className="text-sm text-white/60">
