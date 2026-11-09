@@ -2,7 +2,7 @@ import "server-only";
 import { randomUUID } from "crypto";
 import sharp, { type OverlayOptions } from "sharp";
 import { CAP, anton, fit, lineSvg, prepareLogo, seloSvg, textDefs } from "@/lib/producao/compose";
-import { isGeminiConfigured, renderPlate } from "@/lib/producao/gemini";
+import { ehFotoDePessoa, isGeminiConfigured, renderPlate } from "@/lib/producao/gemini";
 import { matte } from "@/lib/producao/matte";
 import { isQuadroId, quadroLogoPath, themeOf, type QuadroTheme } from "@/lib/producao/quadros";
 import { LOGO_PATH, download, upload, type Headline } from "@/lib/producao/store";
@@ -350,7 +350,9 @@ export async function pessoasDaArte(ep: Episodio, convidados: Convidado[], mater
   }
   for (const c of convidados.slice(0, 3)) {
     const img = await imagemConvidado(c, materiais);
-    if (img || comFrames) out.push({ nome: c.nome, papel: c.cargo || "CONVIDADO", host: false, img });
+    // Clube ou empresa: a "foto" é o escudo. Entra como logo, não como pessoa.
+    const marca = !!img && isGeminiConfigured() && !(await ehFotoDePessoa(img.buf, img.mime));
+    if (img || comFrames) out.push({ nome: c.nome, papel: c.cargo || "CONVIDADO", host: false, img, ...(marca ? { marca } : {}) });
   }
   return out;
 }
@@ -404,8 +406,8 @@ export async function gerarArtes(ep: Episodio, convidados: Convidado[], h: Headl
       quadro: ep.quadro,
       inicio: ep.inicio,
       convidados: lista.length ? lista : pessoas.map((p) => ({ nome: p.nome, instagram: null })),
-      // O recorte precisa de foto de cada pessoa; quem só está nos frames fica de fora.
-      fotos: pessoas.map((p) => p.img?.buf ?? null),
+      // O recorte precisa de foto de cada pessoa; quem só está nos frames, ou é clube/empresa, fica de fora.
+      fotos: pessoas.map((p) => (p.marca ? null : p.img?.buf ?? null)),
       logo: logoRaw,
       headline: h,
       plates,

@@ -106,6 +106,74 @@ export async function renderPlate(prompt: string, aspectRatio: "16:9" | "9:16" =
   return Buffer.from(img.data, "base64");
 }
 
+/**
+ * A foto mostra uma pessoa de verdade, ou é logo, escudo, arte, produto?
+ * Perfil de clube ou empresa vem com o escudo no lugar da foto, e o modelo de
+ * imagem inventava um homem com a camisa do time. Na dúvida (erro), pessoa.
+ */
+export async function ehFotoDePessoa(img: Buffer, mime: string): Promise<boolean> {
+  try {
+    const json = await generate(TEXT_MODEL, {
+      contents: [
+        {
+          parts: [
+            { text: "Esta imagem é a FOTOGRAFIA de uma pessoa real com o rosto visível? Responda false se for logotipo, escudo, brasão, ilustração, texto, produto, fachada ou paisagem sem pessoa em destaque." },
+            { inlineData: { mimeType: mime, data: img.toString("base64") } },
+          ],
+        },
+      ],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: { type: "OBJECT", properties: { pessoa: { type: "BOOLEAN" } }, required: ["pessoa"] },
+      },
+    });
+    const parsed = JSON.parse(json.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}") as { pessoa?: boolean };
+    return parsed.pessoa !== false;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Confere a arte gerada contra as fotos: quantas pessoas aparecem e se alguém
+ * foi inventado ou repetido (o modelo chegou a pôr o apresentador duas vezes,
+ * uma delas com a camisa do clube convidado). `ok` false pede outra tentativa.
+ * Na dúvida (erro), aprova — a conferência não pode travar a geração.
+ */
+export async function conferirPessoas(
+  arte: Buffer,
+  fotos: { nome: string; data: Buffer; mime: string }[],
+  proibido: string | null
+): Promise<{ ok: boolean; motivo: string }> {
+  try {
+    const parts: unknown[] = [
+      {
+        text: `A IMAGEM 1 é uma arte de divulgação. As seguintes são as fotos das ÚNICAS ${fotos.length} pessoas que podem aparecer nela: ${fotos.map((f, i) => `IMAGEM ${i + 2} = ${f.nome}`).join("; ")}.
+Responda ok=false se a arte tiver: mais ou menos que ${fotos.length} ${fotos.length === 1 ? "pessoa" : "pessoas"}; a mesma pessoa duas vezes; alguém que não está nas fotos${proibido ? `; ${proibido}` : ""}. Primeiro conte em rostos quantos rostos humanos nítidos a arte tem (ignore silhuetas pequenas e escuras ao fundo); depois compare cada rosto com as fotos. Em motivo, diga o problema em poucas palavras.`,
+      },
+      { inlineData: { mimeType: "image/jpeg", data: arte.toString("base64") } },
+      ...fotos.map((f) => ({ inlineData: { mimeType: f.mime, data: f.data.toString("base64") } })),
+    ];
+    const json = await generate(TEXT_MODEL, {
+      contents: [{ parts }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: { rostos: { type: "INTEGER" }, ok: { type: "BOOLEAN" }, motivo: { type: "STRING" } },
+          required: ["rostos", "ok", "motivo"],
+        },
+      },
+    });
+    const parsed = JSON.parse(json.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}") as { rostos?: number; ok?: boolean; motivo?: string };
+    const aMais = typeof parsed.rostos === "number" && parsed.rostos !== fotos.length;
+    const motivo = parsed.motivo?.trim() || (aMais ? `${parsed.rostos} rostos na arte, esperados ${fotos.length}` : "");
+    return { ok: parsed.ok !== false && !aMais, motivo };
+  } catch {
+    return { ok: true, motivo: "" };
+  }
+}
+
 export type PessoaNoFrame = { box: [number, number, number, number]; apresentador: boolean };
 
 /**
@@ -169,16 +237,22 @@ export async function renderWithRefs(
     parts.push({ text: `IMAGEM ${i + 1} — ${r.legenda}` });
     parts.push({ inlineData: { mimeType: r.mime, data: r.data.toString("base64") } });
   });
-  const json = await generate(IMAGE_MODEL, {
-    contents: [{ parts }],
-    generationConfig: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio, imageSize } },
-  });
-  const img = (json.candidates?.[0]?.content?.parts ?? []).find((p: any) => p.inlineData)?.inlineData;
-  if (!img) {
-    const reason = json.candidates?.[0]?.finishReason ?? json.promptFeedback?.blockReason ?? "sem imagem";
-    throw new Error(`Gemini não gerou a arte (${reason}).`);
+  // Teto de saída no máximo: o modelo "pensa" antes de desenhar e, com prompt
+  // longo, estourava o limite padrão sem entregar imagem (MAX_TOKENS).
+  // Sem imagem, uma nova tentativa — costuma sair na segunda.
+  let reason = "sem imagem";
+  for (let tentativa = 0; tentativa < 2; tentativa++) {
+    const json = await generate(IMAGE_MODEL, {
+      contents: [{ parts }],
+      generationConfig: { responseModalities: ["IMAGE"], maxOutputTokens: 32768, imageConfig: { aspectRatio, imageSize } },
+    });
+    const img = (json.candidates?.[0]?.content?.parts ?? []).find((p: any) => p.inlineData)?.inlineData;
+    if (img) return Buffer.from(img.data, "base64");
+    reason = json.candidates?.[0]?.finishReason ?? json.promptFeedback?.blockReason ?? "sem imagem";
+    // Bloqueio de conteúdo não muda numa nova tentativa.
+    if (json.promptFeedback?.blockReason) break;
   }
-  return Buffer.from(img.data, "base64");
+  throw new Error(`Gemini não gerou a arte (${reason}).`);
 }
 
 /**
