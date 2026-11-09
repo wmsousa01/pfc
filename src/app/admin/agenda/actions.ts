@@ -24,6 +24,7 @@ import {
 } from "@/lib/agenda/fluxo";
 import { abrirEspelho } from "@/lib/agenda/espelho";
 import { adicionarExtra, removerExtra } from "@/lib/agenda/extras";
+import { decidir } from "@/lib/agenda/sugestoes";
 import { importarRoteiro, tirarRoteiro } from "@/lib/agenda/roteiro";
 import { disconnectCalendar } from "@/lib/agenda/gcal";
 import { pedirUpload, registrarMaterial, removerMaterial } from "@/lib/agenda/materiais";
@@ -660,6 +661,11 @@ export async function extraAction(_prev: ActionState, form: FormData): Promise<A
       a
     )
   );
+}
+
+/** Aceita (aplica no roteiro) ou recusa uma sugestão da revisão. */
+export async function sugestaoAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  return run((a) => decidir(str(form, "sugestao"), form.get("aceitar") === "1", a));
 }
 
 export async function removerExtraAction(form: FormData): Promise<void> {

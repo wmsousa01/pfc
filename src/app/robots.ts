@@ -21,6 +21,7 @@ export default function robots(): MetadataRoute.Robots {
         "/parceiros/*/painel",
         "/proposta/",
         "/espelho/",
+        "/roteiro/",
       ],
     },
     sitemap: `${site.url}/sitemap.xml`,
