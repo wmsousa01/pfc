@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ProducaoForm from "@/components/admin/ProducaoForm";
+import AcompanhantesFields from "@/components/agenda/AcompanhantesFields";
 import BriefingFields from "@/components/agenda/BriefingFields";
 import { TZ, WEEKDAYS, brtDate, vagasLivres } from "@/lib/agenda/store";
 import { QUADROS, isQuadroId } from "@/lib/producao/quadros";
@@ -75,6 +76,11 @@ export default async function AgendarPage({ params }: { params: { quadro: string
               <fieldset>
                 <legend className="text-white font-bold mb-3">2. Conte sobre você</legend>
                 <BriefingFields />
+              </fieldset>
+
+              <fieldset>
+                <legend className="text-white font-bold mb-3">3. Vem mais alguém com você? <span className="text-white/40 font-normal">(opcional)</span></legend>
+                <AcompanhantesFields />
               </fieldset>
             </ProducaoForm>
           )}

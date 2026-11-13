@@ -3,14 +3,16 @@ import { notFound } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ProducaoForm from "@/components/admin/ProducaoForm";
-import BriefingFields from "@/components/agenda/BriefingFields";
+import { AcompanhanteCampos } from "@/components/agenda/AcompanhantesFields";
+import BriefingFields, { MAX_ACOMPANHANTES } from "@/components/agenda/BriefingFields";
 import MaterialUploader from "@/components/agenda/MaterialUploader";
 import { youtubeUrl } from "@/lib/agenda/fluxo";
-import { MATERIAL_TIPOS, convidadoPorToken, getArte, getEpisodio, materiaisDe, quandoLongo } from "@/lib/agenda/store";
-import { whatsapp } from "@/lib/config";
+import { MATERIAL_TIPOS, convidadoPorToken, convidadosDe, getArte, getEpisodio, materiaisDe, quandoLongo } from "@/lib/agenda/store";
+import { site, whatsapp } from "@/lib/config";
 import { QUADROS, isQuadroId } from "@/lib/producao/quadros";
 import { signedUrls } from "@/lib/producao/store";
 import {
+  adicionarAcompanhanteAction,
   pedirUploadConvidadoAction,
   registrarMaterialConvidadoAction,
   removerMaterialConvidadoAction,
@@ -49,6 +51,9 @@ export default async function ConvidadoBriefingPage({
   const urls = await signedUrls([...(arte ? [arte.feed_path, arte.story_path] : []), ...meus.map((m) => m.path)]);
   const aberto = ep.status !== "cancelado" && ep.status !== "realizado";
   const live = youtubeUrl(ep);
+  const todos = await convidadosDe(ep.id);
+  const outros = todos.filter((o) => o.id !== c.id);
+  const cabeMais = aberto && todos.length < MAX_ACOMPANHANTES + 1;
 
   return (
     <>
@@ -97,6 +102,57 @@ export default async function ConvidadoBriefingPage({
                   ) : null;
                 })}
               </div>
+            </section>
+          )}
+
+          {(outros.length > 0 || cabeMais) && (
+            <section className="bg-[#111] border border-[#222] rounded-2xl p-6">
+              <h2 className="text-white font-bold">Quem vem com você</h2>
+              <p className="text-white/50 text-sm mt-1">
+                Cada pessoa tem o próprio link para mandar foto e completar o briefing. Mande para ela pelo WhatsApp.
+              </p>
+              {outros.length > 0 && (
+                <ul className="mt-4 divide-y divide-[#222]">
+                  {outros.map((o) => {
+                    const link = `${site.url}/convidado/b/${o.token}`;
+                    const msg = `Oi, ${o.nome.split(" ")[0]}! Vamos juntos no ${t?.name ?? "Fora da Caixa"} em ${quandoLongo(ep.inicio)}. Mande sua foto e complete seu briefing por aqui: ${link}`;
+                    return (
+                      <li key={o.id} className="py-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+                        <span>
+                          <span className="text-white font-semibold">{o.nome}</span>
+                          {o.instagram && <span className="text-white/40"> · @{o.instagram}</span>}
+                          {!o.foto_path && !o.briefing_em && <span className="text-gold-400/80 text-xs"> · falta foto e briefing</span>}
+                        </span>
+                        <span className="flex gap-3">
+                          <a
+                            href={o.whatsapp ? `https://wa.me/${o.whatsapp}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`}
+                            target="_blank"
+                            className="text-gold-400 hover:underline font-semibold"
+                          >
+                            Enviar link no WhatsApp
+                          </a>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {cabeMais && (
+                <details className="mt-4">
+                  <summary className="cursor-pointer list-none text-gold-400 text-sm font-semibold">+ Adicionar pessoa</summary>
+                  <ProducaoForm
+                    action={adicionarAcompanhanteAction}
+                    label="Adicionar"
+                    pending="Adicionando..."
+                    okMessage="Pessoa adicionada. Mande o link dela pelo WhatsApp."
+                    className="mt-4 space-y-4"
+                    buttonClassName="btn-primary px-5 py-2.5 rounded-lg text-sm font-bold"
+                  >
+                    <input type="hidden" name="token" value={c.token} />
+                    <AcompanhanteCampos />
+                  </ProducaoForm>
+                </details>
+              )}
             </section>
           )}
 
