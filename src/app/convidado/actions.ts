@@ -3,12 +3,14 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type { ActionState } from "@/app/admin/producao/actions";
-import { atualizarPerfilIg, agendar, salvarFoto, sincronizarAgenda, type NovoConvidado } from "@/lib/agenda/fluxo";
+import { MAX_ACOMPANHANTES } from "@/components/agenda/BriefingFields";
+import { adicionarConvidado, atualizarPerfilIg, agendar, salvarFoto, sincronizarAgenda, type NovoConvidado } from "@/lib/agenda/fluxo";
 import { pedirUpload, registrarMaterial, removerMaterial } from "@/lib/agenda/materiais";
 import {
   CONVIDADO,
   cleanInstagram,
   convidadoPorToken,
+  convidadosDe,
   db,
   getEpisodio,
   logAgenda,
@@ -47,6 +49,34 @@ function dadosDe(form: FormData): NovoConvidado | string {
   };
 }
 
+/**
+ * Quem vem junto: só o nome é obrigatório; WhatsApp e e-mail, se vierem, têm
+ * que ser válidos. `prefix` é "extra_<n>_" no pedido e "" no link do convidado.
+ */
+function acompanhanteDe(form: FormData, prefix: string): NovoConvidado | string {
+  const nome = str(form, `${prefix}nome`, 120);
+  if (!nome) return "Diga o nome de cada pessoa que vem junto.";
+  const waRaw = str(form, `${prefix}whatsapp`);
+  const whatsapp = waRaw ? normalizeWhatsapp(waRaw) : null;
+  if (waRaw && !whatsapp) return `O WhatsApp de ${nome} não parece válido. Use o DDD.`;
+  const email = str(form, `${prefix}email`, 200)?.toLowerCase() ?? null;
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return `O e-mail de ${nome} não parece válido.`;
+  const igRaw = str(form, `${prefix}instagram`, 100);
+  const instagram = igRaw ? cleanInstagram(igRaw) : null;
+  if (igRaw && !instagram) return `O @ do Instagram de ${nome} não parece válido.`;
+  return {
+    nome,
+    whatsapp,
+    email,
+    instagram,
+    bio: null,
+    temas: null,
+    divulgar: null,
+    links: null,
+    cargo: str(form, `${prefix}cargo`, 60)?.toUpperCase() ?? null,
+  };
+}
+
 function fotoDe(form: FormData): File | null {
   const f = form.get("foto");
   return f instanceof File && f.size > 0 ? f : null;
@@ -64,6 +94,13 @@ export async function agendarAction(_prev: ActionState, form: FormData): Promise
   const dados = dadosDe(form);
   if (typeof dados === "string") return { ok: false, error: dados };
   const foto = fotoDe(form);
+  const extras: NovoConvidado[] = [];
+  for (const id of form.getAll("extra").map(String).slice(0, MAX_ACOMPANHANTES)) {
+    if (!/^\d+$/.test(id)) continue;
+    const e = acompanhanteDe(form, `extra_${id}_`);
+    if (typeof e === "string") return { ok: false, error: e };
+    extras.push(e);
+  }
 
   let token: string;
   try {
@@ -72,6 +109,12 @@ export async function agendarAction(_prev: ActionState, form: FormData): Promise
     // Foto e perfil são acabamento: se falharem, o horário já está garantido.
     if (foto) await salvarFoto(c.id, foto).catch(() => null);
     await atualizarPerfilIg(c).catch(() => null);
+    for (const e of extras) {
+      const a = await adicionarConvidado(c.episodio_id, e).catch(() => null);
+      if (!a) continue;
+      await logAgenda(c.episodio_id, CONVIDADO, "adicionou convidado", `${a.nome} (por ${c.nome})`).catch(() => null);
+      await atualizarPerfilIg(a).catch(() => null);
+    }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Não deu para agendar agora." };
   }
@@ -101,6 +144,26 @@ export async function salvarBriefingAction(_prev: ActionState, form: FormData): 
     return { ok: true, error: null };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Não deu para salvar agora." };
+  }
+}
+
+/** Pelo link dele, o convidado traz mais alguém para o mesmo episódio. */
+export async function adicionarAcompanhanteAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  try {
+    const c = await convidadoAtivo(str(form, "token") ?? "");
+    const dados = acompanhanteDe(form, "");
+    if (typeof dados === "string") return { ok: false, error: dados };
+    const todos = await convidadosDe(c.episodio_id);
+    if (todos.length >= MAX_ACOMPANHANTES + 1)
+      return { ok: false, error: `O episódio já tem ${todos.length} convidados. Para trazer mais gente, fale com a produção.` };
+    const a = await adicionarConvidado(c.episodio_id, dados);
+    await logAgenda(c.episodio_id, CONVIDADO, "adicionou convidado", `${a.nome} (por ${c.nome})`);
+    await atualizarPerfilIg(a).catch(() => null);
+    if (a.email) await sincronizarAgenda(c.episodio_id, CONVIDADO);
+    revalidatePath(`/convidado/b/${c.token}`);
+    return { ok: true, error: null };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Não deu para adicionar agora." };
   }
 }
 

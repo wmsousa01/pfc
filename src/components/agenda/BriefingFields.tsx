@@ -2,6 +2,9 @@ import type { Convidado } from "@/lib/agenda/store";
 
 export const inputCls =
   "w-full bg-[#0d0d0d] border border-[#2a2a2a] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-gold-500/60 transition-colors";
+/** Quantas pessoas, além de quem pede o horário, entram pelo link público (a arte fica cheia depois disso). */
+export const MAX_ACOMPANHANTES = 3;
+
 const label = "block text-white/70 text-sm font-semibold mb-1.5";
 const hint = "text-white/35 text-xs mt-1";
 
