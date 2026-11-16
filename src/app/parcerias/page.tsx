@@ -5,6 +5,7 @@ import WhatsAppButton from "@/components/WhatsAppButton";
 import Exposure from "@/components/Exposure";
 import Differentials from "@/components/Differentials";
 import Plans from "@/components/Plans";
+import PlanoComparativo from "@/components/PlanoComparativo";
 import QuadroSponsorship from "@/components/QuadroSponsorship";
 import HowItWorks from "@/components/HowItWorks";
 import PartnersShowcase from "@/components/PartnersShowcase";
@@ -99,6 +100,7 @@ export default function ParceriasPage() {
       <Exposure />
       <Differentials />
       <Plans />
+      <PlanoComparativo />
       <LeadCapture />
       <PartnersShowcase />
       <HowItWorks />

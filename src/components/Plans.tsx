@@ -267,6 +267,11 @@ export default function Plans() {
             Não sabe qual escolher? Monte seu plano e veja o preço na hora →
           </a>
         </div>
+        <p className="mt-4 text-center">
+          <a href="#o-que-inclui" className="text-white/50 text-sm underline underline-offset-4 hover:text-white">
+            Comparar o que cada plano inclui, com as telas de cada entrega ↓
+          </a>
+        </p>
 
         {/* Fine print */}
         <p className="text-center text-white/25 text-xs mt-4">
