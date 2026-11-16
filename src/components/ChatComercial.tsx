@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { enviarPlano } from "@/app/monte-seu-plano/actions";
+import { buscarInstagram } from "@/app/monte-seu-plano/instagram";
+import type { MarcaIg } from "@/lib/marca-instagram";
 import { quadros, quadroSponsorship, whatsapp } from "@/lib/config";
 import {
   OBJETIVOS,
@@ -87,6 +89,7 @@ export default function ChatComercial() {
   const b = useRef<Briefing>({ empresa: "", segmento: "", objetivos: [], verba: "500-1000", exclusividade: false, quadro: "" });
   const sel = useRef<Selecao | null>(null);
   const contato = useRef({ nome: "" });
+  const marcaIg = useRef<MarcaIg | null>(null);
 
   // Convite discreto depois de alguns segundos, uma vez por sessão.
   useEffect(() => {
@@ -143,7 +146,7 @@ export default function ChatComercial() {
     bot(
       ["Oi! 👋 Sou o assistente comercial do Papo Fora da Caixa.", "Quer colocar sua marca no programa? Te mostro o plano e o preço em 1 minuto."],
       [
-        { ...escolha("Quero montar meu plano", perguntarEmpresa), destaque: true },
+        { ...escolha("Quero montar meu plano", perguntarInstagram), destaque: true },
         escolha("Quanto custa?", precos),
         escolha("Como funciona o QR na tela?", comoFunciona),
         escolha("Falar com uma pessoa", pessoa),
@@ -151,7 +154,7 @@ export default function ChatComercial() {
     );
 
   const voltarOpcoes = (): Opcao[] => [
-    { ...escolha("Montar meu plano", perguntarEmpresa), destaque: true },
+    { ...escolha("Montar meu plano", perguntarInstagram), destaque: true },
     escolha("Falar com uma pessoa", pessoa),
   ];
 
@@ -208,12 +211,73 @@ export default function ChatComercial() {
         </div>,
         "Se quiser chegar lá já com um plano e um preço, eu monto agora.",
       ],
-      [{ ...escolha("Montar meu plano", perguntarEmpresa), destaque: true }],
+      [{ ...escolha("Montar meu plano", perguntarInstagram), destaque: true }],
     );
   }
 
-  function perguntarEmpresa() {
-    bot(["Bora! Qual é o nome da sua empresa?"], [], {
+  function perguntarInstagram() {
+    marcaIg.current = null;
+    b.current.instagram = undefined;
+    bot(
+      ["Bora! Qual é o Instagram da sua marca? Pode mandar o @ ou colar o link do perfil, que eu já puxo o nome e a logo."],
+      [escolha("Não tenho Instagram", () => perguntarEmpresa())],
+      { placeholder: "@suamarca ou link do perfil", enviar: (v) => lerInstagramChat(v) },
+    );
+  }
+
+  async function lerInstagramChat(v: string) {
+    setOpcoes([]);
+    setEntrada(null);
+    setDigitando(true);
+    const r = await buscarInstagram(v).catch(() => null);
+    setDigitando(false);
+    if (!r?.ok) {
+      const motivo = r && !r.ok ? r.motivo : "indisponivel";
+      return perguntarEmpresa(
+        motivo === "nao-encontrado"
+          ? "Não achei esse perfil como conta comercial (perfil pessoal não aparece). Sem problema!"
+          : motivo === "invalido"
+            ? "Não reconheci esse @ ou link, mas tudo bem."
+            : "Não consegui ler o Instagram agora, mas tudo bem.",
+      );
+    }
+    const m = r.marca;
+    marcaIg.current = m;
+    b.current.instagram = m.username;
+    if (m.cor) b.current.cor = m.cor;
+    const nome = m.nome || m.username;
+    bot(
+      [
+        <div key="ig" className="flex items-center gap-3">
+          {m.logo ? (
+            // eslint-disable-next-line @next/next/no-img-element -- data URL pequena
+            <img src={m.logo} alt="" className="w-11 h-11 rounded-full object-cover bg-white" />
+          ) : null}
+          <div className="min-w-0">
+            <div className="text-white font-semibold truncate">{nome}</div>
+            <div className="text-white/45 text-xs">
+              @{m.username}
+              {m.seguidores !== null ? ` · ${m.seguidores.toLocaleString("pt-BR")} seguidores` : ""}
+            </div>
+          </div>
+        </div>,
+        `Achei! É a ${nome}?`,
+      ],
+      [
+        {
+          ...escolha("Sim, é essa", () => {
+            b.current.empresa = nome;
+            perguntarSegmento();
+          }),
+          destaque: true,
+        },
+        escolha("Não, outro @", perguntarInstagram),
+      ],
+    );
+  }
+
+  function perguntarEmpresa(antes?: string) {
+    bot([...(antes ? [antes] : []), "Qual é o nome da sua empresa?"], [], {
       placeholder: "Nome da empresa",
       enviar: (v) => {
         b.current.empresa = v;
@@ -342,7 +406,8 @@ export default function ChatComercial() {
     const ids = placementsDe(chaves).slice(0, 3) as PlacementId[];
     const marca = {
       nome: b.current.empresa,
-      cor: "#2563eb",
+      cor: b.current.cor ?? "#2563eb",
+      logo: marcaIg.current?.logo ?? null,
       quadro: quadros.find((q) => s.quadros.includes(q.slug))?.name,
     };
     bot(
@@ -442,7 +507,7 @@ export default function ChatComercial() {
     if (!v || !entrada) return;
     setTexto("");
     eu(v);
-    entrada.enviar(v.slice(0, 120));
+    entrada.enviar(v.slice(0, 200));
   };
 
   // ------------------------------------------------------------ tela
@@ -551,7 +616,7 @@ export default function ChatComercial() {
                 value={texto}
                 onChange={(e) => setTexto(e.target.value)}
                 placeholder={entrada.placeholder}
-                maxLength={120}
+                maxLength={200}
                 className="flex-1 bg-[#0d0d0d] border border-[#2a2a2a] rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-gold-500/60"
               />
               <button type="submit" className="btn-primary px-4 rounded-xl font-bold text-sm" aria-label="Enviar">

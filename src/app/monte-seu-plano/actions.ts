@@ -7,6 +7,7 @@ import {
   SEGMENTOS,
   VERBAS,
   orcar,
+  handleInstagram,
   resumo,
   type Briefing,
   type Meses,
@@ -49,6 +50,7 @@ export async function enviarPlano(_prev: EnvioState, fd: FormData): Promise<Envi
     verba: (VERBAS.find((v) => v.id === rb.verba)?.id ?? "ate-500") as Briefing["verba"],
     exclusividade: rb.exclusividade === true,
     quadro: str(rb.quadro, 60),
+    instagram: handleInstagram(str(rb.instagram, 200)) ?? undefined,
   };
   const selecao: Selecao = {
     plano: typeof rs.plano === "string" ? rs.plano : null,
