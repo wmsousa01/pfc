@@ -7,6 +7,7 @@ import { listJobCuts, type ContentaCut } from "@/lib/producao/contenta";
 import { db } from "@/lib/producao/store";
 import { defaultCaption } from "@/lib/social/caption";
 import { IG_DAILY_MAX, runSocialQueue } from "@/lib/social/publisher";
+import { JANELA_HORAS, dentroDaJanela } from "@/lib/social/ritmo";
 import { PLATFORMS, deleteConnections, type Platform } from "@/lib/social/store";
 
 const PATH = "/admin/marketing";
@@ -87,8 +88,8 @@ type NewPost = {
 /** Folga aleatória de até 20 min: horários redondos repetidos parecem robô. */
 const jitter = (d: Date) => new Date(d.getTime() + Math.floor(Math.random() * 20 * 60_000));
 
-/** Com o Instagram no lote, o intervalo respeita o teto de Reels por dia. */
-const IG_MIN_INTERVAL_H = 24 / IG_DAILY_MAX;
+/** Com o Instagram no lote, o intervalo respeita o teto de Reels por dia dentro da janela (10h–22h). */
+const IG_MIN_INTERVAL_H = Math.round((JANELA_HORAS / IG_DAILY_MAX) * 10) / 10;
 
 /** Insere os posts. O índice único barra corte repetido na mesma rede: devolve quantos pularam. */
 async function insertPosts(posts: NewPost[]): Promise<{ criados: number; repetidos: number }> {
@@ -142,7 +143,7 @@ export async function scheduleCutAction(_prev: ActionState, form: FormData): Pro
     if (r.criados === 0) return { ok: false, error: "Esse corte já está programado nessas redes." };
     const notes = [
       r.repetidos && `${r.repetidos} rede(s) já tinham esse corte e foram puladas.`,
-      q?.adiados && "O Instagram está no limite de ritmo: o Reel foi para o próximo horário livre (veja a fila).",
+      q?.adiados && "Fora do horário (10h–22h) ou no limite de ritmo da rede: foi para o próximo horário livre (veja a fila).",
     ].filter(Boolean);
     return { ok: true, error: notes.length ? notes.join(" ") : null };
   } catch (e) {
@@ -183,16 +184,17 @@ export async function scheduleJobAction(_prev: ActionState, form: FormData): Pro
     const has = new Set((taken ?? []).map((t) => `${t.platform}|${t.cut_file}`));
 
     const posts: NewPost[] = [];
-    let slot = 0;
+    // Horários só dentro da janela (10h–22h): o que cairia de madrugada passa para a manhã.
+    let t = dentroDaJanela(start.getTime());
     for (const cut of cuts) {
       const free = platforms.filter((p) => !has.has(`${p}|${cut.file}`));
       if (free.length === 0) continue;
-      const at = jitter(new Date(start.getTime() + slot * interval * 3_600_000));
+      const at = jitter(new Date(t));
+      t = dentroDaJanela(t + interval * 3_600_000);
       const caption = defaultCaption(cut);
       for (const platform of free) {
         posts.push({ platform, cut, jobId, title: cut.title || cut.file, caption, at, actor: actorOf(role), trial, collaborators });
       }
-      slot++;
     }
     if (posts.length === 0) return { ok: false, error: "Todos os cortes já estão programados nessas redes." };
     await insertPosts(posts);

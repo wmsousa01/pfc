@@ -66,7 +66,13 @@ export async function graph<T>(path: string, params: Record<string, string> = {}
   const json = await res.json().catch(() => ({}));
   if (!res.ok || json.error) {
     const e = json.error ?? {};
-    throw new MetaError(`Meta ${res.status}: ${e.error_user_msg ?? e.message ?? "erro"}`, e.code ?? null);
+    // A Meta às vezes manda error_user_msg vazio: com `??` o erro chegava como
+    // "Meta 400: " sem nada (foi o caso dos 112 vídeos do Facebook em nov/2026).
+    const texto = e.error_user_msg || e.message || "erro sem mensagem";
+    const codigo = [e.code && `código ${e.code}`, e.error_subcode && `subcódigo ${e.error_subcode}`, e.type, e.fbtrace_id && `trace ${e.fbtrace_id}`]
+      .filter(Boolean)
+      .join(" · ");
+    throw new MetaError(`Meta ${res.status}: ${texto}${codigo ? ` (${codigo})` : ""}`, e.code ?? null);
   }
   return json as T;
 }
