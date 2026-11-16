@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
+import { ofertaFundador } from "@/lib/campanha";
 import QuadroLogo from "@/components/QuadroLogo";
 import { enviarPlano, type EnvioState } from "@/app/monte-seu-plano/actions";
 import { buscarInstagram } from "@/app/monte-seu-plano/instagram";
@@ -606,6 +607,14 @@ export default function MonteSeuPlano() {
               </div>
               {orc.sobConsulta.length > 0 && (
                 <p className="text-white/40 text-xs mt-1 text-right">+ {orc.sobConsulta.join(", ")} (sob consulta)</p>
+              )}
+              {orc.fundador.length > 0 && (
+                <p className="mt-3 rounded-xl border border-gold-500/40 bg-gold-500/[0.06] p-3 text-xs leading-relaxed text-white/70">
+                  <span className="block text-gold-400 font-bold uppercase tracking-wider text-[10px] mb-1">
+                    Patrocinador fundador · {orc.fundador.join(", ")}
+                  </span>
+                  {ofertaFundador()}
+                </p>
               )}
               <ul className="mt-3 flex flex-col gap-1">
                 {orc.pagamento.map((p) => (

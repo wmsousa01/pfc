@@ -230,7 +230,10 @@ A fundação está pronta e bem feita. O que falta é o que transforma isso de
 
 ### 🔴 P0 — sem isso a estratégia não roda
 
-**7.1 · Comissão de patrocínio não existe no sistema.**
+**7.1 · Comissão de patrocínio não existe no sistema.** ✅ **feito em 2026-11-16**
+(migração 029, `/revendedor` seção Patrocínio, `/admin/revendedores/indicacoes`,
+link `/r/{slug}?ir=plano`; campanha em `docs/campanha-fim-de-ano-2026.md`).
+
 Hoje a plataforma só conhece pedido de produto. O parceiro que indicar um
 Master de R$ 19 mil **não vê nada no painel** — e vai perguntar por WhatsApp toda
 semana, que é exatamente o oposto da transparência que você quer.

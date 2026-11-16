@@ -1,6 +1,6 @@
 "use server";
 
-import { createAdminSupabase } from "@/lib/supabase/admin";
+import { gravarLead } from "@/lib/indicacoes-store";
 
 export type LeadFormState = {
   ok: boolean;
@@ -36,15 +36,7 @@ export async function submitLead(
     return { ok: false, error: "Informe um WhatsApp válido com DDD." };
   }
 
-  const admin = createAdminSupabase();
-  if (!admin) {
-    return {
-      ok: false,
-      error: "Não foi possível enviar agora. Fale direto no WhatsApp.",
-    };
-  }
-
-  const { error } = await admin.from("leads").insert({
+  const { error } = await gravarLead({
     name: name.slice(0, 120),
     company: company.slice(0, 120),
     segment,

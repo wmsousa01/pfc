@@ -37,12 +37,20 @@ export default async function AdminResellersPage() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
         <div className="flex items-center justify-between mb-6 gap-4">
           <h1 className="text-2xl font-bold text-white">Revendedores</h1>
+          <div className="flex gap-2">
+          <a
+            href="/admin/revendedores/indicacoes"
+            className="border border-gold-500/40 text-gold-400 hover:border-gold-500 px-4 py-2.5 rounded-lg text-sm font-bold whitespace-nowrap"
+          >
+            Indicações de patrocínio
+          </a>
           <a
             href="/admin/revendedores/new"
             className="btn-primary px-4 py-2.5 rounded-lg text-sm font-bold whitespace-nowrap"
           >
             + Novo revendedor
           </a>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

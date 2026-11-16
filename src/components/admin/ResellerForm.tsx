@@ -5,6 +5,7 @@ import { saveReseller } from "@/app/admin/revendedores/actions";
 import { MAX_DISCOUNT_PERCENT } from "@/lib/commission";
 import { centsToInput } from "@/lib/money";
 import type { Reseller } from "@/lib/types";
+import { quadros } from "@/lib/config";
 
 /**
  * Cadastro do revendedor. O campo de senha é opcional: preenchê-lo cria (ou
@@ -88,6 +89,33 @@ export default function ResellerForm({ reseller }: { reseller?: Reseller }) {
             placeholder="Combinações, prazos de repasse, etc."
             className="admin-input mt-1.5"
           />
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-4 pt-4 border-t border-[#1e1e1e]">
+          <label className="flex items-center gap-2.5 text-white/70 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              name="apresentador"
+              defaultChecked={reseller?.apresentador ?? false}
+              className="w-4 h-4 accent-gold-500"
+            />
+            É apresentador de quadro
+          </label>
+          <div>
+            <label className="admin-label">Quadro que apresenta</label>
+            <select name="quadro" defaultValue={reseller?.quadro ?? ""} className="admin-input mt-1.5">
+              <option value="">Nenhum</option>
+              {quadros.map((q) => (
+                <option key={q.slug} value={q.slug}>
+                  {q.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="sm:col-span-2 text-white/30 text-xs leading-relaxed -mt-2">
+            Apresentador ganha +20% na comissão quando traz patrocínio para o próprio quadro na campanha de fim de ano,
+            e 25% off quando a empresa dele patrocina.
+          </p>
         </div>
 
         <label className="flex items-center gap-2.5 text-white/70 text-sm cursor-pointer">

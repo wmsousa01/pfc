@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ofertaFundador } from "@/lib/campanha";
 import { enviarPlano } from "@/app/monte-seu-plano/actions";
 import { buscarInstagram } from "@/app/monte-seu-plano/instagram";
 import type { MarcaIg } from "@/lib/marca-instagram";
@@ -72,6 +73,11 @@ function CartaoPlano({ orc }: { orc: Orcamento }) {
           {p}
         </span>
       ))}
+      {orc.fundador.length > 0 && (
+        <span className="text-gold-400 text-[11px] leading-snug">
+          <b>Patrocinador fundador:</b> {ofertaFundador()}
+        </span>
+      )}
     </div>
   );
 }

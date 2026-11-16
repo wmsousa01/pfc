@@ -8,6 +8,7 @@
  * servidor recalcula no envio, para o lead nunca chegar com total adulterado.
  */
 import { quadros, quadroSponsorship, type Quadro } from "@/lib/config";
+import { campanhaAtiva, ehQuadroFundador, ofertaFundador } from "@/lib/campanha";
 import { plans, planById } from "@/lib/planos";
 
 // ---------------------------------------------------------------- briefing
@@ -213,6 +214,8 @@ export type Orcamento = {
   meses: Meses;
   pagamento: string[];
   vazio: boolean;
+  /** Quadros da seleção com a condição de patrocinador fundador (campanha de fim de ano). */
+  fundador: string[];
 };
 
 const brl = (v: number) => `R$ ${v.toLocaleString("pt-BR")}`;
@@ -285,7 +288,11 @@ export function orcar(sel: Selecao): Orcamento {
   }
 
   const total = linhas.reduce((s, l) => s + (l.valor ?? 0), 0);
+  const fundador = campanhaAtiva()
+    ? qs.filter(ehQuadroFundador).map((slug) => quadros.find((x) => x.slug === slug)!.name)
+    : [];
   return {
+    fundador,
     linhas,
     total,
     sobConsulta: linhas.filter((l) => l.valor === null).map((l) => l.label),
@@ -309,6 +316,7 @@ export function resumo(b: Briefing, o: Orcamento): string {
     "Itens:",
     ...o.linhas.map((l) => `- ${l.label}: ${l.valor === null ? "sob consulta" : brl(l.valor)}`),
     `Total estimado: ${brl(o.total)}${o.sobConsulta.length ? " + itens sob consulta" : ""}`,
+    ...(o.fundador.length ? [`Patrocinador fundador (${o.fundador.join(", ")}): ${ofertaFundador()}`] : []),
   ].join("\n");
 }
 
