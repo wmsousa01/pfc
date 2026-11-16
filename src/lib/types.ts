@@ -224,6 +224,10 @@ export type Reseller = {
   commission_value: number;
   /** Desconto que o cupom dele dá ao cliente (0 a 30%). 0 = cupom só atribui. */
   discount_percent: number;
+  /** Apresentador de quadro (migração 029): bônus e desconto da campanha. */
+  apresentador?: boolean;
+  /** Slug do quadro que apresenta (src/lib/config.ts). */
+  quadro?: string | null;
   active: boolean;
   created_at: string;
 };

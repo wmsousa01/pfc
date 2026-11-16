@@ -1,6 +1,6 @@
 "use server";
 
-import { createAdminSupabase } from "@/lib/supabase/admin";
+import { gravarLead } from "@/lib/indicacoes-store";
 import {
   DURACOES,
   OBJETIVOS,
@@ -64,18 +64,21 @@ export async function enviarPlano(_prev: EnvioState, fd: FormData): Promise<Envi
   if (orc.vazio) return { ok: false, error: "Ligue pelo menos um item do plano.", resumo: null };
   const texto = resumo(briefing, orc);
 
-  const admin = createAdminSupabase();
-  if (!admin) return { ok: false, error: "Não foi possível enviar agora. Fale direto no WhatsApp.", resumo: texto };
-
-  const { error } = await admin.from("leads").insert({
-    name,
-    company: briefing.empresa,
-    segment: briefing.segmento,
-    whatsapp: digits,
-    message: texto.slice(0, 2000),
-    // Lead do chat comercial (ChatComercial) ou da página.
-    source: fd.get("origem") === "chat" ? "chat-comercial" : "monte-seu-plano",
-  });
+  const { error } = await gravarLead(
+    {
+      name,
+      company: briefing.empresa,
+      segment: briefing.segmento,
+      whatsapp: digits,
+      message: texto.slice(0, 2000),
+      // Lead do chat comercial (ChatComercial) ou da página.
+      source: fd.get("origem") === "chat" ? "chat-comercial" : "monte-seu-plano",
+    },
+    {
+      interesse: orc.linhas.map((l) => l.label).join(", "),
+      quadro: selecao.quadros[0] ?? (selecao.modalidades[0]?.split(":")[0] || null),
+    },
+  );
   if (error) return { ok: false, error: "Não foi possível enviar agora. Fale direto no WhatsApp.", resumo: texto };
 
   return { ok: true, error: null, resumo: texto };

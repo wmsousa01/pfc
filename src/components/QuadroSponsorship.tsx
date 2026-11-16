@@ -1,3 +1,4 @@
+import CampanhaFundador from "@/components/CampanhaFundador";
 import QuadroLogo from "@/components/QuadroLogo";
 import { quadros, quadroSponsorship, whatsapp, type CotaStatus } from "@/lib/config";
 import { WhatsAppIcon } from "@/components/icons";
@@ -43,6 +44,8 @@ export default function QuadroSponsorship() {
             {minMonths} meses.
           </p>
         </div>
+
+        <CampanhaFundador className="max-w-4xl mx-auto mb-8" />
 
         {/* As duas cotas */}
         <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
