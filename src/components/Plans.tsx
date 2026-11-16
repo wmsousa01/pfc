@@ -2,84 +2,7 @@
 
 import { useState } from "react";
 import { installmentLabel, PAYMENT_TERMS } from "@/lib/payment";
-
-type Plan = {
-  id: string;
-  name: string;
-  badge?: string;
-  tagline: string;
-  highlighted: boolean;
-  monthlyPrice: number;
-  yearlyPrice: number;
-  savings: number;
-  features: string[];
-  ctaLabel: string;
-  ctaUrl: string;
-};
-
-const plans: Plan[] = [
-  {
-    id: "apoio",
-    name: "Apoio",
-    tagline: "Ideal para marcas que querem começar.",
-    highlighted: false,
-    monthlyPrice: 297,
-    yearlyPrice: 2851,
-    savings: 713,
-    features: [
-      "Inserções pontuais",
-      "Stories de divulgação",
-      "Link na descrição",
-      "Participação em ações específicas",
-    ],
-    ctaLabel: "Quero o Plano Apoio",
-    ctaUrl:
-      "https://wa.me/5519989331908?text=Tenho%20interesse%20no%20plano%20Apoio%20do%20PFC",
-  },
-  {
-    id: "patrocinador",
-    name: "Patrocinador",
-    badge: "Mais escolhido",
-    tagline: "Ideal para presença recorrente.",
-    highlighted: true,
-    monthlyPrice: 797,
-    yearlyPrice: 7651,
-    savings: 1913,
-    features: [
-      "Logo no estúdio",
-      "Menção nos episódios",
-      "Presença em cortes",
-      "Stories com CTA",
-      "Link na descrição",
-      "Possibilidade de collab",
-    ],
-    ctaLabel: "Quero ser Patrocinador",
-    ctaUrl:
-      "https://wa.me/5519989331908?text=Tenho%20interesse%20no%20plano%20Patrocinador%20do%20PFC",
-  },
-  {
-    id: "master",
-    name: "Master",
-    tagline: "Ideal para máxima presença e exclusividade.",
-    highlighted: false,
-    monthlyPrice: 1997,
-    yearlyPrice: 19171,
-    savings: 4793,
-    features: [
-      "Exclusividade por segmento",
-      "Presença em todos os episódios",
-      "Destaque no estúdio",
-      "Menções ao vivo",
-      "Conteúdos especiais",
-      "Episódio temático",
-      "Prioridade na agenda do PFC Visita",
-      "Relatório de resultados",
-    ],
-    ctaLabel: "Quero ser Master",
-    ctaUrl:
-      "https://wa.me/5519989331908?text=Tenho%20interesse%20no%20plano%20Master%20do%20PFC",
-  },
-];
+import { plans, type Plan } from "@/lib/planos";
 
 function fmt(value: number): string {
   return value.toLocaleString("pt-BR");
@@ -334,6 +257,15 @@ export default function Plans() {
               O Plano Master garante prioridade e exclusividade comercial.
             </p>
           </div>
+        </div>
+
+        <div className="mt-8 flex justify-center">
+          <a
+            href="/monte-seu-plano"
+            className="inline-flex items-center gap-2 rounded-xl border border-gold-500/40 px-6 py-3 text-sm font-bold text-gold-500 hover:bg-gold-500/10 transition-colors"
+          >
+            Não sabe qual escolher? Monte seu plano e veja o preço na hora →
+          </a>
         </div>
 
         {/* Fine print */}
