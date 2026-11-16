@@ -140,8 +140,10 @@ export async function connectMeta(
 // ---- Instagram Reels: container → processamento → media_publish ----
 
 /**
- * `trial` = Reel de teste: só não seguidores veem. MANUAL porque a API não
- * promove — a equipe escolhe pelo ranking e promove no app.
+ * `trial` = Reel de teste: só não seguidores veem. SS_PERFORMANCE: o próprio
+ * Instagram promove aos seguidores os que forem bem. A API não promove um
+ * teste já publicado (no MANUAL só pelo app) e não informa quais a Meta
+ * promoveu. Até 16/11/2026 era MANUAL: ver IG_PROMOCAO_AUTO_DESDE.
  */
 export async function igCreateReel(
   igId: string,
@@ -157,7 +159,7 @@ export async function igCreateReel(
       media_type: "REELS",
       video_url: videoUrl,
       caption: caption.slice(0, 2200),
-      ...(trial ? { trial_params: JSON.stringify({ graduation_strategy: "MANUAL" }) } : { share_to_feed: "true" }),
+      ...(trial ? { trial_params: JSON.stringify({ graduation_strategy: "SS_PERFORMANCE" }) } : { share_to_feed: "true" }),
       // Convite de collab (até 3): o perfil aceita no app e o Reel aparece nos dois.
       ...(collaborators.length ? { collaborators: JSON.stringify(collaborators.slice(0, 3)) } : {}),
       access_token: token,

@@ -48,6 +48,18 @@ export const IG_MAX_SEGUNDOS = 90;
  */
 export const PROMOVER = { assistidoMs: 14_000, minViews: 300, views: 1_000, aposHoras: 48 } as const;
 
+/**
+ * Testes publicados a partir daqui saem com promoção automática da Meta
+ * (SS_PERFORMANCE em meta.ts). Os anteriores são MANUAL e continuam com a
+ * regra PROMOVER e a promoção no app.
+ */
+export const IG_PROMOCAO_AUTO_DESDE = Date.parse("2026-11-17T00:00:00-03:00");
+
+/** Teste com promoção automática da Meta (não depende da equipe). */
+export function promocaoAutomatica(p: { trial: boolean; published_at?: string | null }): boolean {
+  return p.trial && !!p.published_at && Date.parse(p.published_at) >= IG_PROMOCAO_AUTO_DESDE;
+}
+
 /** Por quantos dias a fila continua lendo as métricas de um Reel publicado. */
 export const METRICAS_DIAS = 14;
 
@@ -64,6 +76,7 @@ type PostComMetricas = {
 export function valePromover(p: PostComMetricas, now = Date.now()): boolean {
   if (p.platform !== "instagram" || !p.trial || p.graduated_at || !p.published_at || !p.metrics) return false;
   if (p.status && p.status !== "publicado") return false;
+  if (promocaoAutomatica(p)) return false;
   if (now - new Date(p.published_at).getTime() < PROMOVER.aposHoras * 3_600_000) return false;
   const views = p.metrics.views ?? 0;
   if (views >= PROMOVER.views) return true;

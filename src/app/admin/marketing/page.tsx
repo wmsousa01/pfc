@@ -18,7 +18,7 @@ import { isCryptoConfigured } from "@/lib/social/crypto";
 import { isMetaConfigured } from "@/lib/social/meta";
 import { numerosDaSemanaPendente } from "@/lib/social/numeros-semana";
 import { IG_COLLAB_FAVORITOS, IG_DAILY_MAX } from "@/lib/social/publisher";
-import { IG_TESTES_POR_DIA, JANELA, METRICAS_DIAS, PROMOVER, valePromover } from "@/lib/social/ritmo";
+import { IG_TESTES_POR_DIA, JANELA, METRICAS_DIAS, PROMOVER, promocaoAutomatica, valePromover } from "@/lib/social/ritmo";
 import { PLATFORMS, listConnections, type Platform, type PostStatus, type SocialPost } from "@/lib/social/store";
 import {
   cancelPostAction,
@@ -178,7 +178,15 @@ export default async function MarketingPage({
   // Mais views primeiro; empate decide quem foi mais compartilhado e salvo.
   // Os que já bateram a regra de promoção primeiro; depois mais views.
   const testes = posts
-    .filter((p) => p.platform === "instagram" && p.trial && p.status === "publicado" && !p.graduated_at)
+    .filter(
+      (p) =>
+        p.platform === "instagram" &&
+        p.trial &&
+        p.status === "publicado" &&
+        !p.graduated_at &&
+        // Os automáticos a Meta resolve: ficam só enquanto ainda são medidos.
+        (!promocaoAutomatica(p) || horasDesde(p.published_at) < METRICAS_DIAS * 24)
+    )
     .sort(
       (a, b) =>
         Number(valePromover(b)) - Number(valePromover(a)) ||
@@ -572,7 +580,9 @@ export default async function MarketingPage({
         {view === "testes" && (
           <section className="mt-4">
             <p className="text-white/40 text-xs mb-3 max-w-3xl">
-              Só não seguidores viram estes Reels. Promova no app do Instagram (Reel → ⋯ → Compartilhar com seguidores)
+              Só não seguidores viram estes Reels. Desde 17/11 os testes novos saem com promoção automática: o próprio
+              Instagram mostra aos seguidores os que forem bem (marcados <b className="text-sky-300">automático</b>; a API
+              não diz quais ele promoveu). Nos testes anteriores, promova no app (Reel → ⋯ → Compartilhar com seguidores)
               os marcados com <b className="text-gold-400">promover</b>: {PROMOVER.aposHoras} h no ar e{" "}
               {PROMOVER.assistidoMs / 1000} s ou mais de tempo médio assistido com {num(PROMOVER.minViews)}+ views, ou{" "}
               {num(PROMOVER.views)} views. Um ou
@@ -618,6 +628,11 @@ export default async function MarketingPage({
                               )}
                               <div className="min-w-0">
                                 <p className="text-white font-semibold line-clamp-1">
+                                  {promocaoAutomatica(p) && (
+                                    <span className="text-[10px] font-bold px-1.5 mr-1.5 rounded border border-sky-500/40 text-sky-300">
+                                      automático
+                                    </span>
+                                  )}
                                   {valePromover(p) && (
                                     <span className="text-[10px] font-bold px-1.5 mr-1.5 rounded border border-gold-500/40 text-gold-400">
                                       promover
@@ -650,7 +665,9 @@ export default async function MarketingPage({
                             )}
                             <form action={graduatePostAction} className="inline">
                               <input type="hidden" name="id" value={p.id} />
-                              <button className="text-white/60 hover:text-emerald-400">Já promovi</button>
+                              <button className="text-white/60 hover:text-emerald-400">
+                                {promocaoAutomatica(p) ? "Tirar da lista" : "Já promovi"}
+                              </button>
                             </form>
                           </td>
                         </tr>
