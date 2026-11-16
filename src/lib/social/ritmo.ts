@@ -33,6 +33,43 @@ export const IG_TESTES_POR_DIA = 4;
 /** Chave em producao_config: até quando os testes ficam parados (ISO). */
 export const IG_TESTES_BLOQUEIO = "ig_testes_bloqueio_ate";
 
+/**
+ * O que vai para o Instagram. Cortes 16:9 saíram como Reel de teste com
+ * 0 views; os de 60–90 s rendem menos que os de 30–45 s.
+ */
+export const IG_MAX_SEGUNDOS = 90;
+
+/**
+ * Quando promover um Reel de teste ao perfil. Nos 84 testes de 31/10 a
+ * 14/11/2026, 13 dos 15 promovidos tinham 14 s ou mais de tempo médio
+ * assistido; abaixo de 8 s nenhum passou de algumas centenas de views. O
+ * tempo assistido só vale com público mínimo (minViews, ~2× a mediana dos
+ * testes): com 80 views uma média de 40 s não diz nada.
+ */
+export const PROMOVER = { assistidoMs: 14_000, minViews: 300, views: 1_000, aposHoras: 48 } as const;
+
+/** Por quantos dias a fila continua lendo as métricas de um Reel publicado. */
+export const METRICAS_DIAS = 14;
+
+type PostComMetricas = {
+  platform: Platform;
+  trial: boolean;
+  graduated_at?: string | null;
+  published_at?: string | null;
+  status?: string;
+  metrics?: { views?: number; ig_reels_avg_watch_time?: number; erro?: string } | null;
+};
+
+/** Teste ainda não promovido que já bateu a regra de PROMOVER. */
+export function valePromover(p: PostComMetricas, now = Date.now()): boolean {
+  if (p.platform !== "instagram" || !p.trial || p.graduated_at || !p.published_at || !p.metrics) return false;
+  if (p.status && p.status !== "publicado") return false;
+  if (now - new Date(p.published_at).getTime() < PROMOVER.aposHoras * 3_600_000) return false;
+  const views = p.metrics.views ?? 0;
+  if (views >= PROMOVER.views) return true;
+  return views >= PROMOVER.minViews && (p.metrics.ig_reels_avg_watch_time ?? 0) >= PROMOVER.assistidoMs;
+}
+
 /** Linhas da grade da semana e a meta de cada uma por dia. */
 export type LinhaSemana = "youtube" | "ig_perfil" | "ig_teste" | "facebook" | "tiktok";
 export const METAS: { key: LinhaSemana; label: string; porDia: number }[] = [

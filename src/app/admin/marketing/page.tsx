@@ -18,7 +18,7 @@ import { isCryptoConfigured } from "@/lib/social/crypto";
 import { isMetaConfigured } from "@/lib/social/meta";
 import { numerosDaSemanaPendente } from "@/lib/social/numeros-semana";
 import { IG_COLLAB_FAVORITOS, IG_DAILY_MAX } from "@/lib/social/publisher";
-import { IG_TESTES_POR_DIA, JANELA } from "@/lib/social/ritmo";
+import { IG_TESTES_POR_DIA, JANELA, METRICAS_DIAS, PROMOVER, valePromover } from "@/lib/social/ritmo";
 import { PLATFORMS, listConnections, type Platform, type PostStatus, type SocialPost } from "@/lib/social/store";
 import {
   cancelPostAction,
@@ -176,10 +176,12 @@ export default async function MarketingPage({
   const fila = posts.filter((p) => p.status !== "publicado" && p.status !== "cancelado");
   const postsOfCut = (file: string) => posts.filter((p) => p.contenta_job_id === jobId && p.cut_file === file);
   // Mais views primeiro; empate decide quem foi mais compartilhado e salvo.
+  // Os que já bateram a regra de promoção primeiro; depois mais views.
   const testes = posts
     .filter((p) => p.platform === "instagram" && p.trial && p.status === "publicado" && !p.graduated_at)
     .sort(
       (a, b) =>
+        Number(valePromover(b)) - Number(valePromover(a)) ||
         (b.metrics?.views ?? -1) - (a.metrics?.views ?? -1) ||
         (b.metrics?.shares ?? 0) + (b.metrics?.saved ?? 0) - ((a.metrics?.shares ?? 0) + (a.metrics?.saved ?? 0))
     );
@@ -570,8 +572,11 @@ export default async function MarketingPage({
         {view === "testes" && (
           <section className="mt-4">
             <p className="text-white/40 text-xs mb-3 max-w-3xl">
-              Só não seguidores viram estes Reels. Compare depois de 24–72 h e promova os melhores no app do Instagram
-              (Reel → ⋯ → Compartilhar com seguidores); depois marque aqui. Métricas atualizam a cada hora por 7 dias.
+              Só não seguidores viram estes Reels. Promova no app do Instagram (Reel → ⋯ → Compartilhar com seguidores)
+              os marcados com <b className="text-gold-400">promover</b>: {PROMOVER.aposHoras} h no ar e{" "}
+              {PROMOVER.assistidoMs / 1000} s ou mais de tempo médio assistido com {num(PROMOVER.minViews)}+ views, ou{" "}
+              {num(PROMOVER.views)} views. Um ou
+              dois por dia bastam; depois marque aqui. Métricas de todo Reel atualizam por {METRICAS_DIAS} dias.
             </p>
             {metricsErro && (
               <p className="text-yellow-300 text-xs mb-3 break-words">
@@ -612,7 +617,14 @@ export default async function MarketingPage({
                                 <img src={p.thumb_url} alt="" className="w-8 aspect-[9/16] object-cover rounded shrink-0 bg-black" />
                               )}
                               <div className="min-w-0">
-                                <p className="text-white font-semibold line-clamp-1">{p.title}</p>
+                                <p className="text-white font-semibold line-clamp-1">
+                                  {valePromover(p) && (
+                                    <span className="text-[10px] font-bold px-1.5 mr-1.5 rounded border border-gold-500/40 text-gold-400">
+                                      promover
+                                    </span>
+                                  )}
+                                  {p.title}
+                                </p>
                                 <p className="text-white/40">
                                   há {h < 48 ? `${h} h` : `${Math.floor(h / 24)} dias`}
                                   {h < 24 && " · cedo para comparar"}
@@ -761,6 +773,9 @@ export default async function MarketingPage({
                               rows={4}
                               className={`${input} w-full resize-y`}
                             />
+                            <p className="text-white/35 text-[11px]">
+                              Sem mudar a legenda, o Instagram recebe esta com uma pergunta e um pedido de envio no fim.
+                            </p>
                             <PlatformBoxes prefix={c.file} />
                             <InstagramMode />
                             <CollabFields />
