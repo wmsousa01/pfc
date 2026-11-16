@@ -6,7 +6,13 @@
  * `episodes`/`cuts` são os títulos das playlists do canal: a live fica na de
  * episódios, e é por ela que o quadro de cada corte é descoberto.
  */
-export type QuadroId = "fora-da-caixa" | "lado-a-lado-b" | "pfc-news" | "pfc-visita" | "tateios-escolares";
+export type QuadroId =
+  | "fora-da-caixa"
+  | "lado-a-lado-b"
+  | "pfc-news"
+  | "pfc-visita"
+  | "tateios-escolares"
+  | "pfc-esporte-clube";
 
 export type QuadroTheme = {
   id: QuadroId;
@@ -97,6 +103,21 @@ export const QUADROS: Record<QuadroId, QuadroTheme> = {
     rim: "#7dd3fc",
     selo: { bg: "#38bdf8", text: "#04202e" },
     light: "bright sky-blue accent light strips and soft cyan bokeh, a lighter and friendlier mood",
+  },
+  "pfc-esporte-clube": {
+    id: "pfc-esporte-clube",
+    name: "PFC Esporte Clube",
+    episodes: "PFC Esporte Clube",
+    cuts: "Cortes PFC Esporte Clube",
+    // Logo: escudo verde-floresta (#0d2a1b) com letras creme (#f3e6c8).
+    // A headline vai no creme; o verde fica no selo e na luz do fundo.
+    accent: ["#fff6e0", "#f3e6c8", "#d9c49a"],
+    stroke: "#0d2a1b",
+    glow: "#3fa86b",
+    rim: "#4cc27e",
+    selo: { bg: "#0d2a1b", text: "#f3e6c8" },
+    light:
+      "a sports-club look: deep forest-green light strips near the left and right edges, a subtle green diamond net pattern out of focus in the background, warm cream key light",
   },
 };
 
