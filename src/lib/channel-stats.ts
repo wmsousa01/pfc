@@ -57,10 +57,12 @@ async function load(): Promise<ChannelStatsView> {
       return analyticsReport({ startDate: ymd(start), endDate: ymd(end), metrics: "views,estimatedMinutesWatched,likes" });
     })(),
     (() => {
-      // Melhor mês: só meses fechados, os 12 anteriores ao atual.
+      // Melhor mês: só meses fechados, os 12 anteriores ao atual. Com
+      // dimensions=month as duas datas têm de ser dia 1: endDate = 1º do
+      // último mês fechado (o mês inteiro entra).
       const now = new Date();
       const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 12, 1));
-      const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0));
+      const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
       return analyticsReport({ startDate: ymd(start), endDate: ymd(end), metrics: "views", dimensions: "month" });
     })(),
     uploadsSince(new Date(Date.now() - 28 * 86_400_000)),
