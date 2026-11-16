@@ -16,7 +16,9 @@ import { connectedChannel } from "@/lib/producao/youtube-api";
 import { defaultCaption } from "@/lib/social/caption";
 import { isCryptoConfigured } from "@/lib/social/crypto";
 import { isMetaConfigured } from "@/lib/social/meta";
+import { numerosDaSemanaPendente } from "@/lib/social/numeros-semana";
 import { IG_COLLAB_FAVORITOS, IG_DAILY_MAX } from "@/lib/social/publisher";
+import { IG_TESTES_POR_DIA, JANELA } from "@/lib/social/ritmo";
 import { PLATFORMS, listConnections, type Platform, type PostStatus, type SocialPost } from "@/lib/social/store";
 import {
   cancelPostAction,
@@ -124,6 +126,7 @@ export default async function MarketingPage({
       .order("scheduled_at", { ascending: true })
       .limit(200),
   ]);
+  const numerosPendente = await numerosDaSemanaPendente().catch(() => false);
   const schemaMissing = connections === null || !!postsRes.error;
   const posts = (postsRes.data ?? []) as SocialPost[];
 
@@ -412,7 +415,10 @@ export default async function MarketingPage({
               />
             </>
           }
-          abas={TABS.map((t) => ({ href: href({ view: t.v }), label: t.label, ativa: view === t.v, count: t.count, alerta: t.alerta }))}
+          abas={[
+            { href: "/admin/marketing/semana", label: "Semana", ativa: false, alerta: numerosPendente },
+            ...TABS.map((t) => ({ href: href({ view: t.v }), label: t.label, ativa: view === t.v, count: t.count, alerta: t.alerta })),
+          ]}
         />
 
         <div className="space-y-3 mt-4">
@@ -686,7 +692,9 @@ export default async function MarketingPage({
                     </div>
                     <p className="text-white/40 text-xs mt-1">
                       Um corte por horário, nas redes marcadas, com a legenda padrão. Corte que já está numa rede é pulado.
-                      Com o Instagram, no máximo {IG_DAILY_MAX} Reels por dia (intervalo mínimo de {24 / IG_DAILY_MAX} h).
+                      A fila só publica das {JANELA.inicio}h às {JANELA.fim}h e segura cada rede no ritmo da aba Semana: o que
+                      passar disso vai para o próximo horário livre. Com o Instagram, no máximo {IG_DAILY_MAX} Reels por dia
+                      ({IG_TESTES_POR_DIA} de teste).
                     </p>
                     <ProducaoForm
                       action={scheduleJobAction}

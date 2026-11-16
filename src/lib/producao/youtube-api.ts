@@ -403,6 +403,8 @@ export async function analyticsReport(q: {
   endDate: string;
   metrics: string;
   dimensions?: string;
+  sort?: string;
+  maxResults?: string;
 }): Promise<unknown[][]> {
   if (!(await getConfig("yt_refresh_token"))) return [];
   const params = new URLSearchParams({ ids: "channel==MINE", ...q });
@@ -544,4 +546,13 @@ export async function updateBroadcast(id: string, b: BroadcastInput): Promise<vo
 
 export async function deleteBroadcast(id: string): Promise<void> {
   await ytFetch(`/liveBroadcasts?id=${id}`, { method: "DELETE" });
+}
+
+/** Títulos dos vídeos pelo id (até 50 por chamada). */
+export async function videoTitles(ids: string[]): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+  const r = await ytFetch<{ items?: { id: string; snippet: { title: string } }[] }>(
+    `/videos?part=snippet&id=${ids.slice(0, 50).join(",")}`
+  );
+  return new Map((r.items ?? []).map((i) => [i.id, i.snippet.title]));
 }
