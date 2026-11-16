@@ -14,7 +14,7 @@ import {
   input,
 } from "@/components/admin/Campanhas";
 import ProducaoForm from "@/components/admin/ProducaoForm";
-import { requireAdmin } from "@/lib/auth";
+import { requireArea } from "@/lib/auth";
 import { metaAdUrl } from "@/lib/campanhas/meta-ads";
 import {
   CTAS,
@@ -51,7 +51,7 @@ const label = "block text-[11px] font-bold uppercase tracking-wide text-white/40
 const area = `${input} w-full text-sm`;
 
 export default async function EstrategiaPage({ params }: { params: { id: string } }) {
-  await requireAdmin();
+  await requireArea("campanhas");
   const e = await getEstrategia(params.id);
   if (!e) notFound();
 

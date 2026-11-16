@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/auth";
+import { requireArea } from "@/lib/auth";
 import { roteiroTexto } from "@/lib/agenda/roteiro";
 import { getEpisodio, quandoLongo } from "@/lib/agenda/store";
 import { QUADROS, isQuadroId } from "@/lib/producao/quadros";
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 /** O roteiro do espelho em .txt, no formato do documento do apresentador. */
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  await requireAdmin();
+  await requireArea("agenda");
   const ep = await getEpisodio(params.id);
   if (!ep?.roteiro?.materias.length) return new Response("Sem roteiro.", { status: 404 });
   const quadro = isQuadroId(ep.quadro) ? QUADROS[ep.quadro].name : ep.quadro;

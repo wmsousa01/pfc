@@ -2,7 +2,7 @@ import AdminHeader from "@/components/admin/AdminHeader";
 import { Flash, MetricasView, abasCampanhas, btnPri, btnSec, card, input } from "@/components/admin/Campanhas";
 import { Coluna, EspacoHeader, Quadro, cartao } from "@/components/admin/Espaco";
 import ProducaoForm from "@/components/admin/ProducaoForm";
-import { requireAdmin } from "@/lib/auth";
+import { requireArea } from "@/lib/auth";
 import {
   CONTA_PENDENTE,
   contasParaEscolher,
@@ -36,7 +36,7 @@ function diasPara(iso: string | null): number | null {
 }
 
 export default async function CampanhasPage({ searchParams }: { searchParams: { ok?: string; erro?: string; view?: string } }) {
-  await requireAdmin();
+  await requireArea("campanhas");
   const view = searchParams.view === "gerenciadores" || searchParams.view === "contas" ? searchParams.view : "estrategias";
 
   const [estrategias, entregas, conexoes] = await Promise.all([

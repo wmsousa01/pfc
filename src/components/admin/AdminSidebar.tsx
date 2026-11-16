@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { signOut } from "@/app/admin/actions";
-import { ICONES, NAV, itemAtivo, type Contadores, type NavKey } from "./nav";
+import { ICONES, itemAtivo, type Contadores, type NavGrupo, type NavKey } from "./nav";
 
 /** Guardado no navegador: o menu recolhido continua recolhido na próxima página. */
 const CHAVE = "pfc-admin-menu";
@@ -42,12 +42,14 @@ function Marca() {
 }
 
 function Menu({
+  grupos,
   contadores,
   ativo,
   filtro,
   grande,
   aoNavegar,
 }: {
+  grupos: NavGrupo[];
   contadores: Contadores;
   ativo: NavKey | null;
   filtro: string;
@@ -58,7 +60,7 @@ function Menu({
   const altura = grande ? "h-12 text-[15px] gap-3" : "h-9 text-sm gap-2.5";
   return (
     <>
-      {NAV.map((g) => {
+      {grupos.map((g) => {
         const itens = g.itens.filter((i) => !f || i.label.toLowerCase().includes(f));
         if (itens.length === 0) return null;
         return (
@@ -123,7 +125,8 @@ function Rodape({ grande }: { grande?: boolean }) {
   );
 }
 
-export default function AdminSidebar({ contadores }: { contadores: Contadores }) {
+/** `grupos`: o menu já filtrado pelo acesso de quem está logado (navPara). */
+export default function AdminSidebar({ grupos, contadores }: { grupos: NavGrupo[]; contadores: Contadores }) {
   const pathname = usePathname();
   const ativo = itemAtivo(pathname);
   const [aberto, setAberto] = useState(false);
@@ -163,11 +166,11 @@ export default function AdminSidebar({ contadores }: { contadores: Contadores })
   const irPrimeiro = (e: React.FormEvent) => {
     e.preventDefault();
     const f = filtro.trim().toLowerCase();
-    const alvo = NAV.flatMap((g) => g.itens).find((i) => i.label.toLowerCase().includes(f));
+    const alvo = grupos.flatMap((g) => g.itens).find((i) => i.label.toLowerCase().includes(f));
     if (alvo) window.location.href = alvo.href;
   };
 
-  const areaAtual = NAV.flatMap((g) => g.itens).find((i) => i.key === ativo)?.label;
+  const areaAtual = grupos.flatMap((g) => g.itens).find((i) => i.key === ativo)?.label;
 
   return (
     <>
@@ -218,7 +221,7 @@ export default function AdminSidebar({ contadores }: { contadores: Contadores })
           </label>
         </form>
 
-        <Menu contadores={contadores} ativo={ativo} filtro={filtro} />
+        <Menu grupos={grupos} contadores={contadores} ativo={ativo} filtro={filtro} />
         <div className="flex-1" />
         <Rodape />
       </aside>
@@ -273,7 +276,7 @@ export default function AdminSidebar({ contadores }: { contadores: Contadores })
                 <Icone d={ICONES.fechar} size={20} />
               </button>
             </div>
-            <Menu contadores={contadores} ativo={ativo} filtro="" grande aoNavegar={() => setAberto(false)} />
+            <Menu grupos={grupos} contadores={contadores} ativo={ativo} filtro="" grande aoNavegar={() => setAberto(false)} />
             <div className="flex-1" />
             <Rodape grande />
           </aside>

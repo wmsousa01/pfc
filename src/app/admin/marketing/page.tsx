@@ -2,7 +2,7 @@ import AdminHeader from "@/components/admin/AdminHeader";
 import { Coluna, EspacoHeader, GrupoColuna, Quadro, diaKey, diaLabel, porDia, selo } from "@/components/admin/Espaco";
 import CardAcoes from "@/components/admin/CardAcoes";
 import ProducaoForm from "@/components/admin/ProducaoForm";
-import { requireAdmin } from "@/lib/auth";
+import { requireArea } from "@/lib/auth";
 import {
   contentaJobUrl,
   isContentaConfigured,
@@ -111,7 +111,7 @@ export default async function MarketingPage({
 }: {
   searchParams: { job?: string; ok?: string; erro?: string; view?: string; rede?: string; q?: string };
 }) {
-  await requireAdmin();
+  await requireArea("marketing");
 
   const since = new Date(Date.now() - 14 * 86_400_000).toISOString();
   const [channel, connections, postsRes] = await Promise.all([

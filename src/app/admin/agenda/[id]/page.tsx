@@ -4,7 +4,7 @@ import CopyButton from "@/components/CopyButton";
 import ProducaoForm from "@/components/admin/ProducaoForm";
 import Diferenca from "@/components/agenda/Diferenca";
 import MaterialUploader from "@/components/agenda/MaterialUploader";
-import { requireAdmin } from "@/lib/auth";
+import { requireArea } from "@/lib/auth";
 import { pautaTexto } from "@/lib/agenda/briefing";
 import { blocosDoEspelho, linkEspelho, linkRevisao } from "@/lib/agenda/espelho";
 import { CAMPOS, sugestoesDe, valorDoCampo } from "@/lib/agenda/sugestoes";
@@ -89,7 +89,7 @@ function localInput(iso: string): string {
 }
 
 export default async function EpisodioPage({ params }: { params: { id: string } }) {
-  await requireAdmin();
+  await requireArea("agenda");
   const ep = await getEpisodio(params.id);
   if (!ep) notFound();
   const t = isQuadroId(ep.quadro) ? QUADROS[ep.quadro] : null;

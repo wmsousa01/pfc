@@ -1,6 +1,6 @@
 import AdminHeader from "@/components/admin/AdminHeader";
 import ProducaoForm from "@/components/admin/ProducaoForm";
-import { requireAdmin } from "@/lib/auth";
+import { requireArea } from "@/lib/auth";
 import { episodiosDaSemana, getSemana, legendaSemana, resumoCard } from "@/lib/agenda/semana";
 import { TZ, addDays, brtDate, db, segundaDe, type SemanaArte } from "@/lib/agenda/store";
 import { signedUrls } from "@/lib/producao/store";
@@ -21,7 +21,7 @@ const quando = (iso: string) =>
 const ddmm = (d: string) => d.slice(8) + "/" + d.slice(5, 7);
 
 export default async function SemanaPage({ searchParams }: { searchParams: { de?: string } }) {
-  await requireAdmin();
+  await requireArea("agenda");
   const hoje = brtDate(new Date());
   const segunda = segundaDe(/^\d{4}-\d{2}-\d{2}$/.test(searchParams.de ?? "") ? searchParams.de! : hoje);
   const domingo = addDays(segunda, 6);
