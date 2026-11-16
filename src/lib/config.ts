@@ -66,7 +66,13 @@ export const channelStats = {
   activeSince: "Abril/2025",
 };
 
-/** Os 5 quadros do ecossistema. */
+/**
+ * Situação da cota master de um quadro na vitrine de /parcerias.
+ * "negociacao" segura a cota sem dizer quem é; "vendida" mostra o nome em `sponsor`.
+ */
+export type CotaStatus = "disponivel" | "negociacao" | "vendida";
+
+/** Os quadros do ecossistema. */
 export type Quadro = {
   slug: string;
   name: string;
@@ -77,6 +83,17 @@ export type Quadro = {
   episodes: string[];
   sponsorProfile: string;
   accent: string; // classe tailwind de cor de destaque
+  /** Logo do quadro em /public (opcional; sem ele, vale o emoji). */
+  logo?: string;
+  /** Selo de "novo" na vitrine. */
+  isNew?: boolean;
+  /** Patrocínio por quadro. Sem isto, o quadro não entra na vitrine de cotas. */
+  cota?: { status: CotaStatus; sponsor?: string };
+  /**
+   * Cotas de apoio por modalidade (quadro com host em rodízio): a marca apoia
+   * só os episódios daquela modalidade. Sem exclusividade entre modalidades.
+   */
+  modalidades?: { nome: string; status: CotaStatus; sponsor?: string }[];
 };
 
 export const quadros: Quadro[] = [
@@ -96,6 +113,7 @@ export const quadros: Quadro[] = [
     sponsorProfile:
       "Agências de marketing, negócios locais, consultorias, coworkings, eventos corporativos.",
     accent: "gold",
+    cota: { status: "disponivel" },
   },
   {
     slug: "lado-a-lado-b",
@@ -113,6 +131,7 @@ export const quadros: Quadro[] = [
     sponsorProfile:
       "Bancos, fintechs, contabilidade, imobiliárias, RH, bares e restaurantes, eventos.",
     accent: "emerald",
+    cota: { status: "disponivel" },
   },
   {
     slug: "tateios-escolares",
@@ -147,6 +166,7 @@ export const quadros: Quadro[] = [
     sponsorProfile:
       "Comunicação, faculdades, cursos livres, tecnologia, advocacia, planos de saúde.",
     accent: "rose",
+    cota: { status: "disponivel" },
   },
   {
     slug: "pfc-visita",
@@ -164,7 +184,68 @@ export const quadros: Quadro[] = [
       "Qualquer negócio local: restaurantes, lojas, clínicas, academias, indústrias, comércios.",
     accent: "violet",
   },
+  {
+    slug: "pfc-esporte-clube",
+    name: "PFC Esporte Clube",
+    emoji: "⚽",
+    format: "Esporte e treino, com um especialista diferente no comando",
+    // TODO: confirmar o dia de gravação com a produção.
+    host: "Rodízio de especialistas: futebol, crossfit, Hyrox e outras modalidades",
+    description:
+      "O quadro do esporte de Mogi Guaçu e região, com host rotativo: a cada episódio quem conduz é um especialista da modalidade — do futebol ao crossfit e ao Hyrox. Treino, competição, bastidores e as histórias de quem vive o esporte na cidade.",
+    episodes: [
+      "Futebol: dos campos da cidade às categorias de base",
+      "Crossfit e Hyrox: treino, competição e rotina de atleta",
+      "Especialistas e atletas locais de cada modalidade",
+    ],
+    sponsorProfile:
+      "Academias e boxes de crossfit, lojas de artigos esportivos, suplementos, nutrição esportiva, fisioterapia e ortopedia, bares e restaurantes.",
+    accent: "forest",
+    logo: "/quadros/pfc-esporte-clube.png",
+    isNew: true,
+    cota: { status: "negociacao" },
+    modalidades: [
+      { nome: "Futebol", status: "disponivel" },
+      { nome: "Crossfit e Hyrox", status: "disponivel" },
+    ],
+  },
 ];
+
+/**
+ * Patrocínio por quadro: a marca "apresenta" um quadro específico em vez de
+ * aparecer no canal inteiro. Cota master é exclusiva (1 por quadro); as de
+ * apoio são menores, sem exclusividade, e têm preço sob consulta. Contrato
+ * mínimo de 3 meses nas duas.
+ */
+export const quadroSponsorship = {
+  /** Contratação mínima, vale para as duas cotas. */
+  minMonths: 3,
+  master: {
+    name: "Cota Master do quadro",
+    monthlyPrice: 997,
+    features: [
+      "“{quadro} apresentado por {marca}” na abertura e no encerramento",
+      "Logo na vinheta, no cenário e na thumb dos episódios",
+      "Menção do apresentador em todos os episódios do quadro",
+      "Marca nos cortes e shorts do quadro",
+      "QR code na tela + página exclusiva com tracking",
+      "Exclusividade: nenhuma outra marca como master do quadro",
+      "Relatório mensal de alcance e acessos ao QR",
+    ],
+  },
+  apoio: {
+    name: "Cota de Apoio",
+    features: [
+      "Menção do apresentador nos episódios do quadro",
+      "Logo nos créditos finais",
+      "Link na descrição dos episódios",
+      "Story de divulgação a cada episódio",
+    ],
+    /** Texto da variação por modalidade, nos quadros que têm `modalidades`. */
+    modalidade:
+      "No PFC Esporte Clube dá para apoiar só uma modalidade: um box de crossfit, por exemplo, aparece só nos episódios de crossfit e Hyrox.",
+  },
+};
 
 /** Formatos de parceria disponíveis (Media Kit). */
 export const partnershipFormats = [
@@ -184,6 +265,12 @@ export const partnershipFormats = [
     title: "PFC Visita",
     description: "Episódio gravado no espaço do patrocinador.",
     emoji: "🚗",
+  },
+  {
+    title: "Patrocínio de quadro",
+    description:
+      "Sua marca apresenta um quadro inteiro — cota master exclusiva ou cota de apoio.",
+    emoji: "🏆",
   },
   {
     title: "Vinheta / abertura",

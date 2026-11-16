@@ -5,11 +5,12 @@ import WhatsAppButton from "@/components/WhatsAppButton";
 import Exposure from "@/components/Exposure";
 import Differentials from "@/components/Differentials";
 import Plans from "@/components/Plans";
+import QuadroSponsorship from "@/components/QuadroSponsorship";
 import HowItWorks from "@/components/HowItWorks";
 import PartnersShowcase from "@/components/PartnersShowcase";
 import LeadCapture from "@/components/LeadCapture";
 import FinalCTA from "@/components/FinalCTA";
-import { partnershipFormats, quadros, whatsapp } from "@/lib/config";
+import { partnershipFormats, whatsapp } from "@/lib/config";
 import { WhatsAppIcon, ArrowRight } from "@/components/icons";
 
 export const metadata: Metadata = {
@@ -91,30 +92,10 @@ export default function ParceriasPage() {
               </div>
             ))}
           </div>
-
-          {/* Quadros + perfil de patrocinador */}
-          <div className="mt-14">
-            <h3 className="text-center text-white/60 text-sm font-bold uppercase tracking-widest mb-6">
-              Patrocinador ideal por quadro
-            </h3>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
-              {quadros.map((q) => (
-                <div
-                  key={q.slug}
-                  className="bg-[#0d0d0d] border border-[#222] rounded-xl p-5 flex flex-col gap-2"
-                >
-                  <div className="text-2xl">{q.emoji}</div>
-                  <div className="text-white font-semibold text-sm">{q.name}</div>
-                  <div className="text-white/40 text-xs leading-relaxed">
-                    {q.sponsorProfile}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       </section>
 
+      <QuadroSponsorship />
       <Exposure />
       <Differentials />
       <Plans />

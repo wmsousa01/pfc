@@ -1,4 +1,7 @@
+import Image from "next/image";
 import { quadros } from "@/lib/config";
+
+const POR_EXTENSO = ["Zero", "Um", "Dois", "Três", "Quatro", "Cinco", "Seis", "Sete", "Oito", "Nove", "Dez"];
 
 // Classes estáticas por accent (Tailwind não aceita classes dinâmicas).
 const accentMap: Record<
@@ -29,6 +32,12 @@ const accentMap: Record<
     hover: "hover:border-rose-500/40",
     glow: "group-hover:shadow-[0_0_30px_rgba(244,63,94,0.08)]",
   },
+  forest: {
+    badge: "bg-green-900/30 text-[#f3e6c8] border-green-700/40",
+    dot: "bg-green-700",
+    hover: "hover:border-green-600/50",
+    glow: "group-hover:shadow-[0_0_30px_rgba(34,120,70,0.12)]",
+  },
   violet: {
     badge: "bg-violet-500/10 text-violet-400 border-violet-500/20",
     dot: "bg-violet-500",
@@ -44,12 +53,12 @@ export default function Quadros() {
         <div className="text-center mb-14 max-w-2xl mx-auto">
           <span className="section-tag">Os quadros</span>
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black mt-3 leading-tight">
-            Cinco programas,{" "}
+            {POR_EXTENSO[quadros.length] ?? quadros.length} programas,{" "}
             <span className="text-gradient-gold">um ecossistema</span>
           </h2>
           <p className="text-white/50 mt-4 leading-relaxed">
             Cada quadro tem identidade, apresentador e público próprios — do
-            comportamento ao jornalismo, da educação ao empreendedorismo.
+            comportamento ao jornalismo, da educação ao empreendedorismo e ao esporte.
           </p>
         </div>
 
@@ -62,11 +71,15 @@ export default function Quadros() {
                 className={`group bg-[#111] border border-[#222] rounded-2xl p-6 flex flex-col gap-4 transition-all duration-300 ${a.hover} ${a.glow}`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="text-4xl">{q.emoji}</div>
+                  {q.logo ? (
+                    <Image src={q.logo} alt={`Logo ${q.name}`} width={56} height={56} className="w-14 h-14 object-contain" />
+                  ) : (
+                    <div className="text-4xl">{q.emoji}</div>
+                  )}
                   <span
                     className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${a.badge}`}
                   >
-                    Quadro
+                    {q.isNew ? "Novo quadro" : "Quadro"}
                   </span>
                 </div>
 

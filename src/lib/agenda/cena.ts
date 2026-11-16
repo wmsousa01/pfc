@@ -66,6 +66,8 @@ const ESTILO: Record<QuadroId, string> = {
     "Luz natural quente com faixas verticais de luz verde-esmeralda e bokeh verde suave; fundo escuro, textos brancos e verdes.",
   "tateios-escolares":
     "Faixas de luz azul-celeste e bokeh ciano suave, clima mais leve e amigável; fundo escuro, textos brancos e azul-celeste.",
+  "pfc-esporte-clube":
+    "Clube esportivo: fundo verde-floresta profundo com rede de alambrado em losangos desfocada, faixas laterais de luz verde e luz principal creme quente. Textos creme e brancos, tipografia de escudo esportivo. Energia de vestiário e arquibancada local.",
 };
 
 const PRESERVAR = `PRESERVAÇÃO ABSOLUTA DAS PESSOAS (prioridade máxima, acima de qualquer estilo)
