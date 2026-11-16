@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import WhatsAppButton from "@/components/WhatsAppButton";
-import { channelStats, whatsapp } from "@/lib/config";
+import { whatsapp } from "@/lib/config";
+import { getChannelStats, type ChannelStatsView } from "@/lib/channel-stats";
 import { WhatsAppIcon, ArrowRight } from "@/components/icons";
 
 export const metadata: Metadata = {
@@ -25,7 +26,7 @@ export const revalidate = 3600;
  */
 
 /** Glossário-ponte: o termo que ele já usa → o equivalente aqui. */
-const glossario = [
+const glossario = (channelStats: ChannelStatsView) => [
   {
     conhecido: "Spot de 30 segundos",
     aqui: "Menção do apresentador dentro do episódio",
@@ -68,7 +69,7 @@ const glossario = [
  * é isso que dá credibilidade à coluna do PFC. Uma tabela em que só nós somos
  * bons não convence ninguém que já assinou contrato com rádio.
  */
-const comparativo = [
+const comparativo = (channelStats: ChannelStatsView) => [
   {
     criterio: "O que faz muito bem",
     radio: "Presença ampla e simultânea na cidade inteira",
@@ -139,7 +140,7 @@ const perguntas = [
   },
 ];
 
-const objecoes = [
+const objecoes = (channelStats: ChannelStatsView) => [
   {
     q: "Eu já anuncio no rádio. Preciso trocar?",
     a: "Não. Rádio dá presença na cidade e isso ninguém discute. A proposta aqui não é substituir — é ter pelo menos um canal em que você consegue medir. A maioria dos nossos parceiros mantém as duas coisas.",
@@ -162,7 +163,8 @@ const objecoes = [
   },
 ];
 
-export default function ComoAnunciarPage() {
+export default async function ComoAnunciarPage() {
+  const channelStats = await getChannelStats();
   return (
     <main className="bg-dark-900 text-white overflow-x-hidden">
       <Navbar />
@@ -273,7 +275,7 @@ export default function ComoAnunciarPage() {
           </div>
 
           <div className="flex flex-col gap-3">
-            {glossario.map((g) => (
+            {glossario(channelStats).map((g) => (
               <div
                 key={g.conhecido}
                 className="bg-[#0d0d0d] border border-[#2a2a2a] rounded-2xl p-5 sm:p-6 grid sm:grid-cols-[1fr_auto_1fr] gap-3 sm:gap-5 sm:items-center"
@@ -338,7 +340,7 @@ export default function ComoAnunciarPage() {
                 </tr>
               </thead>
               <tbody>
-                {comparativo.map((row) => (
+                {comparativo(channelStats).map((row) => (
                   <tr
                     key={row.criterio}
                     className="border-t border-[#222] align-top"
@@ -580,7 +582,7 @@ export default function ComoAnunciarPage() {
           </div>
 
           <div className="flex flex-col gap-4">
-            {objecoes.map((o) => (
+            {objecoes(channelStats).map((o) => (
               <div
                 key={o.q}
                 className="bg-[#0d0d0d] border border-[#2a2a2a] rounded-2xl p-6"

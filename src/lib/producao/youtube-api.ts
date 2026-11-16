@@ -7,9 +7,16 @@ import { getConfig, setConfig } from "./store";
  * thumb e agendar a publicação.
  *
  * youtube.force-ssl cobre leitura, captions.download, thumbnails.set,
- * videos.update e as lives (liveBroadcasts/liveStreams) — um escopo só.
+ * videos.update e as lives (liveBroadcasts/liveStreams).
+ *
+ * yt-analytics.readonly: views/horas/likes dos últimos 12 meses para os
+ * números do site (lib/channel-stats). Conexão feita antes desse escopo
+ * existir precisa ser refeita para o Analytics funcionar.
  */
-const SCOPE = "https://www.googleapis.com/auth/youtube.force-ssl";
+const SCOPE = [
+  "https://www.googleapis.com/auth/youtube.force-ssl",
+  "https://www.googleapis.com/auth/yt-analytics.readonly",
+].join(" ");
 const API = "https://www.googleapis.com/youtube/v3";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 
@@ -371,6 +378,64 @@ export async function publishVideo(videoId: string, publishAt: Date | null): Pro
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id: videoId, status: next }),
   });
+}
+
+// ---- Números do canal (site): cada chamada custa 1 de cota ----
+
+/** Inscritos (null se o canal esconde), views e vídeos totais. null sem canal conectado. */
+export async function channelStatisticsMine(): Promise<{ subscribers: number | null; views: number; videos: number } | null> {
+  if (!(await getConfig("yt_refresh_token"))) return null;
+  const r = await ytFetch<{
+    items?: { statistics: { subscriberCount?: string; hiddenSubscriberCount?: boolean; viewCount: string; videoCount: string } }[];
+  }>("/channels?part=statistics&mine=true");
+  const s = r.items?.[0]?.statistics;
+  if (!s) return null;
+  return {
+    subscribers: s.hiddenSubscriberCount || s.subscriberCount == null ? null : Number(s.subscriberCount),
+    views: Number(s.viewCount),
+    videos: Number(s.videoCount),
+  };
+}
+
+/** YouTube Analytics (reports.query) do próprio canal. Devolve as linhas cruas. */
+export async function analyticsReport(q: {
+  startDate: string;
+  endDate: string;
+  metrics: string;
+  dimensions?: string;
+}): Promise<unknown[][]> {
+  if (!(await getConfig("yt_refresh_token"))) return [];
+  const params = new URLSearchParams({ ids: "channel==MINE", ...q });
+  const r = await ytFetch<{ rows?: unknown[][] }>(`https://youtubeanalytics.googleapis.com/v2/reports?${params}`);
+  return r.rows ?? [];
+}
+
+/** Quantos uploads públicos saíram desde `since` (para a média por semana). */
+export async function uploadsSince(since: Date): Promise<number> {
+  if (!(await getConfig("yt_refresh_token"))) return 0;
+  const ch = await ytFetch<{ items?: { contentDetails: { relatedPlaylists: { uploads: string } } }[] }>(
+    "/channels?part=contentDetails&mine=true"
+  );
+  const uploads = ch.items?.[0]?.contentDetails.relatedPlaylists.uploads;
+  if (!uploads) return 0;
+  let count = 0;
+  let page = "";
+  // A playlist de uploads vem do mais novo para o mais velho: para no primeiro
+  // vídeo anterior a `since`. Teto de 6 páginas (300 vídeos) por segurança.
+  for (let i = 0; i < 6; i++) {
+    const r = await ytFetch<{ items?: { contentDetails: { videoPublishedAt?: string } }[]; nextPageToken?: string }>(
+      `/playlistItems?part=contentDetails&maxResults=50&playlistId=${uploads}${page ? `&pageToken=${page}` : ""}`
+    );
+    for (const it of r.items ?? []) {
+      const at = it.contentDetails.videoPublishedAt;
+      if (!at) continue; // privado/agendado: ainda não conta
+      if (new Date(at) < since) return count;
+      count++;
+    }
+    if (!r.nextPageToken) break;
+    page = r.nextPageToken;
+  }
+  return count;
 }
 
 // ---- Playlists: playlistItems.insert custa 50 de cota; listar custa 1 ----
