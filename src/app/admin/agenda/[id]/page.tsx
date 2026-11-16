@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import QuadroLogo from "@/components/QuadroLogo";
 import AdminHeader from "@/components/admin/AdminHeader";
 import CopyButton from "@/components/CopyButton";
 import ProducaoForm from "@/components/admin/ProducaoForm";
@@ -167,6 +168,7 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
         <div>
           <a href="/admin/agenda" className="text-white/40 hover:text-white text-sm">← Agenda</a>
           <div className="flex flex-wrap items-center gap-3 mt-3">
+            {t && <QuadroLogo quadro={t.id} nome={t.name} className="w-9 h-9" />}
             {t && (
               <span
                 className="text-xs font-black px-2.5 py-1 rounded-md"

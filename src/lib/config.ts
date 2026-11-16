@@ -75,6 +75,12 @@ export const channelStats = {
  */
 export type CotaStatus = "disponivel" | "negociacao" | "vendida";
 
+/**
+ * Logo do quadro, o mesmo enviado em /admin/producao/config (sem logo próprio,
+ * vale o do PFC). Use sempre isto para mostrar logo de quadro no site.
+ */
+export const quadroLogo = (slugOuId: string) => `/api/quadros/${slugOuId}/logo`;
+
 /** Os quadros do ecossistema. */
 export type Quadro = {
   slug: string;
@@ -86,8 +92,6 @@ export type Quadro = {
   episodes: string[];
   sponsorProfile: string;
   accent: string; // classe tailwind de cor de destaque
-  /** Logo do quadro em /public (opcional; sem ele, vale o emoji). */
-  logo?: string;
   /** Selo de "novo" na vitrine. */
   isNew?: boolean;
   /** Patrocínio por quadro. Sem isto, o quadro não entra na vitrine de cotas. */
@@ -204,7 +208,6 @@ export const quadros: Quadro[] = [
     sponsorProfile:
       "Academias e boxes de crossfit, lojas de artigos esportivos, suplementos, nutrição esportiva, fisioterapia e ortopedia, bares e restaurantes.",
     accent: "forest",
-    logo: "/quadros/pfc-esporte-clube.png",
     isNew: true,
     cota: { status: "negociacao" },
     modalidades: [

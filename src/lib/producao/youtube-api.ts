@@ -10,8 +10,8 @@ import { getConfig, setConfig } from "./store";
  * videos.update e as lives (liveBroadcasts/liveStreams).
  *
  * yt-analytics.readonly: views/horas/likes dos últimos 12 meses para os
- * números do site (lib/channel-stats). Conexão feita antes desse escopo
- * existir precisa ser refeita para o Analytics funcionar.
+ * números do site (lib/channel-stats, que faz as próprias chamadas: aqui é
+ * tudo no-store, o que não pode rodar dentro de página estática).
  */
 const SCOPE = [
   "https://www.googleapis.com/auth/youtube.force-ssl",

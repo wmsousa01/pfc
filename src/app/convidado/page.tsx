@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import QuadroLogo from "@/components/QuadroLogo";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { WEEKDAYS, brt, listAvulsos, listSlots, quadrosAbertos, quandoLongo } from "@/lib/agenda/store";
@@ -49,6 +50,7 @@ export default async function ConvidadoPage() {
                     href={`/convidado/${q}`}
                     className="card-hover block bg-[#111] border border-[#222] rounded-2xl p-6 hover:border-gold-500/40"
                   >
+                    <QuadroLogo quadro={q} nome={t.name} className="w-14 h-14 mb-4" />
                     <span
                       className="text-xs font-black px-2.5 py-1 rounded-md"
                       style={{

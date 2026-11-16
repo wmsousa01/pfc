@@ -97,7 +97,8 @@ export default async function ProducaoConfigPage({
           <h2 className="text-white font-bold">Identidade dos quadros</h2>
           <p className="text-white/40 text-sm mt-1">
             A thumb de cada corte usa a cor, a luz do fundo e o selo do quadro de origem. O logo próprio é opcional:
-            sem ele, entra o logo do PFC. Mesmas regras de arquivo do logo acima.
+            sem ele, entra o logo do PFC. É este mesmo logo que aparece no site (home, parcerias, Monte seu plano e
+            páginas do convidado); a troca chega lá em até 10 minutos. Mesmas regras de arquivo do logo acima.
           </p>
           <div className="mt-4 space-y-3">
             {QUADRO_IDS.map((q) => {

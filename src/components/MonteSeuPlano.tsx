@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
-import Image from "next/image";
+import QuadroLogo from "@/components/QuadroLogo";
 import { enviarPlano, type EnvioState } from "@/app/monte-seu-plano/actions";
 import { buscarInstagram } from "@/app/monte-seu-plano/instagram";
 import type { MarcaIg } from "@/lib/marca-instagram";
@@ -76,14 +76,15 @@ function ItemRow(props: {
   on: boolean;
   onChange: (v: boolean) => void;
   motivo?: string;
-  logo?: string;
+  /** Slug do quadro, para o logo. */
+  quadro?: string;
   /** Chave de INCLUI: mostra o que o item põe no ar. */
   inclui?: string;
 }) {
   return (
     <div className={`rounded-2xl border p-4 sm:p-5 ${props.on ? "border-gold-500/50 bg-gold-500/[0.04]" : "border-[#2a2a2a] bg-[#0d0d0d]"}`}>
       <div className="flex items-start gap-3">
-        {props.logo && <Image src={props.logo} alt="" width={40} height={40} className="w-10 h-10 object-contain flex-shrink-0" />}
+        {props.quadro && <QuadroLogo quadro={props.quadro} className="w-10 h-10" />}
         <div className="flex-1 min-w-0">
           <div className="text-white font-semibold leading-tight">{props.titulo}</div>
           <div className="text-white/45 text-xs mt-1">
@@ -475,7 +476,7 @@ export default function MonteSeuPlano() {
                     titulo={`Cota Master · ${q.name}`}
                     preco={`${brl(quadroSponsorship.master.monthlyPrice)}/mês`}
                     detalhe={q.cota?.status === "negociacao" ? "em negociação, sujeita a disponibilidade" : "exclusiva no quadro"}
-                    logo={q.logo}
+                    quadro={q.slug}
                     on={sel.quadros.includes(q.slug)}
                     onChange={(on) => setSel({ ...sel, quadros: toggleIn(sel.quadros, q.slug, on) })}
                     inclui="cota:master"
@@ -496,7 +497,7 @@ export default function MonteSeuPlano() {
                       titulo={`${m.nome} · ${m.quadro.name}`}
                       preco="Sob consulta"
                       detalhe="só nos episódios da modalidade"
-                      logo={m.quadro.logo}
+                      quadro={m.quadro.slug}
                       on={sel.modalidades.includes(m.key)}
                       onChange={(on) => setSel({ ...sel, modalidades: toggleIn(sel.modalidades, m.key, on) })}
                       inclui="cota:apoio"
