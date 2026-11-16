@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import QuadroLogo from "@/components/QuadroLogo";
 import { notFound } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -67,7 +68,10 @@ export default async function ConvidadoBriefingPage({
           )}
 
           <div>
-            <span className="section-tag">{t?.name ?? "Fora da Caixa"}</span>
+            <div className="flex items-center gap-3">
+              {t && <QuadroLogo quadro={t.id} nome={t.name} className="w-10 h-10" />}
+              <span className="section-tag">{t?.name ?? "Fora da Caixa"}</span>
+            </div>
             <h1 className="text-3xl sm:text-4xl font-black mt-3 leading-tight capitalize">{quandoLongo(ep.inicio)}</h1>
             <div className={`mt-4 p-4 rounded-xl border text-sm ${st.cls}`}>
               <strong>{st.label}.</strong> {st.texto}

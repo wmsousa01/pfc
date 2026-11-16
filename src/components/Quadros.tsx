@@ -1,4 +1,4 @@
-import Image from "next/image";
+import QuadroLogo from "@/components/QuadroLogo";
 import { quadros } from "@/lib/config";
 
 const POR_EXTENSO = ["Zero", "Um", "Dois", "Três", "Quatro", "Cinco", "Seis", "Sete", "Oito", "Nove", "Dez"];
@@ -71,11 +71,7 @@ export default function Quadros() {
                 className={`group bg-[#111] border border-[#222] rounded-2xl p-6 flex flex-col gap-4 transition-all duration-300 ${a.hover} ${a.glow}`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  {q.logo ? (
-                    <Image src={q.logo} alt={`Logo ${q.name}`} width={56} height={56} className="w-14 h-14 object-contain" />
-                  ) : (
-                    <div className="text-4xl">{q.emoji}</div>
-                  )}
+                  <QuadroLogo quadro={q.slug} nome={q.name} className="w-14 h-14" />
                   <span
                     className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${a.badge}`}
                   >
