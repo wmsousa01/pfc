@@ -22,6 +22,8 @@ import {
   type Selecao,
 } from "@/lib/monte-plano";
 import { WhatsAppIcon, ArrowRight } from "@/components/icons";
+import { PlacementGallery } from "@/components/PlacementMockup";
+import { INCLUI, placementsDe, tituloDos, type PlacementId } from "@/lib/placements";
 
 const brl = (v: number) => `R$ ${v.toLocaleString("pt-BR")}`;
 
@@ -73,6 +75,8 @@ function ItemRow(props: {
   onChange: (v: boolean) => void;
   motivo?: string;
   logo?: string;
+  /** Chave de INCLUI: mostra o que o item põe no ar. */
+  inclui?: string;
 }) {
   return (
     <div className={`rounded-2xl border p-4 sm:p-5 ${props.on ? "border-gold-500/50 bg-gold-500/[0.04]" : "border-[#2a2a2a] bg-[#0d0d0d]"}`}>
@@ -87,6 +91,19 @@ function ItemRow(props: {
         </div>
         <Toggle on={props.on} onChange={props.onChange} label={props.titulo} />
       </div>
+      {props.inclui && INCLUI[props.inclui] && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {INCLUI[props.inclui].map((id) => (
+            <a
+              key={id}
+              href={`#placement-${id}`}
+              className="text-[11px] rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-white/55 hover:text-white hover:border-gold-500/40"
+            >
+              {tituloDos([id])[0]}
+            </a>
+          ))}
+        </div>
+      )}
       <Sugerido motivo={props.motivo} />
     </div>
   );
@@ -101,7 +118,7 @@ function Enviar() {
   );
 }
 
-const vazio: Briefing = { empresa: "", segmento: "", objetivos: [], verba: "500-1000", exclusividade: false, quadro: "" };
+const vazio: Briefing = { empresa: "", segmento: "", objetivos: [], verba: "500-1000", exclusividade: false, quadro: "", cor: "#2563eb" };
 const inicial: EnvioState = { ok: false, error: null, resumo: null };
 
 export default function MonteSeuPlano() {
@@ -113,6 +130,29 @@ export default function MonteSeuPlano() {
 
   const orc = useMemo(() => (sel ? orcar(sel) : null), [sel]);
   const cotas = quadrosComCota();
+
+  /** Placements do que está ligado, com o nome de quem trouxe cada um. */
+  const vitrine = useMemo(() => {
+    const origem: Partial<Record<PlacementId, string[]>> = {};
+    if (!sel) return { ids: [] as PlacementId[], origem, quadro: undefined as string | undefined };
+    const itens: [string, string][] = [];
+    const plano = plans.find((p) => p.id === sel.plano);
+    if (plano) itens.push([`plano:${plano.id}`, `Plano ${plano.name}`]);
+    const nomesQuadros = cotas.filter((q) => sel.quadros.includes(q.slug)).map((q) => q.name);
+    nomesQuadros.forEach((n) => itens.push(["cota:master", `Cota Master ${n}`]));
+    sel.modalidades.forEach((k) => itens.push(["cota:apoio", `Apoio ${k.split(":")[1]}`]));
+    if (sel.visita) itens.push(["visita", "PFC Visita"]);
+    for (const [chave, nome] of itens) {
+      for (const id of INCLUI[chave] ?? []) {
+        const lista = (origem[id] ??= []);
+        if (!lista.includes(nome)) lista.push(nome);
+      }
+    }
+    const quadroModalidade = sel.modalidades.length
+      ? cotas.find((q) => sel.modalidades[0].startsWith(q.slug + ":"))?.name
+      : undefined;
+    return { ids: placementsDe(itens.map(([c]) => c)), origem, quadro: nomesQuadros[0] ?? quadroModalidade };
+  }, [sel, cotas]);
   const mods = modalidadesLivres();
 
   const sugerir = () => {
@@ -167,6 +207,19 @@ export default function MonteSeuPlano() {
               onChange={(e) => setB({ ...b, empresa: e.target.value })}
               placeholder="Ex.: Box Guaçu Crossfit"
               maxLength={120}
+            />
+          </label>
+          <label className="flex items-center justify-between gap-4 rounded-2xl border border-[#2a2a2a] bg-[#0d0d0d] p-4 cursor-pointer">
+            <span>
+              <span className="block text-white/70 text-sm font-semibold">Cor principal da sua marca</span>
+              <span className="block text-white/40 text-xs mt-0.5">Usamos para mostrar como ela aparece nas telas do programa.</span>
+            </span>
+            <input
+              type="color"
+              value={b.cor ?? "#2563eb"}
+              onChange={(e) => setB({ ...b, cor: e.target.value })}
+              className="w-12 h-10 rounded-lg bg-transparent border border-white/15 cursor-pointer flex-shrink-0"
+              aria-label="Cor da marca"
             />
           </label>
           <div>
@@ -270,9 +323,10 @@ export default function MonteSeuPlano() {
                     key={p.id}
                     titulo={`Plano ${p.name}`}
                     preco={`${brl(p.monthlyPrice)}/mês`}
-                    detalhe={p.features.slice(0, 3).join(", ")}
+                    detalhe={p.tagline}
                     on={sel.plano === p.id}
                     onChange={(on) => setSel({ ...sel, plano: on ? p.id : null })}
+                    inclui={`plano:${p.id}`}
                     motivo={sel.plano === p.id ? motivos[`plano:${p.id}`] : undefined}
                   />
                 ))}
@@ -293,6 +347,7 @@ export default function MonteSeuPlano() {
                     logo={q.logo}
                     on={sel.quadros.includes(q.slug)}
                     onChange={(on) => setSel({ ...sel, quadros: toggleIn(sel.quadros, q.slug, on) })}
+                    inclui="cota:master"
                     motivo={sel.quadros.includes(q.slug) ? motivos[`quadro:${q.slug}`] : undefined}
                   />
                 ))}
@@ -313,6 +368,7 @@ export default function MonteSeuPlano() {
                       logo={m.quadro.logo}
                       on={sel.modalidades.includes(m.key)}
                       onChange={(on) => setSel({ ...sel, modalidades: toggleIn(sel.modalidades, m.key, on) })}
+                      inclui="cota:apoio"
                       motivo={sel.modalidades.includes(m.key) ? motivos[`modalidade:${m.key}`] : undefined}
                     />
                   ))}
@@ -329,6 +385,7 @@ export default function MonteSeuPlano() {
                 detalhe="pagamento único"
                 on={sel.visita}
                 onChange={(on) => setSel({ ...sel, visita: on })}
+                inclui="visita"
                 motivo={sel.visita ? motivos.visita : undefined}
               />
             </section>
@@ -364,6 +421,24 @@ export default function MonteSeuPlano() {
               <span className="text-white font-semibold">Incluso em tudo:</span> página da sua marca em
               pfctv.com.br/parceiros, QR code na tela e relatório de acessos.
             </div>
+
+            <section>
+              <h3 className="text-white text-xl font-black">
+                Como a <span className="text-gradient-gold">{b.empresa}</span> aparece
+              </h3>
+              <p className="text-white/45 text-sm mt-1 mb-4">
+                Ilustrações do que está ligado no seu plano. Mude os itens acima e as telas mudam junto.
+              </p>
+              {vitrine.ids.length ? (
+                <PlacementGallery
+                  ids={vitrine.ids}
+                  origem={vitrine.origem}
+                  marca={{ nome: b.empresa, cor: b.cor ?? "#2563eb", quadro: vitrine.quadro }}
+                />
+              ) : (
+                <p className="text-white/40 text-sm">Ligue um item para ver as telas.</p>
+              )}
+            </section>
           </div>
 
           {/* Resumo fixo */}

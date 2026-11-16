@@ -52,6 +52,8 @@ export type Briefing = {
   exclusividade: boolean;
   /** Quadro que ele escolheu; vazio = deixa a gente sugerir. */
   quadro: string;
+  /** Cor da marca (hex), só para os mockups. */
+  cor?: string;
 };
 
 // ---------------------------------------------------------------- seleção
