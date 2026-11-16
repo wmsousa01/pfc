@@ -17,11 +17,14 @@ import {
   IG_TESTES_BLOQUEIO,
   JANELA,
   METAS,
+  METRICAS_DIAS,
+  PROMOVER,
   RITMO,
   isSegunda,
   limitesDaSemana,
   linhaDo,
   segundaDe,
+  valePromover,
   type LinhaSemana,
 } from "@/lib/social/ritmo";
 import { PLATFORMS, type SocialPost } from "@/lib/social/store";
@@ -118,6 +121,17 @@ export default async function SemanaPage({ searchParams }: { searchParams: { s?:
     .eq("status", "erro");
   const fbUltimo = (fbErroRes.data?.[0] as { error: string | null } | undefined)?.error ?? null;
   const bloqueio = bloqueioRaw && Date.parse(bloqueioRaw) > now ? bloqueioRaw : null;
+  // Testes de qualquer semana recente que já bateram a regra de promoção.
+  const { data: testesAbertos } = await db()
+    .from("social_posts")
+    .select(COLS)
+    .eq("platform", "instagram")
+    .eq("trial", true)
+    .eq("status", "publicado")
+    .is("graduated_at", null)
+    .gte("published_at", new Date(now - METRICAS_DIAS * DIA).toISOString())
+    .limit(500);
+  const paraPromover = ((testesAbertos ?? []) as Post[]).filter((p) => valePromover(p, now));
 
   // Números: os do rascunho salvo; sem rascunho, lidos agora do Analytics.
   let numeros: NumerosSemana | null = estado?.numeros ?? null;
@@ -160,10 +174,32 @@ export default async function SemanaPage({ searchParams }: { searchParams: { s?:
   const comViews = igPub.filter((p) => p.metrics?.views != null).sort((a, b) => (b.metrics!.views ?? 0) - (a.metrics!.views ?? 0));
   const vs = comViews.map((p) => p.metrics!.views ?? 0).sort((a, b) => a - b);
   const mediana = vs.length ? vs[Math.floor(vs.length / 2)] : null;
+  const soma = (k: "views" | "shares" | "saved" | "comments") => comViews.reduce((a, p) => a + (p.metrics?.[k] ?? 0), 0);
+  const igTotais = { views: soma("views"), shares: soma("shares"), saved: soma("saved"), comments: soma("comments") };
 
   /* ---- alertas ---- */
   const proximos3 = futuros.length;
   const alertas: { cor: string; texto: React.ReactNode; acao?: React.ReactNode }[] = [];
+  if (paraPromover.length > 0) {
+    alertas.push({
+      cor: "yellow",
+      texto: (
+        <>
+          <b>{paraPromover.length}</b> Reel(s) de teste prontos para promover ao perfil (
+          {paraPromover
+            .slice(0, 3)
+            .map((p) => p.title)
+            .join(", ")}
+          {paraPromover.length > 3 ? "…" : ""}). Promova 1 ou 2 por dia no app e marque como promovido.
+        </>
+      ),
+      acao: (
+        <a href="/admin/marketing?view=testes" className="underline whitespace-nowrap">
+          Ver testes
+        </a>
+      ),
+    });
+  }
   if (bloqueio) {
     alertas.push({
       cor: "yellow",
@@ -445,6 +481,18 @@ export default async function SemanaPage({ searchParams }: { searchParams: { s?:
               {igPub.length} Reels publicados · {comViews.length} com métrica
               {mediana != null && <> · mediana de {int(mediana)} views</>}
             </p>
+            {comViews.length > 0 && (
+              <p className="text-white/70 text-sm mt-2">
+                {int(igTotais.views)} views · <b className="text-white">{int(igTotais.shares)}</b> envios ·{" "}
+                <b className="text-white">{int(igTotais.saved)}</b> salvos · {int(igTotais.comments)} comentários
+                {igTotais.views > 0 && (
+                  <span className="text-white/40">
+                    {" "}
+                    ({((100 * (igTotais.shares + igTotais.saved)) / igTotais.views).toFixed(2)}% enviaram ou salvaram)
+                  </span>
+                )}
+              </p>
+            )}
             {comViews.length > 0 ? (
               <ol className="mt-3 space-y-1">
                 {comViews.slice(0, 6).map((p, i) => (
@@ -453,9 +501,13 @@ export default async function SemanaPage({ searchParams }: { searchParams: { s?:
                     <a href={p.post_url ?? "#"} target="_blank" rel="noreferrer" className="text-white/85 hover:text-white truncate flex-1">
                       {p.title}
                     </a>
-                    {p.trial && !p.graduated_at && mediana != null && (p.metrics?.views ?? 0) >= mediana * 3 && (
+                    {valePromover(p, now) && (
                       <span className="text-[10px] font-bold px-1.5 rounded border border-gold-500/40 text-gold-400">promover</span>
                     )}
+                    <span className="text-white/35 text-[11px] tabular-nums" title="tempo médio assistido · envios · salvos">
+                      {p.metrics?.ig_reels_avg_watch_time != null && `${(p.metrics.ig_reels_avg_watch_time / 1000).toFixed(0)} s · `}
+                      {int(p.metrics?.shares ?? 0)}↗ {int(p.metrics?.saved ?? 0)}⚑
+                    </span>
                     <span className="text-white/60 tabular-nums">{int(p.metrics?.views ?? 0)}</span>
                   </li>
                 ))}
@@ -464,7 +516,8 @@ export default async function SemanaPage({ searchParams }: { searchParams: { s?:
               <p className="text-white/45 text-sm mt-2">Sem métricas nesta semana.</p>
             )}
             <p className="text-white/35 text-[11px] mt-2">
-              &quot;Promover&quot; = teste com 3× a mediana da semana. A promoção é feita no app; depois marque em{" "}
+              &quot;Promover&quot; = teste há {PROMOVER.aposHoras} h no ar com {PROMOVER.assistidoMs / 1000} s ou mais de tempo
+              médio assistido e {int(PROMOVER.minViews)}+ views, ou {int(PROMOVER.views)} views. A promoção é feita no app; depois marque em{" "}
               <a href="/admin/marketing?view=testes" className="underline">
                 Reels de teste
               </a>
