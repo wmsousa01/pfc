@@ -57,10 +57,10 @@ export default function ParceriasPage() {
               Solicitar proposta
             </a>
             <a
-              href="#media-kit"
-              className="px-8 py-4 rounded-xl text-base font-bold border border-white/15 text-white/80 hover:border-gold-500/50 hover:text-white transition-colors"
+              href="/monte-seu-plano"
+              className="px-8 py-4 rounded-xl text-base font-bold border border-gold-500/50 text-white hover:bg-gold-500/10 transition-colors"
             >
-              Receber media kit
+              Monte seu plano com preço
             </a>
           </div>
         </div>

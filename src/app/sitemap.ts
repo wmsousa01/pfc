@@ -36,7 +36,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
     {
       path: "/parcerias",
-      alterado: "2026-07-17",
+      alterado: "2026-11-16",
       changeFrequency: "monthly" as const,
       priority: 0.9,
     },
@@ -51,6 +51,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       alterado: "2026-10-22",
       changeFrequency: "monthly" as const,
       priority: 0.9,
+    },
+    {
+      path: "/monte-seu-plano",
+      alterado: "2026-11-16",
+      changeFrequency: "monthly" as const,
+      priority: 0.8,
     },
     {
       path: "/como-anunciar",
