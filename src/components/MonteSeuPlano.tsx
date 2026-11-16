@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import Image from "next/image";
 import { enviarPlano, type EnvioState } from "@/app/monte-seu-plano/actions";
+import { buscarInstagram } from "@/app/monte-seu-plano/instagram";
+import type { MarcaIg } from "@/lib/marca-instagram";
 import { quadroSponsorship, whatsapp } from "@/lib/config";
 import {
   DURACOES,
@@ -118,6 +120,39 @@ function Enviar() {
   );
 }
 
+/** Paleta curta para quem quer trocar a cor (no lugar do seletor nativo, que confundia). */
+const CORES = ["#2563eb", "#16a34a", "#dc2626", "#ea580c", "#ca8a04", "#9333ea", "#db2777", "#111111"];
+
+type IgEstado =
+  | { fase: "vazio" }
+  | { fase: "buscando" }
+  | { fase: "ok"; marca: MarcaIg }
+  | { fase: "erro"; msg: string };
+
+const MSG_IG: Record<string, string> = {
+  invalido: "Não reconhecemos esse @ ou link. Confere e tenta de novo? Ex.: @suamarca ou instagram.com/suamarca",
+  "nao-encontrado": "Não achamos esse perfil como conta comercial (perfil pessoal não aparece). Sem problema: é só seguir.",
+  indisponivel: "Não conseguimos ler o Instagram agora. Sem problema: é só seguir.",
+};
+
+function CorPicker({ cor, onChange, detectada }: { cor: string; onChange: (c: string) => void; detectada?: string | null }) {
+  const opcoes = detectada && !CORES.includes(detectada) ? [detectada, ...CORES] : CORES;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {opcoes.map((c) => (
+        <button
+          key={c}
+          type="button"
+          onClick={() => onChange(c)}
+          aria-label={`Cor ${c}${c === detectada ? " (da sua logo)" : ""}`}
+          className={`w-7 h-7 rounded-full border-2 transition-transform ${cor === c ? "border-white scale-110" : "border-transparent hover:scale-105"}`}
+          style={{ background: c }}
+        />
+      ))}
+    </div>
+  );
+}
+
 const vazio: Briefing = { empresa: "", segmento: "", objetivos: [], verba: "500-1000", exclusividade: false, quadro: "", cor: "#2563eb" };
 const inicial: EnvioState = { ok: false, error: null, resumo: null };
 
@@ -127,6 +162,32 @@ export default function MonteSeuPlano() {
   const [sel, setSel] = useState<Selecao | null>(null);
   const [motivos, setMotivos] = useState<Record<string, string>>({});
   const [state, action] = useFormState(enviarPlano, inicial);
+
+  const [ig, setIg] = useState<IgEstado>({ fase: "vazio" });
+  const [igEntrada, setIgEntrada] = useState("");
+
+  /** Busca o @ e preenche o que estiver vazio (nome) e a cor. */
+  const lerIg = async (entrada: string, base?: Briefing) => {
+    if (!entrada.trim()) return;
+    setIg({ fase: "buscando" });
+    const r = await buscarInstagram(entrada).catch(() => ({ ok: false as const, motivo: "indisponivel" as const }));
+    if (!r.ok) {
+      setIg({ fase: "erro", msg: MSG_IG[r.motivo] });
+      return;
+    }
+    setIg({ fase: "ok", marca: r.marca });
+    setIgEntrada(`@${r.marca.username}`);
+    setB((atual) => {
+      const x = base ?? atual;
+      return {
+        ...x,
+        instagram: r.marca.username,
+        empresa: x.empresa.trim() || r.marca.nome || r.marca.username,
+        cor: r.marca.cor ?? x.cor,
+      };
+    });
+  };
+  const logo = ig.fase === "ok" ? ig.marca.logo : null;
 
   const orc = useMemo(() => (sel ? orcar(sel) : null), [sel]);
   const cotas = quadrosComCota();
@@ -168,6 +229,10 @@ export default function MonteSeuPlano() {
       setSel(r.selecao);
       setMotivos(r.motivos);
       setEtapa(3);
+      if (nb.instagram) {
+        setIgEntrada(`@${nb.instagram}`);
+        lerIg(nb.instagram, nb);
+      }
     } catch {}
   }, []);
 
@@ -215,6 +280,59 @@ export default function MonteSeuPlano() {
       {/* 1 · Marca */}
       {etapa === 1 && (
         <div className="max-w-2xl mx-auto flex flex-col gap-6">
+          <div className="rounded-2xl border border-gold-500/30 bg-gold-500/[0.04] p-4 sm:p-5">
+            <span className="block text-white text-sm font-semibold">Qual é o Instagram da sua marca?</span>
+            <span className="block text-white/45 text-xs mt-0.5">Digite o @ ou cole o link do perfil. A gente puxa o nome, a logo e a cor sozinho. É opcional.</span>
+            <form
+              className="flex gap-2 mt-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                lerIg(igEntrada);
+              }}
+            >
+              <div className="relative flex-1">
+                <input
+                  className={input}
+                  value={igEntrada}
+                  onChange={(e) => setIgEntrada(e.target.value)}
+                  onBlur={() => igEntrada.trim() && ig.fase === "vazio" && lerIg(igEntrada)}
+                  placeholder="@suamarca ou link do perfil"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  maxLength={200}
+                  inputMode="url"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={!igEntrada.trim() || ig.fase === "buscando"}
+                className="btn-primary px-5 rounded-xl font-bold text-sm disabled:opacity-40"
+              >
+                {ig.fase === "buscando" ? "Buscando…" : "Buscar"}
+              </button>
+            </form>
+            {ig.fase === "ok" && (
+              <div className="mt-4 flex items-center gap-3">
+                {ig.marca.logo ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- data URL pequena
+                  <img src={ig.marca.logo} alt="" className="w-12 h-12 rounded-full object-cover bg-white flex-shrink-0" />
+                ) : (
+                  <span className="w-12 h-12 rounded-full flex-shrink-0" style={{ background: b.cor }} />
+                )}
+                <div className="min-w-0">
+                  <div className="text-white font-semibold truncate">{ig.marca.nome ?? `@${ig.marca.username}`}</div>
+                  <div className="text-white/45 text-xs">
+                    @{ig.marca.username}
+                    {ig.marca.seguidores !== null ? ` · ${ig.marca.seguidores.toLocaleString("pt-BR")} seguidores` : ""}
+                  </div>
+                </div>
+                <span className="ml-auto text-emerald-400 text-xs font-semibold">✓ Achamos</span>
+              </div>
+            )}
+            {ig.fase === "erro" && <p className="mt-3 text-white/55 text-xs leading-relaxed">{ig.msg}</p>}
+          </div>
+
           <label className="block">
             <span className="text-white/70 text-sm font-semibold">Nome da sua empresa</span>
             <input
@@ -225,19 +343,16 @@ export default function MonteSeuPlano() {
               maxLength={120}
             />
           </label>
-          <label className="flex items-center justify-between gap-4 rounded-2xl border border-[#2a2a2a] bg-[#0d0d0d] p-4 cursor-pointer">
-            <span>
-              <span className="block text-white/70 text-sm font-semibold">Cor principal da sua marca</span>
-              <span className="block text-white/40 text-xs mt-0.5">Usamos para mostrar como ela aparece nas telas do programa.</span>
+
+          <div>
+            <span className="text-white/70 text-sm font-semibold">Cor da marca</span>
+            <span className="text-white/35 text-xs ml-2">
+              {ig.fase === "ok" && ig.marca.cor ? "já pegamos da sua logo, troque se quiser" : "para as telas de exemplo"}
             </span>
-            <input
-              type="color"
-              value={b.cor ?? "#2563eb"}
-              onChange={(e) => setB({ ...b, cor: e.target.value })}
-              className="w-12 h-10 rounded-lg bg-transparent border border-white/15 cursor-pointer flex-shrink-0"
-              aria-label="Cor da marca"
-            />
-          </label>
+            <div className="mt-2">
+              <CorPicker cor={b.cor ?? CORES[0]} onChange={(c) => setB({ ...b, cor: c })} detectada={ig.fase === "ok" ? ig.marca.cor : null} />
+            </div>
+          </div>
           <div>
             <span className="text-white/70 text-sm font-semibold">Qual é o seu segmento?</span>
             <div className="grid sm:grid-cols-2 gap-2 mt-2">
@@ -449,7 +564,8 @@ export default function MonteSeuPlano() {
                 <PlacementGallery
                   ids={vitrine.ids}
                   origem={vitrine.origem}
-                  marca={{ nome: b.empresa, cor: b.cor ?? "#2563eb", quadro: vitrine.quadro }}
+                  colunas={2}
+                  marca={{ nome: b.empresa, cor: b.cor ?? "#2563eb", quadro: vitrine.quadro, logo }}
                 />
               ) : (
                 <p className="text-white/40 text-sm">Ligue um item para ver as telas.</p>

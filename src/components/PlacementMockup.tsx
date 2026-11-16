@@ -9,7 +9,7 @@ import { PLACEMENTS, type PlacementId } from "@/lib/placements";
  * Sem hooks — serve em Server e Client Components.
  */
 
-export type MarcaInfo = { nome: string; cor: string; quadro?: string };
+export type MarcaInfo = { nome: string; cor: string; quadro?: string; /** Foto de perfil do Instagram (data URL). */ logo?: string | null };
 
 const slug = (s: string) =>
   s
@@ -38,9 +38,14 @@ function Logo({ m, size = "sm" }: { m: MarcaInfo; size?: "xs" | "sm" | "md" }) {
   const fg = tinta(m.cor);
   return (
     <span className={`inline-flex items-center rounded-md font-black uppercase tracking-wide whitespace-nowrap max-w-full ${s}`} style={{ background: m.cor, color: fg }}>
-      <span className={`rounded-full flex items-center justify-center flex-shrink-0 ${d}`} style={{ background: fg, color: m.cor }}>
-        {m.nome.trim().charAt(0) || "M"}
-      </span>
+      {m.logo ? (
+        // eslint-disable-next-line @next/next/no-img-element -- data URL pequena, sem otimização a fazer
+        <img src={m.logo} alt="" className={`rounded-full object-cover flex-shrink-0 bg-white ${d}`} />
+      ) : (
+        <span className={`rounded-full flex items-center justify-center flex-shrink-0 ${d}`} style={{ background: fg, color: m.cor }}>
+          {m.nome.trim().charAt(0) || "M"}
+        </span>
+      )}
       <span className="truncate">{m.nome}</span>
     </span>
   );
@@ -233,7 +238,12 @@ function Tela({ id, m }: { id: PlacementId; m: MarcaInfo }) {
           <div className="flex items-center gap-1.5 p-1.5">
             <span className="flex -space-x-1.5">
               <span className="w-4 h-4 rounded-full bg-amber-400 border border-black" />
-              <span className="w-4 h-4 rounded-full border border-black" style={{ background: m.cor }} />
+              {m.logo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={m.logo} alt="" className="w-4 h-4 rounded-full border border-black object-cover" />
+              ) : (
+                <span className="w-4 h-4 rounded-full border border-black" style={{ background: m.cor }} />
+              )}
             </span>
             <span className="text-[8px] text-white leading-tight truncate">
               <b>papoforadacaixapdc</b> e <b>{slug(m.nome).replace(/-/g, "")}</b>
@@ -355,13 +365,16 @@ export function PlacementGallery({
   ids,
   marca,
   origem,
+  colunas = 3,
 }: {
   ids: PlacementId[];
   marca: MarcaInfo;
   origem?: Partial<Record<PlacementId, string[]>>;
+  /** 2 quando a galeria fica numa coluna estreita (Monte seu plano). */
+  colunas?: 2 | 3;
 }) {
   return (
-    <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+    <div className={`grid sm:grid-cols-2 gap-4 ${colunas === 3 ? "xl:grid-cols-3" : ""}`}>
       {ids.map((id) => {
         const p = PLACEMENTS[id];
         return (

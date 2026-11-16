@@ -54,7 +54,28 @@ export type Briefing = {
   quadro: string;
   /** Cor da marca (hex), só para os mockups. */
   cor?: string;
+  /** @ do Instagram, sem o @ (vai no resumo para o comercial). */
+  instagram?: string;
 };
+
+/** "@Marca", "instagram.com/marca/" ou "marca" → "marca"; null se não for um @ válido. */
+export function handleInstagram(v: string): string | null {
+  let s = v.trim();
+  // Link do perfil, com ou sem https/www/m., e o encurtado instagr.am.
+  const link = /^(?:https?:\/\/)?(?:(?:www|m)\.)?(?:instagram\.com|instagr\.am)\/(.*)$/i.exec(s);
+  if (link) {
+    // instagram.com/_u/marca (link de app) e caminhos que não são perfil.
+    const partes = link[1].split(/[?#]/)[0].split("/").filter(Boolean);
+    const p = partes[0] === "_u" ? partes[1] : partes[0];
+    if (!p || ["p", "reel", "reels", "stories", "explore", "tv"].includes(p.toLowerCase())) return null;
+    s = p;
+  }
+  // Espaço no meio é nome digitado, não @ ("box guacu" não pode virar "box").
+  if (/\s/.test(s)) return null;
+  const h = s.replace(/^@/, "").split(/[/?#]/)[0].toLowerCase();
+  // Precisa de ao menos uma letra/número: "." ou "_" sozinhos não são @.
+  return /^[a-z0-9._]{1,30}$/.test(h) && /[a-z0-9]/.test(h) ? h : null;
+}
 
 // ---------------------------------------------------------------- seleção
 
@@ -281,6 +302,7 @@ export function resumo(b: Briefing, o: Orcamento): string {
   const verba = VERBAS.find((v) => v.id === b.verba)?.label ?? b.verba;
   return [
     `Monte seu plano: ${b.empresa} (${b.segmento})`,
+    ...(b.instagram ? [`Instagram: @${b.instagram}`] : []),
     `Objetivos: ${obj || "não informado"}`,
     `Verba: ${verba}${b.exclusividade ? " · quer exclusividade" : ""}`,
     `Duração: ${o.meses} ${o.meses === 1 ? "mês" : "meses"}`,
