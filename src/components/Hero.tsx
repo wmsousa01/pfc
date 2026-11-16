@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { getVideosSplit, type YouTubeVideo } from "@/lib/youtube";
-import { social, channelStats } from "@/lib/config";
+import { social } from "@/lib/config";
+import { getChannelStats } from "@/lib/channel-stats";
 import { PlayIcon, YouTubeIcon, ArrowRight } from "./icons";
 
 function timeAgo(iso: string): string {
@@ -79,7 +80,7 @@ function StaticVisual() {
 }
 
 export default async function Hero() {
-  const { episodes, shorts, latest } = await getVideosSplit();
+  const [{ episodes, shorts, latest }, channelStats] = await Promise.all([getVideosSplit(), getChannelStats()]);
   const featured = episodes[0] ?? latest;
   const strip = [...shorts, ...episodes.slice(1)].slice(0, 4);
 

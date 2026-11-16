@@ -3,7 +3,8 @@ import Image from "next/image";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import VideoFacade from "@/components/VideoFacade";
-import { channelStats, whatsapp } from "@/lib/config";
+import { whatsapp } from "@/lib/config";
+import { getChannelStats, type ChannelStatsView } from "@/lib/channel-stats";
 import { WhatsAppIcon, ArrowRight, InstagramIcon } from "@/components/icons";
 import { installmentLabel, PAYMENT_TERMS_CASH } from "@/lib/payment";
 
@@ -33,6 +34,9 @@ export const metadata: Metadata = {
  * Avulso parcela até 3x sem juros (líquido ~R$ 1.498, ainda acima do "Do
  * Zero"). O preço de cliente já é desconto: só à vista — ver lib/payment.
  */
+/** Os números do canal (lib/channel-stats) se renovam de hora em hora. */
+export const revalidate = 3600;
+
 const VALOR_AVULSO = 1690;
 const PRECO_AVULSO = "R$ 1.690";
 const PRECO_CLIENTE = "R$ 1.350";
@@ -143,7 +147,7 @@ const passos = [
   },
 ];
 
-const faq = [
+const faq = (channelStats: ChannelStatsView) => [
   {
     q: "Não sei falar em câmera. Vai dar certo?",
     a: "Vai. Quem conduz é o apresentador: ele pergunta, você responde sobre o que conhece melhor que ninguém — o seu negócio. É conversa, não discurso. Ninguém decora texto.",
@@ -170,7 +174,8 @@ const faq = [
   },
 ];
 
-export default function PfcVisitaPage() {
+export default async function PfcVisitaPage() {
+  const channelStats = await getChannelStats();
   const cta = whatsapp(CTA_MSG);
 
   return (
@@ -496,7 +501,7 @@ export default function PfcVisitaPage() {
             </h2>
           </div>
           <div className="flex flex-col gap-4">
-            {faq.map((o) => (
+            {faq(channelStats).map((o) => (
               <div
                 key={o.q}
                 className="bg-[#0d0d0d] border border-[#2a2a2a] rounded-2xl p-6"
