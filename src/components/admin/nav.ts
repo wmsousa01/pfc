@@ -6,11 +6,13 @@ export type NavKey =
   | "producao"
   | "marketing"
   | "campanhas"
+  | "materiais"
   | "parceiros"
   | "entregas"
   | "pedidos"
   | "revendedores"
-  | "produtos";
+  | "produtos"
+  | "equipe";
 
 export type NavItem = { key: NavKey; href: string; label: string; icon: string };
 export type NavGrupo = { label: string; itens: NavItem[] };
@@ -29,6 +31,8 @@ export const ICONES = {
   revendedores:
     "M18 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4",
   produtos: "M21 16V8l-9-5-9 5v8l9 5 9-5zM3.3 7L12 12l8.7-5M12 22V12",
+  materiais: "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2zM12 11v6M9 14l3-3 3 3",
+  equipe: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",
   site: "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3",
   conta: "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
   sair: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9",
@@ -53,6 +57,7 @@ export const NAV: NavGrupo[] = [
       { key: "producao", href: "/admin/producao", label: "Produção", icon: ICONES.producao },
       { key: "marketing", href: "/admin/marketing", label: "Marketing", icon: ICONES.marketing },
       { key: "campanhas", href: "/admin/campanhas", label: "Campanhas", icon: ICONES.campanhas },
+      { key: "materiais", href: "/admin/materiais", label: "Materiais", icon: ICONES.materiais },
     ],
   },
   {
@@ -65,7 +70,20 @@ export const NAV: NavGrupo[] = [
       { key: "produtos", href: "/admin/produtos", label: "Produtos", icon: ICONES.produtos },
     ],
   },
+  {
+    label: "Gestão",
+    itens: [{ key: "equipe", href: "/admin/equipe", label: "Equipe", icon: ICONES.equipe }],
+  },
 ];
+
+/**
+ * O menu de quem está logado: admin vê tudo ("todas"); membro da equipe, só as
+ * áreas da lista dele. Grupo que fica sem item some.
+ */
+export function navPara(permitidas: NavKey[] | "todas"): NavGrupo[] {
+  if (permitidas === "todas") return NAV;
+  return NAV.map((g) => ({ ...g, itens: g.itens.filter((i) => permitidas.includes(i.key)) })).filter((g) => g.itens.length > 0);
+}
 
 /** Item do menu da rota atual. Parceiros mora em /admin e /admin/parceiros. */
 export function itemAtivo(pathname: string): NavKey | null {

@@ -1,7 +1,7 @@
 import AdminHeader from "@/components/admin/AdminHeader";
 import { EspacoHeader, selo } from "@/components/admin/Espaco";
 import { ICONES } from "@/components/admin/nav";
-import { requireAdmin } from "@/lib/auth";
+import { requireArea } from "@/lib/auth";
 import { quandoLongo, type Convidado, type Episodio } from "@/lib/agenda/store";
 import { db, type ProducaoVideo } from "@/lib/producao/store";
 import type { ProducaoLive } from "@/lib/producao/lives";
@@ -34,7 +34,7 @@ type Linha = { id: string; href: string; titulo: string; detalhe: string; erro?:
 type Secao = { key: string; titulo: string; icone: string; area: string; areaHref: string; alerta?: boolean; itens: Linha[] };
 
 export default async function PendenciasPage() {
-  await requireAdmin();
+  await requireArea("pendencias");
 
   const [pedidos, revisar, cortesErro, lives, posts] = await Promise.all([
     linhas<Episodio>(() => db().from("agenda_episodios").select("*").eq("status", "solicitado").order("inicio").limit(50)),

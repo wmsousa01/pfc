@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type { ActionState } from "@/app/admin/producao/actions";
-import { requireAdmin } from "@/lib/auth";
+import { requireArea } from "@/lib/auth";
 import { pautaDeTexto } from "@/lib/agenda/briefing";
 import {
   YT_STREAM_KEY,
@@ -70,7 +70,7 @@ const ok: ActionState = { ok: true, error: null };
 
 /** Roda a ação e já devolve o estado do formulário. */
 async function run(fn: (actor: string) => Promise<unknown>): Promise<ActionState> {
-  const role = await requireAdmin();
+  const role = await requireArea("agenda");
   try {
     await fn(actorOf(role));
     refresh();
@@ -113,7 +113,7 @@ function inicioDe(form: FormData): Date {
 // ---- Episódio ----
 
 export async function novoEpisodioAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  const role = await requireAdmin();
+  const role = await requireArea("agenda");
   let id: string;
   try {
     const quadro = str(form, "quadro");
@@ -146,7 +146,7 @@ export async function cancelarAction(_prev: ActionState, form: FormData): Promis
 }
 
 export async function realizadoAction(form: FormData): Promise<void> {
-  const role = await requireAdmin();
+  const role = await requireArea("agenda");
   const id = str(form, "id");
   await updateEpisodio(id, { status: "realizado" });
   await logAgenda(id, actorOf(role), "marcou como realizado");
@@ -174,7 +174,7 @@ export async function addConvidadoAction(_prev: ActionState, form: FormData): Pr
 }
 
 export async function removerConvidadoAction(form: FormData): Promise<void> {
-  const role = await requireAdmin();
+  const role = await requireArea("agenda");
   const { data } = await db().from("agenda_convidados").delete().eq("id", str(form, "convidado")).select("episodio_id, nome").maybeSingle();
   if (data) {
     await logAgenda(data.episodio_id, actorOf(role), "removeu convidado", data.nome);
@@ -198,7 +198,7 @@ export async function apresentadoresEpisodioAction(_prev: ActionState, form: For
 }
 
 export async function perfilIgAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await requireArea("agenda");
   const { data } = await db().from("agenda_convidados").select("*").eq("id", str(form, "convidado")).maybeSingle();
   if (data) await atualizarPerfilIg(data);
   refresh();
@@ -257,7 +257,7 @@ export async function gerarArteAction(_prev: ActionState, form: FormData): Promi
 }
 
 export async function aprovarArteAction(form: FormData): Promise<void> {
-  const role = await requireAdmin();
+  const role = await requireArea("agenda");
   await aprovarArte(str(form, "id"), str(form, "arte"), actorOf(role)).catch(() => null);
   refresh();
 }
@@ -284,7 +284,7 @@ export async function instagramAction(_prev: ActionState, form: FormData): Promi
 
 /** Cancela o post programado, ou libera para programar de novo depois de um erro. */
 export async function instagramResetAction(form: FormData): Promise<void> {
-  const role = await requireAdmin();
+  const role = await requireArea("agenda");
   const id = str(form, "id");
   const ep = await getEpisodio(id);
   if (!ep || ep.ig_status === "publicando") return;
@@ -321,13 +321,13 @@ export async function slotAction(_prev: ActionState, form: FormData): Promise<Ac
 }
 
 export async function slotToggleAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await requireArea("agenda");
   await db().from("agenda_slots").update({ ativo: str(form, "ativo") === "1" }).eq("id", Number(str(form, "slot")));
   refresh();
 }
 
 export async function slotRemoverAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await requireArea("agenda");
   await db().from("agenda_slots").delete().eq("id", Number(str(form, "slot")));
   refresh();
 }
@@ -406,7 +406,7 @@ export async function avulsoAction(_prev: ActionState, form: FormData): Promise<
 
 /** Remove o avulso e, se era mudança de dia, libera a data original. */
 export async function avulsoRemoverAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await requireArea("agenda");
   const id = Number(str(form, "avulso"));
   const { data: av } = await db().from("agenda_avulsos").select("bloqueio_id").eq("id", id).maybeSingle();
   await db().from("agenda_avulsos").delete().eq("id", id);
@@ -415,7 +415,7 @@ export async function avulsoRemoverAction(form: FormData): Promise<void> {
 }
 
 export async function bloqueioRemoverAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await requireArea("agenda");
   await db().from("agenda_bloqueios").delete().eq("id", Number(str(form, "bloqueio")));
   refresh();
 }
@@ -430,7 +430,7 @@ export async function gcalConfigAction(_prev: ActionState, form: FormData): Prom
 }
 
 export async function gcalDisconnectAction(): Promise<void> {
-  await requireAdmin();
+  await requireArea("agenda");
   await disconnectCalendar();
   refresh();
 }
@@ -452,7 +452,7 @@ export async function agendaSyncAction(_prev: ActionState, form: FormData): Prom
 type Upload = { ok: true; path: string; token: string } | { ok: false; error: string };
 
 export async function pedirUploadAction(episodioId: string, nome: string, mime: string, tamanho: number): Promise<Upload> {
-  await requireAdmin();
+  await requireArea("agenda");
   try {
     return { ok: true, ...(await pedirUpload(episodioId, nome, mime, tamanho)) };
   } catch (e) {
@@ -505,7 +505,7 @@ export async function materialAction(_prev: ActionState, form: FormData): Promis
 }
 
 export async function materialRemoverAction(form: FormData): Promise<void> {
-  const role = await requireAdmin();
+  const role = await requireArea("agenda");
   await removerMaterial(str(form, "material"), actorOf(role));
   refresh();
 }
@@ -545,13 +545,13 @@ export async function apresentadorEditarAction(_prev: ActionState, form: FormDat
 }
 
 export async function apresentadorToggleAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await requireArea("agenda");
   await db().from("agenda_apresentadores").update({ ativo: str(form, "ativo") === "1" }).eq("id", str(form, "apresentador"));
   refresh();
 }
 
 export async function apresentadorRemoverAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await requireArea("agenda");
   const { data } = await db().from("agenda_apresentadores").delete().eq("id", str(form, "apresentador")).select("foto_path").maybeSingle();
   if (data?.foto_path) await db().storage.from("producao").remove([data.foto_path]);
   refresh();
@@ -570,7 +570,7 @@ export async function gerarSemanaAction(_prev: ActionState, form: FormData): Pro
 }
 
 export async function escolherSemanaAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await requireArea("agenda");
   await escolherArteSemana(semanaDe(form), str(form, "arte"));
   refresh();
 }
@@ -589,7 +589,7 @@ export async function semanaInstagramAction(_prev: ActionState, form: FormData):
 }
 
 export async function semanaResetAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await requireArea("agenda");
   await liberarSemana(semanaDe(form));
   refresh();
 }
@@ -618,7 +618,7 @@ export async function atualizarVideoAction(_prev: ActionState, form: FormData): 
 }
 
 export async function liberarEnvioAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await requireArea("agenda");
   await liberarEnvio(str(form, "id"));
   refresh();
 }
@@ -646,7 +646,7 @@ export async function importarRoteiroAction(_prev: ActionState, form: FormData):
 }
 
 export async function tirarRoteiroAction(form: FormData): Promise<void> {
-  const role = await requireAdmin();
+  const role = await requireArea("agenda");
   await tirarRoteiro(str(form, "id"), actorOf(role));
   refresh();
 }
@@ -669,7 +669,7 @@ export async function sugestaoAction(_prev: ActionState, form: FormData): Promis
 }
 
 export async function removerExtraAction(form: FormData): Promise<void> {
-  const role = await requireAdmin();
+  const role = await requireArea("agenda");
   await removerExtra(str(form, "id"), Number(str(form, "indice")), actorOf(role));
   refresh();
 }

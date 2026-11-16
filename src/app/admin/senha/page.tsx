@@ -1,11 +1,11 @@
 import AdminHeader from "@/components/admin/AdminHeader";
 import PasswordCard from "@/components/auth/PasswordCard";
-import { requireAdmin } from "@/lib/auth";
+import { requireEquipe } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminPasswordPage() {
-  const { email } = await requireAdmin();
+  const { email } = await requireEquipe();
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] pb-20">
