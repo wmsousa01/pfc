@@ -15,7 +15,9 @@ export const JANELA_HORAS = JANELA.fim - JANELA.inicio;
 
 /** Teto por 24h e intervalo mínimo entre dois posts da mesma rede. */
 export const RITMO: Record<Platform, { porDia: number; intervaloMin: number }> = {
-  youtube: { porDia: 2, intervaloMin: 5 * 60 },
+  // 4 por dia (decisão de 16/11/2026): Shorts trazem 89% das views do canal.
+  // Horários fixos em auto-youtube.ts (10h, 13h, 16h, 19h + folga de até 40 min).
+  youtube: { porDia: 4, intervaloMin: 2 * 60 },
   // 1 Reel no perfil + até 4 de teste.
   instagram: { porDia: 5, intervaloMin: 2 * 60 },
   facebook: { porDia: 2, intervaloMin: 5 * 60 },
@@ -34,7 +36,7 @@ export const IG_TESTES_BLOQUEIO = "ig_testes_bloqueio_ate";
 /** Linhas da grade da semana e a meta de cada uma por dia. */
 export type LinhaSemana = "youtube" | "ig_perfil" | "ig_teste" | "facebook" | "tiktok";
 export const METAS: { key: LinhaSemana; label: string; porDia: number }[] = [
-  { key: "youtube", label: "YouTube Shorts", porDia: 2 },
+  { key: "youtube", label: "YouTube Shorts", porDia: RITMO.youtube.porDia },
   { key: "ig_perfil", label: "Instagram · perfil", porDia: 1 },
   { key: "ig_teste", label: "Instagram · teste", porDia: IG_TESTES_POR_DIA },
   { key: "facebook", label: "Facebook", porDia: 1 },

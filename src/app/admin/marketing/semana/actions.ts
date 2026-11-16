@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import type { ActionState } from "@/app/admin/producao/actions";
-import { db } from "@/lib/producao/store";
+import { clearConfig, db, setConfig } from "@/lib/producao/store";
+import { YT_AUTO_PAUSA } from "@/lib/social/auto-youtube";
 import { cancelarNumeros, gerarNumeros, programarNumeros, salvarLegenda } from "@/lib/social/numeros-semana";
 import { IG_TESTES_POR_DIA, JANELA_HORAS, dentroDaJanela, isSegunda } from "@/lib/social/ritmo";
 
@@ -98,6 +99,19 @@ export async function devolverTestesAction(_prev: ActionState): Promise<ActionSt
         .eq("status", "erro");
       t = dentroDaJanela(t + passo);
     }
+    refresh();
+    return { ok: true, error: null };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Liga ou pausa o agendamento automático dos Shorts no YouTube. */
+export async function youtubeAutoAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  await requireAdmin();
+  try {
+    if (str(form, "pausar") === "1") await setConfig(YT_AUTO_PAUSA, "1");
+    else await clearConfig(YT_AUTO_PAUSA);
     refresh();
     return { ok: true, error: null };
   } catch (e) {

@@ -25,7 +25,14 @@ import {
   type LinhaSemana,
 } from "@/lib/social/ritmo";
 import { PLATFORMS, type SocialPost } from "@/lib/social/store";
-import { cancelarNumerosAction, devolverTestesAction, gerarNumerosAction, programarNumerosAction } from "./actions";
+import { AUTO_POR_LIVE, HORARIOS, isYoutubeAutoPaused } from "@/lib/social/auto-youtube";
+import {
+  cancelarNumerosAction,
+  devolverTestesAction,
+  gerarNumerosAction,
+  programarNumerosAction,
+  youtubeAutoAction,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 // "Publicar agora" sobe a arte para o Instagram dentro da server action.
@@ -100,6 +107,7 @@ export default async function SemanaPage({ searchParams }: { searchParams: { s?:
     getConfig(IG_TESTES_BLOQUEIO).catch(() => null),
     getEstado(segunda).catch(() => null),
   ]);
+  const ytAutoPausado = await isYoutubeAutoPaused().catch(() => false);
   const posts = [...((pubRes.data ?? []) as Post[]), ...((abertosRes.data ?? []) as Post[])];
   const futuros = (futurosRes.data ?? []) as { platform: string }[];
   const recusados = recusadosRes.count ?? 0;
@@ -198,6 +206,31 @@ export default async function SemanaPage({ searchParams }: { searchParams: { s?:
       ),
     });
   }
+  const btnAuto = "text-xs border border-[#2a2a2a] hover:border-gold-500/50 text-white/80 rounded-lg px-3 py-1.5";
+  alertas.push({
+    cor: ytAutoPausado ? "yellow" : "violet",
+    texto: ytAutoPausado ? (
+      <>
+        O agendamento automático do YouTube está <b>pausado</b>. Os cortes das lives novas só vão para o canal se forem programados à mão.
+      </>
+    ) : (
+      <>
+        <b>YouTube automático:</b> quando os shorts de uma live ficam prontos, a IA escolhe os {AUTO_POR_LIVE} melhores e eles entram
+        às {HORARIOS.map((h) => `${h}h`).join(", ")} dos próximos dias livres.
+      </>
+    ),
+    acao: (
+      <ProducaoForm
+        action={youtubeAutoAction}
+        label={ytAutoPausado ? "Retomar" : "Pausar"}
+        pending="Salvando…"
+        okMessage="Salvo."
+        buttonClassName={btnAuto}
+      >
+        {!ytAutoPausado && <input type="hidden" name="pausar" value="1" />}
+      </ProducaoForm>
+    ),
+  });
   if (proximos3 === 0) {
     alertas.push({
       cor: "yellow",
@@ -273,7 +306,11 @@ export default async function SemanaPage({ searchParams }: { searchParams: { s?:
               <div
                 key={i}
                 className={`flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg border text-sm ${
-                  a.cor === "red" ? "border-red-500/30 bg-red-500/10 text-red-200" : "border-yellow-500/30 bg-yellow-500/10 text-yellow-100"
+                  a.cor === "red"
+                    ? "border-red-500/30 bg-red-500/10 text-red-200"
+                    : a.cor === "violet"
+                      ? "border-violet-500/30 bg-violet-500/5 text-white/80"
+                      : "border-yellow-500/30 bg-yellow-500/10 text-yellow-100"
                 }`}
               >
                 <p className="min-w-0 flex-1">{a.texto}</p>
