@@ -11,6 +11,7 @@ import {
   igReelInsights,
 } from "./meta";
 import { activeConnection, revokeConnection, updatePost, type SocialPost } from "./store";
+import { youtubeShortMeta } from "./youtube-meta";
 
 /** Um "publicando" mais velho que isso morreu no meio (timeout da função). */
 const STALE_MS = 15 * 60_000;
@@ -88,7 +89,10 @@ async function publishOne(p: SocialPost): Promise<void> {
   switch (p.platform) {
     case "youtube": {
       if (!(await connectedChannel())) throw new Error("Canal do YouTube não conectado (/admin/producao/config).");
-      const id = await uploadVideo(await download(p.video_url), { title: p.title, description: p.caption });
+      const yt = await youtubeShortMeta(p);
+      // Grava o título que de fato saiu, para a fila mostrar o mesmo que o canal.
+      if (yt.title !== p.title) await updatePost(p.id, { title: yt.title });
+      const id = await uploadVideo(await download(p.video_url), yt);
       await published(p, id, `https://youtube.com/shorts/${id}`);
       return;
     }
