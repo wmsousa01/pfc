@@ -1,7 +1,9 @@
-import { partnershipFormats, channelStats } from "@/lib/config";
+import { partnershipFormats } from "@/lib/config";
+import { getChannelStats } from "@/lib/channel-stats";
 import { ArrowRight } from "./icons";
 
-export default function ParceriasTeaser() {
+export default async function ParceriasTeaser() {
+  const channelStats = await getChannelStats();
   return (
     <section className="section-py bg-[#0a0a0a] relative overflow-hidden">
       <div className="absolute inset-0 pointer-events-none">

@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { channelStats, whatsapp } from "@/lib/config";
+import { whatsapp } from "@/lib/config";
+import { getChannelStats } from "@/lib/channel-stats";
 import { getProposal, isExpired, proposals } from "@/lib/proposals";
 import { WhatsAppIcon, ArrowRight } from "@/components/icons";
 import { installmentLabel, PAYMENT_TERMS_CASH } from "@/lib/payment";
@@ -47,13 +48,14 @@ function dataBR(iso: string): string {
   return `${d}/${m}/${y}`;
 }
 
-export default function PropostaPage({
+export default async function PropostaPage({
   params,
 }: {
   params: { slug: string };
 }) {
   const p = getProposal(params.slug);
   if (!p) notFound();
+  const channelStats = await getChannelStats();
 
   const expired = isExpired(p);
   const perMonth = Math.round(p.price / p.months);

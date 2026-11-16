@@ -45,7 +45,10 @@ export const social = {
 };
 
 /**
- * Números do canal. Atualize aqui quando mudar.
+ * Números do canal — RESERVA. O site lê os números ao vivo do YouTube via
+ * `getChannelStats()` (lib/channel-stats.ts, renova de hora em hora); estes
+ * valores só aparecem quando a leitura falha (canal desconectado em
+ * /admin/producao/config, sem o escopo do Analytics ou API fora do ar).
  *
  * `subscribers`, `totalVideos` e `totalViews` foram reconferidos em 04/08/2026
  * direto na página pública do canal (bloco aboutChannelViewModel) — os valores
