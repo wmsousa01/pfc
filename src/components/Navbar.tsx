@@ -66,6 +66,12 @@ export default function Navbar() {
           {/* CTAs */}
           <div className="flex items-center gap-2">
             <a
+              href="/monte-seu-plano"
+              className="hidden sm:flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-bold border border-gold-500/60 text-gold-400 hover:bg-gold-500/10 transition-colors"
+            >
+              Monte seu plano
+            </a>
+            <a
               href={social.youtube}
               target="_blank"
               rel="noopener noreferrer"
@@ -103,6 +109,13 @@ export default function Navbar() {
                 {l.label}
               </a>
             ))}
+            <a
+              href="/monte-seu-plano"
+              onClick={() => setOpen(false)}
+              className="mt-3 px-4 py-3 rounded-lg text-sm font-bold border border-gold-500/60 text-gold-400 text-center"
+            >
+              Monte seu plano com preço
+            </a>
             <a
               href={social.youtube}
               target="_blank"

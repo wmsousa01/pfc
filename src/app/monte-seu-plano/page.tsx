@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import WhatsAppButton from "@/components/WhatsAppButton";
+import ChatComercial from "@/components/ChatComercial";
 import MonteSeuPlano from "@/components/MonteSeuPlano";
 
 export const metadata: Metadata = {
@@ -28,7 +28,7 @@ export default function MonteSeuPlanoPage() {
         <MonteSeuPlano />
       </section>
       <Footer />
-      <WhatsAppButton />
+      <ChatComercial />
     </main>
   );
 }

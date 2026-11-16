@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import Image from "next/image";
 import { enviarPlano, type EnvioState } from "@/app/monte-seu-plano/actions";
@@ -154,6 +154,22 @@ export default function MonteSeuPlano() {
     return { ids: placementsDe(itens.map(([c]) => c)), origem, quadro: nomesQuadros[0] ?? quadroModalidade };
   }, [sel, cotas]);
   const mods = modalidadesLivres();
+
+  // Vindo do chat com ?b=<briefing>: preenche e abre direto na sugestão.
+  useEffect(() => {
+    try {
+      const raw = new URLSearchParams(window.location.search).get("b");
+      if (!raw) return;
+      const v = JSON.parse(raw) as Partial<Briefing>;
+      if (typeof v.empresa !== "string" || typeof v.segmento !== "string" || !Array.isArray(v.objetivos)) return;
+      const nb: Briefing = { ...vazio, ...v, objetivos: v.objetivos };
+      setB(nb);
+      const r = recomendar(nb);
+      setSel(r.selecao);
+      setMotivos(r.motivos);
+      setEtapa(3);
+    } catch {}
+  }, []);
 
   const sugerir = () => {
     const r = recomendar(b);

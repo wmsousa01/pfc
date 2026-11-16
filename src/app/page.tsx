@@ -8,7 +8,7 @@ import About from "@/components/About";
 import ParceriasTeaser from "@/components/ParceriasTeaser";
 import FinalCTA from "@/components/FinalCTA";
 import Footer from "@/components/Footer";
-import WhatsAppButton from "@/components/WhatsAppButton";
+import ChatComercial from "@/components/ChatComercial";
 
 // ISR: revalida a home a cada 30 min (mantém os vídeos do YouTube atualizados).
 export const revalidate = 1800;
@@ -26,7 +26,7 @@ export default function Home() {
       <ParceriasTeaser />
       <FinalCTA />
       <Footer />
-      <WhatsAppButton />
+      <ChatComercial />
     </main>
   );
 }

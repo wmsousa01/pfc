@@ -71,7 +71,8 @@ export async function enviarPlano(_prev: EnvioState, fd: FormData): Promise<Envi
     segment: briefing.segmento,
     whatsapp: digits,
     message: texto.slice(0, 2000),
-    source: "monte-seu-plano",
+    // Lead do chat comercial (ChatComercial) ou da página.
+    source: fd.get("origem") === "chat" ? "chat-comercial" : "monte-seu-plano",
   });
   if (error) return { ok: false, error: "Não foi possível enviar agora. Fale direto no WhatsApp.", resumo: texto };
 

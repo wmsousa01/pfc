@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import WhatsAppButton from "@/components/WhatsAppButton";
+import ChatComercial from "@/components/ChatComercial";
 import { whatsapp } from "@/lib/config";
 import { WhatsAppIcon, ArrowRight } from "@/components/icons";
 
@@ -646,7 +646,7 @@ export default function CortesPage() {
       </section>
 
       <Footer />
-      <WhatsAppButton />
+      <ChatComercial />
     </main>
   );
 }

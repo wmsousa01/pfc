@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import WhatsAppButton from "@/components/WhatsAppButton";
+import ChatComercial from "@/components/ChatComercial";
 import Exposure from "@/components/Exposure";
 import Differentials from "@/components/Differentials";
 import Plans from "@/components/Plans";
@@ -149,7 +149,7 @@ export default function ParceriasPage() {
 
       <FinalCTA />
       <Footer />
-      <WhatsAppButton />
+      <ChatComercial />
     </main>
   );
 }
