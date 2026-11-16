@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import QuadroLogo from "@/components/QuadroLogo";
 import { notFound } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -36,6 +37,7 @@ export default async function AgendarPage({ params }: { params: { quadro: string
       <main className="min-h-screen bg-[#0a0a0a] pt-28 pb-20">
         <div className="container-px max-w-3xl">
           <a href="/convidado" className="text-white/40 hover:text-white text-sm">← Quadros</a>
+          <QuadroLogo quadro={t.id} nome={t.name} className="w-16 h-16 mt-6" />
           <h1 className="text-3xl sm:text-4xl font-black mt-3 leading-tight">
             Sua participação no <span style={{ color: t.accent[1] }}>{t.name}</span>
           </h1>

@@ -1,4 +1,4 @@
-import Image from "next/image";
+import QuadroLogo from "@/components/QuadroLogo";
 import { quadros, quadroSponsorship, whatsapp, type CotaStatus } from "@/lib/config";
 import { WhatsAppIcon } from "@/components/icons";
 
@@ -106,11 +106,7 @@ export default function QuadroSponsorship() {
                   </span>
                 )}
                 <div className="flex items-center gap-3">
-                  {q.logo ? (
-                    <Image src={q.logo} alt={`Logo ${q.name}`} width={48} height={48} className="w-12 h-12 object-contain" />
-                  ) : (
-                    <div className="text-3xl w-12 text-center">{q.emoji}</div>
-                  )}
+                  <QuadroLogo quadro={q.slug} nome={q.name} className="w-12 h-12" />
                   <div className="text-white font-bold leading-tight">{q.name}</div>
                 </div>
                 <span className={`self-start text-[11px] font-semibold px-2.5 py-1 rounded-full border ${st.cls}`}>
