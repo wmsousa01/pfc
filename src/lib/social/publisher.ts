@@ -10,7 +10,7 @@ import {
   igPublishingUsage,
   igReelInsights,
 } from "./meta";
-import { IG_TESTES_BLOQUEIO, IG_TESTES_POR_DIA, RITMO, dentroDaJanela } from "./ritmo";
+import { IG_TESTES_BLOQUEIO, IG_TESTES_POR_DIA, METRICAS_DIAS, RITMO, dentroDaJanela } from "./ritmo";
 import { activeConnection, revokeConnection, updatePost, type Platform, type SocialPost } from "./store";
 
 /** Um "publicando" mais velho que isso morreu no meio (timeout da função). */
@@ -33,9 +33,15 @@ export const IG_COLLAB_FAVORITOS = ["ladoaladob26"];
 /** Uso da API (inclui outras ferramentas) a partir do qual a fila para. */
 const IG_API_STOP = 25;
 
-/** Métricas: até 7 dias depois de publicar, no máximo uma leitura por hora. */
-const METRICS_DAYS = 7;
+/**
+ * Métricas de todo Reel do Instagram (teste, promovido ou do perfil) por
+ * METRICAS_DIAS: de hora em hora nos 3 primeiros dias, depois a cada 12 h.
+ * Antes só os testes não promovidos eram lidos, e os melhores posts paravam
+ * de ser medidos justamente quando chegavam ao perfil.
+ */
+const METRICS_HOT_MS = 3 * 86_400_000;
 const METRICS_EVERY_MS = 60 * 60_000;
+const METRICS_SLOW_MS = 12 * 60 * 60_000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e)).slice(0, 500);
@@ -186,30 +192,35 @@ async function proximoHorario(platform: Platform, trial: boolean): Promise<Date 
   return new Date(dentroDaJanela(next + Math.random() * JITTER_MS));
 }
 
-/** Atualiza os insights dos Reels de teste recentes, que alimentam o ranking. */
-async function refreshTrialMetrics(started: number): Promise<number> {
+/** Atualiza os insights dos Reels publicados nos últimos METRICAS_DIAS. */
+async function refreshIgMetrics(started: number): Promise<number> {
   const c = await activeConnection("instagram");
   if (!c) return 0;
+  const now = Date.now();
   const { data } = await db()
     .from("social_posts")
-    .select("id, external_id, metrics_at")
+    .select("id, external_id, published_at, metrics, metrics_at")
     .eq("platform", "instagram")
-    .eq("trial", true)
     .eq("status", "publicado")
-    .is("graduated_at", null)
-    .gte("published_at", new Date(Date.now() - METRICS_DAYS * 86_400_000).toISOString())
-    .or(`metrics_at.is.null,metrics_at.lt.${new Date(Date.now() - METRICS_EVERY_MS).toISOString()}`)
+    .gte("published_at", new Date(now - METRICAS_DIAS * 86_400_000).toISOString())
+    .or(`metrics_at.is.null,metrics_at.lt.${new Date(now - METRICS_EVERY_MS).toISOString()}`)
     .order("metrics_at", { ascending: true, nullsFirst: true })
-    .limit(10);
+    .limit(40);
+  const due = (data ?? []).filter((p) => {
+    if (!p.metrics_at) return true;
+    const idade = now - new Date(p.published_at).getTime();
+    return now - new Date(p.metrics_at).getTime() >= (idade < METRICS_HOT_MS ? METRICS_EVERY_MS : METRICS_SLOW_MS);
+  });
   let n = 0;
-  for (const p of data ?? []) {
+  for (const p of due.slice(0, 10)) {
     if (!p.external_id || Date.now() - started > BUDGET_MS + 60_000) break;
     try {
       const metrics = await igReelInsights(p.external_id, c.token);
       await updatePost(p.id, { metrics, metrics_at: new Date().toISOString() });
       n++;
     } catch (e) {
-      await updatePost(p.id, { metrics: { erro: msg(e) }, metrics_at: new Date().toISOString() });
+      // Guarda a última leitura boa: o erro não apaga o histórico do post.
+      await updatePost(p.id, { metrics: { ...(p.metrics ?? {}), erro: msg(e) }, metrics_at: new Date().toISOString() });
     }
   }
   return n;
@@ -292,6 +303,6 @@ export async function runSocialQueue(limit = 4) {
     }
   }
 
-  out.metricas = await refreshTrialMetrics(started).catch(() => 0);
+  out.metricas = await refreshIgMetrics(started).catch(() => 0);
   return out;
 }
