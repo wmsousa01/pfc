@@ -496,7 +496,7 @@ export default function MonteSeuPlano() {
                     <ItemRow
                       key={m.key}
                       titulo={`${m.nome} · ${m.quadro.name}`}
-                      preco="Sob consulta"
+                      preco={`${brl(quadroSponsorship.apoio.modalidadePrice)}/mês`}
                       detalhe="só nos episódios da modalidade"
                       quadro={m.quadro.slug}
                       on={sel.modalidades.includes(m.key)}
@@ -514,7 +514,7 @@ export default function MonteSeuPlano() {
               <h3 className="text-white/50 text-xs font-bold uppercase tracking-widest mb-3">Episódio no seu espaço</h3>
               <ItemRow
                 titulo="PFC Visita"
-                preco={sel.plano || sel.quadros.length ? `${brl(VISITA_CLIENTE)} (preço de cliente)` : brl(VISITA_AVULSO)}
+                preco={sel.plano || sel.quadros.length || sel.modalidades.length ? `${brl(VISITA_CLIENTE)} (preço de cliente)` : brl(VISITA_AVULSO)}
                 detalhe="pagamento único"
                 on={sel.visita}
                 onChange={(on) => setSel({ ...sel, visita: on })}
@@ -526,7 +526,7 @@ export default function MonteSeuPlano() {
             {/* Duração */}
             <section>
               <h3 className="text-white/50 text-xs font-bold uppercase tracking-widest mb-3">Por quanto tempo?</h3>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {DURACOES.map((d) => {
                   const bloqueado = d < orc.minMeses;
                   return (
@@ -537,17 +537,17 @@ export default function MonteSeuPlano() {
                       onClick={() => setSel({ ...sel, meses: d })}
                       className={`${chip(orc.meses === d)} text-center disabled:opacity-30 disabled:cursor-not-allowed`}
                     >
-                      <span className="block font-bold">{d === 12 ? "1 ano" : `${d} ${d === 1 ? "mês" : "meses"}`}</span>
-                      {d === 12 && <span className="block text-[10px] text-emerald-400 font-bold">20% OFF no plano</span>}
+                      <span className="block font-bold">{d === 12 ? "1 ano" : `${d} meses`}</span>
+                      {d === 12 && <span className="block text-[10px] text-emerald-400 font-bold">até 20% OFF no plano</span>}
+                      {d === 6 && <span className="block text-[10px] text-emerald-400 font-bold">+ você como convidado</span>}
                     </button>
                   );
                 })}
               </div>
-              {orc.minMeses > 1 && (
-                <p className="text-white/35 text-xs mt-2">
-                  Cotas de quadro e de modalidade têm contrato mínimo de {orc.minMeses} meses.
-                </p>
-              )}
+              <p className="text-white/35 text-xs mt-2">
+                Planos e cotas têm contrato mínimo de {orc.minMeses} meses. A partir de 6 meses, sua marca participa como
+                convidada em um episódio. No anual, também 20% off no Pix à vista ou 10% off em até 3x no cartão.
+              </p>
             </section>
 
             <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-sm text-white/55">
@@ -580,7 +580,7 @@ export default function MonteSeuPlano() {
             <div>
               <span className="section-tag">Seu plano</span>
               <div className="text-white/40 text-xs mt-1">
-                {orc.meses} {orc.meses === 1 ? "mês" : "meses"} · estimativa, o comercial confirma
+                {orc.meses} meses · estimativa, o comercial confirma
               </div>
             </div>
 
@@ -594,7 +594,7 @@ export default function MonteSeuPlano() {
                       <div className="text-white font-semibold leading-tight">{l.label}</div>
                       <div className="text-white/40 text-xs mt-0.5">{l.detalhe}</div>
                     </div>
-                    <div className="text-white font-bold whitespace-nowrap">{l.valor === null ? "a consultar" : brl(l.valor)}</div>
+                    <div className="text-white font-bold whitespace-nowrap">{l.bonus ? <span className="text-emerald-400">incluso</span> : l.valor === null ? "a consultar" : brl(l.valor)}</div>
                   </li>
                 ))}
               </ul>

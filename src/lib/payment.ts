@@ -7,9 +7,10 @@
  * parcelado, a taxa por venda (3,09%) soma com a de parcelamento. Se as taxas
  * mudarem, atualize aqui e a regra abaixo continua valendo.
  *
- * Por que 3x: absorvendo até 3x (11,38%), o anual no cartão ainda fica ~29%
- * abaixo de 12 mensalidades — dentro do desconto máximo que a gente já aceita
- * dar. Em 12x a perda é 22,6% e, para receber o valor cheio, o anual no cartão
+ * Por que 3x: absorvendo até 3x (11,38%). Desde 16/11/2026 o anual tem dois
+ * preços (lib/planos REGRAS_PRECO): 20% off no Pix e 10% off no cartão em 3x.
+ * O líquido dos dois fica igual (~20% abaixo de 12 mensalidades), em vez dos
+ * ~29% de quando o 3x saía pelo preço do Pix. Em 12x a perda é 22,6% e, para receber o valor cheio, o anual no cartão
  * teria que custar mais que 12 mensalidades. Acima de 3x, o Mercado Pago
  * cobra os juros do comprador.
  *

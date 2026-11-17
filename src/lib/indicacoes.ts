@@ -4,8 +4,12 @@ import { CAMPANHA } from "@/lib/campanha";
  * Indicação de patrocínio pelo parceiro. A regra de comissão é a do playbook
  * (docs/estrategia-revendedores-parceiros.md §3) mais o bônus da campanha:
  *
- * - vendeu (esteve na reunião, cliente assinou): 1 mensalidade inteira;
- *   no anual, 1,5× a mensalidade equivalente.
+ * - vendeu (esteve na reunião, cliente assinou): 30% do contrato mínimo
+ *   (3 meses), ou seja, 0,9 mensalidade; no anual, 1,5× a mensalidade
+ *   equivalente (~16% do contrato). Teto da regra de preço: comissão +
+ *   desconto ≤ 30% da tabela (benchmark de 16/11/2026, docs/precificacao.md).
+ *   Exceção: o que fecha DENTRO da campanha de fim de ano mantém a promessa
+ *   feita aos parceiros — 1 mensalidade inteira.
  * - indicou (só passou o contato): 30% disso.
  * - apresentador trazendo patrocínio para o próprio quadro, fechado dentro da
  *   campanha: +20% sobre a comissão.
@@ -74,6 +78,10 @@ export const PAPEL_LABEL: Record<IndicacaoPapel, string> = {
 export const PROTECAO_DIAS = 60;
 export const INDICOU_FRACAO = 0.3;
 export const ANUAL_MULTIPLICADOR = 1.5;
+/** Vendeu, contrato mensal: 30% de 3 mensalidades (contrato mínimo). */
+export const VENDEU_MENSAL_MULTIPLICADOR = 0.9;
+/** Na campanha de fim de ano, a promessa é 1 mensalidade inteira. */
+export const VENDEU_MENSAL_CAMPANHA = 1;
 
 export type RegraComissao = {
   mensalCents: number;
@@ -87,7 +95,8 @@ export type RegraComissao = {
 
 export function comissaoCents(r: RegraComissao): { base: number; bonus: number; total: number } {
   if (r.papel === "patrocina" || r.mensalCents <= 0) return { base: 0, bonus: 0, total: 0 };
-  const vendeu = r.mensalCents * (r.ciclo === "anual" ? ANUAL_MULTIPLICADOR : 1);
+  const mensal = r.naCampanha ? VENDEU_MENSAL_CAMPANHA : VENDEU_MENSAL_MULTIPLICADOR;
+  const vendeu = r.mensalCents * (r.ciclo === "anual" ? ANUAL_MULTIPLICADOR : mensal);
   const base = Math.round(r.papel === "vendeu" ? vendeu : vendeu * INDICOU_FRACAO);
   const bonus =
     r.quadroDoApresentador && r.naCampanha ? Math.round((base * CAMPANHA.apresentador.bonusPercent) / 100) : 0;

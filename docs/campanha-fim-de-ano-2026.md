@@ -9,7 +9,7 @@
 
 | Para quem | O que ganha | Exemplo na cota master (R$ 997/mês) |
 |---|---|---|
-| **Marca que patrocina um quadro novo** | Fica como **patrocinador fundador**: o preço não sobe por 12 meses e ganha **um PFC Visita de brinde** ao completar 3 meses de contrato | R$ 997/mês até dez/2027, mais um episódio no espaço dela (vale R$ 1.350) |
+| **Marca que patrocina um quadro novo** | Fica como **patrocinador fundador**: o preço não sobe por 12 meses e ganha **um PFC Visita de brinde** no 4º mês, gravado depois que a 4ª mensalidade é paga (assim o brinde não vira desconto de 36% para quem cancela no fim do mínimo) | R$ 997/mês até dez/2027, mais um episódio no espaço dela (vale R$ 1.350) |
 | **Apresentador que traz um patrocinador** | Recebe 1 mensalidade inteira se vendeu, ou 30% se só indicou. Se o patrocínio for **para o quadro dele**, ganha **+20%** | Vendeu: **R$ 1.196** · Indicou: **R$ 359** |
 | **Apresentador que patrocina com a própria empresa** | **25% off** em qualquer plano ou cota, enquanto continuar apresentando | Cota master por **R$ 748/mês** · Apoio R$ 223 · Patrocinador R$ 598 · Master R$ 1.498 |
 
@@ -26,7 +26,8 @@ quadro de tattoo e o Fora do Frame, eles precisam ser cadastrados no config com
 
 O pior caso é uma marca fundadora trazida por um apresentador que vendeu para o
 próprio quadro. Em 3 meses entram R$ 2.991. Saem R$ 1.196 de comissão e o custo
-de produção do PFC Visita. O contrato se paga no 3º mês e, a partir do 4º, a
+de produção do PFC Visita — que só é gravado depois da 4ª mensalidade paga
+(R$ 3.988 no caixa). O contrato se paga no 3º mês e, a partir do 5º, a
 mensalidade fica toda com o PFC. A comissão é paga metade no 1º pagamento e
 metade no 3º, então quem cancelar antes não leva a segunda metade.
 

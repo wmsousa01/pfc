@@ -161,7 +161,7 @@ export default async function IndicacoesPage() {
                               ))}
                             </select>
                             <select name="ciclo" defaultValue={i.ciclo ?? "mensal"} className={input} aria-label="Ciclo">
-                              <option value="mensal">Mensal</option>
+                              <option value="mensal">Mensal (0,9×; 1× na campanha)</option>
                               <option value="anual">Anual (1,5×)</option>
                             </select>
                             <input

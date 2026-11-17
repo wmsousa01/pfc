@@ -58,7 +58,9 @@ export default function PatrocinioParceiro({
         <div>
           <h2 className="text-xl font-bold text-white">Patrocínio</h2>
           <p className="text-white/45 text-sm mt-1">
-            Traga uma marca para patrocinar o PFC e ganhe uma mensalidade inteira. É aqui que o programa paga de verdade.
+            {ativa
+              ? `Traga uma marca para patrocinar o PFC e ganhe uma mensalidade inteira (fechando até ${CAMPANHA.prazoLabel}). É aqui que o programa paga de verdade.`
+              : "Traga uma marca para patrocinar o PFC e ganhe 30% do contrato mínimo. É aqui que o programa paga de verdade."}
           </p>
         </div>
         <div className="flex gap-3 text-center">
@@ -77,9 +79,12 @@ export default function PatrocinioParceiro({
       <div className="grid md:grid-cols-3 gap-4 mt-5">
         <div className="bg-[#111] border border-gold-500/40 rounded-xl p-5">
           <div className="text-gold-500 text-xs font-bold uppercase tracking-wider">Você vendeu</div>
-          <div className="text-white font-black text-2xl mt-1">1 mensalidade</div>
+          <div className="text-white font-black text-2xl mt-1">{ativa ? "1 mensalidade" : "30% do contrato"}</div>
           <p className="text-white/45 text-xs mt-1.5 leading-relaxed">
             Esteve na reunião e o cliente assinou. Cota master de quadro: <b className="text-white/80">{ex("vendeu")}</b>.
+            {ativa
+              ? ` Depois de ${CAMPANHA.prazoLabel}, passa a ser 30% do contrato mínimo de 3 meses.`
+              : " São 3 meses de contrato mínimo, então 0,9 mensalidade."}{" "}
             No contrato anual, 1,5× a mensalidade.
           </p>
         </div>

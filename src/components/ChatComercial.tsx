@@ -59,12 +59,12 @@ function CartaoPlano({ orc }: { orc: Orcamento }) {
       {orc.linhas.map((l) => (
         <div key={l.key} className="flex justify-between gap-3">
           <span className="text-white font-semibold">{l.label}</span>
-          <span className="whitespace-nowrap">{l.valor === null ? "a consultar" : brl(l.valor)}</span>
+          <span className="whitespace-nowrap">{l.bonus ? "incluso" : l.valor === null ? "a consultar" : brl(l.valor)}</span>
         </div>
       ))}
       <div className="border-t border-white/10 pt-2 flex justify-between items-baseline">
         <span className="text-white/60 text-xs">
-          Total em {orc.meses} {orc.meses === 1 ? "mês" : "meses"}
+          Total em {orc.meses} meses
         </span>
         <span className="text-gold-500 font-black text-lg">{brl(orc.total)}</span>
       </div>
@@ -179,10 +179,14 @@ export default function ChatComercial() {
             {quadroSponsorship.minMonths} meses
           </span>
           <span>
+            • <b className="text-white">Apoio de um quadro</b>: {brl(quadroSponsorship.apoio.monthlyPrice)} (só uma
+            modalidade do esporte: {brl(quadroSponsorship.apoio.modalidadePrice)})
+          </span>
+          <span>
             • <b className="text-white">PFC Visita</b> (episódio no seu espaço): {brl(VISITA_AVULSO)} avulso
           </span>
         </div>,
-        "No plano anual tem 20% de desconto. Quer que eu monte a combinação certa para a sua marca?",
+        "Todo contrato tem mínimo de 3 meses. Fechando 6 meses ou mais, sua marca participa como convidada em um episódio. No plano anual, também 20% de desconto no Pix à vista (10% em até 3x no cartão). Quer que eu monte a combinação certa para a sua marca?",
       ],
       voltarOpcoes(),
     );
