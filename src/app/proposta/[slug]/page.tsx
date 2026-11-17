@@ -77,12 +77,16 @@ export default async function PropostaPage({
         <div className="container-px relative max-w-3xl mx-auto text-center flex flex-col items-center gap-5">
           <span className="section-tag">Proposta exclusiva · {p.client}</span>
           <h1 className="text-4xl sm:text-5xl font-black leading-[1.05] tracking-tight">
-            Plano {p.plan}{" "}
-            <span className="text-gradient-gold">no Fora da Caixa</span>
+            {p.headline ?? (
+              <>
+                Plano {p.plan}{" "}
+                <span className="text-gradient-gold">no Fora da Caixa</span>
+              </>
+            )}
           </h1>
           <p className="text-lg text-white/65 leading-relaxed max-w-xl">
             {p.months} meses na frente de quem mora em Mogi Guaçu e região — o
-            público que compra, vende e aluga aqui. Foram {channelStats.views12m}{" "}
+            público que compra e contrata aqui. Foram {channelStats.views12m}{" "}
             visualizações nos últimos 12 meses, com {channelStats.weeklyContent}{" "}
             conteúdos por semana.
           </p>
@@ -104,6 +108,28 @@ export default async function PropostaPage({
                 </li>
               ))}
             </ul>
+
+            {p.addOns?.length ? (
+              <>
+                <div className="h-px bg-[#222] my-7" />
+                <span className="section-tag">Pode somar quando quiser</span>
+                <ul className="mt-5 flex flex-col gap-4">
+                  {p.addOns.map((a) => (
+                    <li key={a.name} className="flex items-start justify-between gap-4">
+                      <div>
+                        <div className="text-white/85 text-sm font-bold">{a.name}</div>
+                        <p className="text-white/50 text-sm leading-relaxed mt-1">
+                          {a.note}
+                        </p>
+                      </div>
+                      <span className="text-gold-500 font-black text-sm whitespace-nowrap">
+                        {brl(a.price)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
 
             <div className="h-px bg-[#222] my-7" />
 
