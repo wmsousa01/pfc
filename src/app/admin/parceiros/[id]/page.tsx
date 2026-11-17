@@ -106,6 +106,33 @@ export default async function EditPartnerPage({
             </div>
 
             <div className="bg-[#111] border border-[#222] rounded-xl p-5">
+              <h3 className="text-white font-semibold mb-1">Placa do QR</h3>
+              <p className="text-white/40 text-xs mb-4">
+                Arte padrão para a tela da live (1080×1920, fundo
+                transparente). Logo e cores vêm do cadastro; textos em{" "}
+                <a
+                  href={`/admin/parceiros/${partner.id}/conteudo/placa`}
+                  className="text-gold-500 hover:text-gold-400"
+                >
+                  Conteúdo → Placa do QR
+                </a>
+                .
+              </p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`/admin/parceiros/${partner.id}/placa`}
+                alt="Placa do QR"
+                className="w-40 mx-auto rounded-lg"
+              />
+              <a
+                href={`/admin/parceiros/${partner.id}/placa?download=1`}
+                className="btn-primary block text-center py-2.5 rounded-lg text-sm font-bold mt-4"
+              >
+                Baixar placa (PNG)
+              </a>
+            </div>
+
+            <div className="bg-[#111] border border-[#222] rounded-xl p-5">
               <h3 className="text-white font-semibold mb-3">Acessos</h3>
               <div className="grid grid-cols-2 gap-3">
                 <div>

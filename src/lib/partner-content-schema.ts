@@ -53,13 +53,14 @@ export type ContentSection = Base &
     | {
         /** Campos soltos, gravados na raiz de `content` ou dentro de `triage`. */
         kind: "fields";
-        container: null | "triage";
+        container: null | "triage" | "placa";
       }
   );
 
 /** Chaves válidas de `content.perks[].icon` — espelha `partnerIcons`. */
 export const PERK_ICONS = [
   "spark",
+  "camera",
   "snowflake",
   "fridge",
   "bottle",
@@ -266,6 +267,71 @@ export const PARTNER_CONTENT_SECTIONS: ContentSection[] = [
         kind: "boolean",
         help: "Sem nenhum marcado, o primeiro da lista vira o principal.",
       },
+    ],
+  },
+  {
+    slug: "placa",
+    label: "Placa do QR",
+    description:
+      "A arte vertical com o QR code exibida na live. O logo e as cores vêm do cadastro; os itens, de \"Itens da placa\".",
+    kind: "fields",
+    container: "placa",
+    fields: [
+      {
+        name: "titulo",
+        label: "Gancho (em branco)",
+        kind: "text",
+        placeholder: "Precisa de",
+        help: "Curto, opcional (ex.: \"Quer\", \"Precisa de\").",
+      },
+      {
+        name: "destaque",
+        label: "Destaque (grande, na cor da marca)",
+        kind: "text",
+        placeholder: "Geladeira, freezer ou cervejeira?",
+        help: "Até uns 40 caracteres para caber em três linhas. Vazio usa a tagline do cadastro.",
+      },
+      {
+        name: "chamada",
+        label: "Chamada acima do QR",
+        kind: "text",
+        placeholder: "Peça já seu orçamento!",
+        help: "Vazio usa o texto do botão principal do cadastro.",
+      },
+      {
+        name: "simbolo",
+        label: "Símbolo no lugar do logo (opcional)",
+        kind: "select",
+        options: PERK_ICONS,
+        help: "Para quando o logo é uma foto ou some na tela: ícone grande na cor da marca, com o nome e o @ embaixo. Vazio usa o logo.",
+      },
+      {
+        name: "itens",
+        label: "Mostrar os benefícios na placa",
+        kind: "boolean",
+        help: "Desmarcado, a placa fica só com o título e o QR (mais limpa).",
+      },
+    ],
+  },
+  {
+    slug: "placa-itens",
+    label: "Itens da placa",
+    description:
+      "Até 3 itens curtos na placa do QR (ícone, título de 1–2 palavras, frase curta).",
+    kind: "list",
+    contentKey: "placa_itens",
+    itemLabel: "Item",
+    emptyEffect:
+      "Sem itens aqui, a placa usa os três primeiros benefícios da página (que costumam ser longos demais).",
+    fields: [
+      {
+        name: "icon",
+        label: "Ícone",
+        kind: "select",
+        options: PERK_ICONS,
+      },
+      { name: "title", label: "Título", kind: "text", required: true, placeholder: "Freezers" },
+      { name: "body", label: "Frase curta", kind: "text", placeholder: "Conservação de verdade" },
     ],
   },
   {

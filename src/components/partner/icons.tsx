@@ -144,6 +144,16 @@ export function SparkIcon({ className = "w-6 h-6" }: IconProps) {
   );
 }
 
+export function CameraIcon({ className = "w-6 h-6" }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h2l1.6-2.2h5.8L16.5 6h2A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5Z" />
+      <circle cx="12" cy="13" r="3.8" />
+      <path d="M17.5 9.2h.01" />
+    </svg>
+  );
+}
+
 export function WrenchIcon({ className = "w-6 h-6" }: IconProps) {
   return (
     <svg {...base} className={className}>
@@ -174,6 +184,7 @@ export const partnerIcons: Record<
   star: StarIcon,
   check: CheckIcon,
   spark: SparkIcon,
+  camera: CameraIcon,
   wrench: WrenchIcon,
 };
 
