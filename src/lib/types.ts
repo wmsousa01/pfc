@@ -46,6 +46,8 @@ export type PartnerPlaca = {
   chamada?: string;
   /** Mostra os benefícios na placa (padrão: sim). */
   itens?: boolean;
+  /** Ícone (chave de PERK_ICONS) no lugar do logo, com nome e @ embaixo. */
+  simbolo?: string;
 };
 
 /** Ajustes da triagem de leads na página do parceiro. */

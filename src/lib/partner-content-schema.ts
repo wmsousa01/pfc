@@ -60,6 +60,7 @@ export type ContentSection = Base &
 /** Chaves válidas de `content.perks[].icon` — espelha `partnerIcons`. */
 export const PERK_ICONS = [
   "spark",
+  "camera",
   "snowflake",
   "fridge",
   "bottle",
@@ -296,6 +297,13 @@ export const PARTNER_CONTENT_SECTIONS: ContentSection[] = [
         kind: "text",
         placeholder: "Peça já seu orçamento!",
         help: "Vazio usa o texto do botão principal do cadastro.",
+      },
+      {
+        name: "simbolo",
+        label: "Símbolo no lugar do logo (opcional)",
+        kind: "select",
+        options: PERK_ICONS,
+        help: "Para quando o logo é uma foto ou some na tela: ícone grande na cor da marca, com o nome e o @ embaixo. Vazio usa o logo.",
       },
       {
         name: "itens",

@@ -180,8 +180,19 @@ export async function renderPlaca(partner: Partner): Promise<Buffer> {
   const FOOTER = 30;
 
   const logoMaxH = items.length === 3 ? 220 : 300;
-  const logo = await logoPng(partner.logo_url, 760, logoMaxH);
-  const logoH = logo ? logo.h : lh(96);
+  // Símbolo no lugar do logo (ex.: câmera do fotógrafo, cuja "logo" é uma
+  // foto pequena demais na tela): ícone grande num círculo + nome e @ embaixo,
+  // para a placa não perder quem é o parceiro.
+  const simbolo = placa.simbolo?.trim() || null;
+  const CIRCLE = items.length === 3 ? 190 : 230;
+  const nomeFit = fitLines(A, partner.name.toUpperCase(), CW, 64, 40, 1);
+  const handle = partner.instagram ? `@${partner.instagram}` : "";
+  const logo = simbolo ? null : await logoPng(partner.logo_url, 760, logoMaxH);
+  const logoH = simbolo
+    ? CIRCLE + 22 + lh(nomeFit.size) + (handle ? 42 : 0)
+    : logo
+      ? logo.h
+      : lh(96);
   const logoBlock = logoH + 40; // + linha de brilho
 
   const innerTop = INSET + PAD_TOP;
@@ -214,7 +225,23 @@ export async function renderPlaca(partner: Partner): Promise<Buffer> {
   let y = innerTop;
 
   // Logo + linha de brilho
-  if (logo) {
+  if (simbolo) {
+    const r = CIRCLE / 2;
+    const cx = PLACA_W / 2;
+    parts.push(
+      `<circle cx="${cx}" cy="${y + r}" r="${r + 10}" fill="${accent}" opacity="0.45" filter="url(#glow)"/>`,
+      `<circle cx="${cx}" cy="${y + r}" r="${r}" fill="#000000" fill-opacity="0.55" stroke="${accent}" stroke-width="6"/>`,
+      iconSvg(simbolo, cx - CIRCLE * 0.3, y + r - CIRCLE * 0.3, CIRCLE * 0.6, accent)
+    );
+    let ny = y + CIRCLE + 22 + lh(nomeFit.size);
+    const nw = A.getAdvanceWidth(nomeFit.lines[0], nomeFit.size);
+    parts.push(textPath(A, nomeFit.lines[0], (PLACA_W - nw) / 2, ny - lh(nomeFit.size) * 0.14, nomeFit.size, "#ffffff"));
+    if (handle) {
+      ny += 42;
+      const hw = N.getAdvanceWidth(handle, 32);
+      parts.push(textPath(N, handle, (PLACA_W - hw) / 2, ny - 6, 32, "rgba(255,255,255,0.7)"));
+    }
+  } else if (logo) {
     overlays.push({ input: logo.data, left: Math.round((PLACA_W - logo.w) / 2), top: Math.round(y) });
   } else {
     const nm = fitLines(A, partner.name.toUpperCase(), CW, 96, 48, 1);
