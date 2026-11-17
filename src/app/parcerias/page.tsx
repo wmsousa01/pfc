@@ -12,6 +12,7 @@ import PartnersShowcase from "@/components/PartnersShowcase";
 import LeadCapture from "@/components/LeadCapture";
 import FinalCTA from "@/components/FinalCTA";
 import { partnershipFormats, whatsapp } from "@/lib/config";
+import { checkoutAtivo } from "@/lib/checkout";
 import { WhatsAppIcon, ArrowRight } from "@/components/icons";
 
 export const metadata: Metadata = {
@@ -49,13 +50,11 @@ export default function ParceriasPage() {
           </p>
           <div className="flex flex-col sm:flex-row items-center gap-3">
             <a
-              href={whatsapp("Quero uma proposta de parceria com o Fora da Caixa")}
-              target="_blank"
-              rel="noopener noreferrer"
+              href="#planos"
               className="btn-primary px-8 py-4 rounded-xl text-base flex items-center gap-3"
             >
-              <WhatsAppIcon className="w-5 h-5" />
-              Solicitar proposta
+              {checkoutAtivo ? "Ver planos e contratar" : "Ver planos"}
+              <ArrowRight className="w-5 h-5" />
             </a>
             <a
               href="/monte-seu-plano"
@@ -64,8 +63,44 @@ export default function ParceriasPage() {
               Monte seu plano com preço
             </a>
           </div>
+          <a
+            href={whatsapp("Quero uma proposta de parceria com o Fora da Caixa")}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-white/50 hover:text-white/80 text-sm inline-flex items-center gap-2"
+          >
+            <WhatsAppIcon className="w-4 h-4" />
+            Prefere uma proposta sob medida? Fale com o comercial
+          </a>
         </div>
       </section>
+
+      {/* Jornada: do plano ao ar */}
+      {checkoutAtivo && (
+      <section className="py-12 bg-[#0a0a0a] border-t border-[#1e1e1e]">
+        <div className="container-px max-w-5xl mx-auto">
+          <h2 className="text-center text-white/80 font-bold text-lg mb-6">
+            Do plano escolhido à sua marca no ar, <span className="text-gold-500">sem reunião</span>
+          </h2>
+          <ol className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              { n: "1", t: "Escolha o plano", d: "Prazo de 3, 6 ou 12 meses, com o preço na tela." },
+              { n: "2", t: "Aceite os termos", d: "O contrato aparece antes de pagar, sem letra miúda." },
+              { n: "3", t: "Pague", d: "Pix, boleto ou cartão em até 3x sem juros pelo Mercado Pago." },
+              { n: "4", t: "Onboarding", d: "Mande logo e WhatsApp; a página e o QR saem em até 3 dias úteis." },
+            ].map((s) => (
+              <li key={s.n} className="bg-[#111] border border-[#222] rounded-xl p-4">
+                <div className="w-7 h-7 rounded-full bg-gold-500 text-black font-black flex items-center justify-center text-sm">
+                  {s.n}
+                </div>
+                <div className="text-white font-semibold mt-2.5 text-sm">{s.t}</div>
+                <div className="text-white/45 text-xs mt-1 leading-relaxed">{s.d}</div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+      )}
 
       {/* Formatos de parceria */}
       <section className="section-py bg-[#111] border-y border-[#1e1e1e]">
@@ -135,9 +170,7 @@ export default function ParceriasPage() {
               ))}
             </ol>
             <a
-              href={whatsapp("Quero uma página de parceiro com QR code no Fora da Caixa")}
-              target="_blank"
-              rel="noopener noreferrer"
+              href="#planos"
               className="btn-primary px-7 py-3.5 rounded-xl font-bold inline-flex items-center gap-2 mt-8"
             >
               Quero minha página

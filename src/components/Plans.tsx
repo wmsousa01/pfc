@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { installmentLabel } from "@/lib/payment";
+import { isSelfServe } from "@/lib/checkout";
 import { plans, REGRAS_PRECO, type Plan } from "@/lib/planos";
 
 function fmt(value: number): string {
@@ -165,18 +166,40 @@ function PlanCard({ plan, isYearly }: { plan: Plan; isYearly: boolean }) {
         ))}
       </div>
 
-      {/* CTA */}
-      <a
-        href={ctaUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={`w-full py-4 rounded-xl font-bold text-center flex items-center justify-center gap-2 ${
-          highlighted ? "btn-primary" : "btn-outline hover:bg-white/5"
-        }`}
-      >
-        <WaIcon />
-        {ctaLabel}
-      </a>
+      {/* CTA: Apoio e Patrocinador vão direto ao checkout; Master passa pelo comercial. */}
+      {isSelfServe(plan.id) ? (
+        <div className="flex flex-col gap-2">
+          <a
+            href={`/contratar/${plan.id}`}
+            className={`w-full py-4 rounded-xl font-bold text-center flex items-center justify-center gap-2 ${
+              highlighted ? "btn-primary" : "btn-outline hover:bg-white/5"
+            }`}
+          >
+            Contratar agora
+          </a>
+          <a
+            href={ctaUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-white/45 hover:text-white/70 text-xs text-center flex items-center justify-center gap-1.5 py-1"
+          >
+            <WaIcon />
+            Prefiro falar com alguém antes
+          </a>
+        </div>
+      ) : (
+        <a
+          href={ctaUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`w-full py-4 rounded-xl font-bold text-center flex items-center justify-center gap-2 ${
+            highlighted ? "btn-primary" : "btn-outline hover:bg-white/5"
+          }`}
+        >
+          <WaIcon />
+          {ctaLabel}
+        </a>
+      )}
     </div>
   );
 }

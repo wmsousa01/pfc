@@ -6,6 +6,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth";
 import type { PartnerSection } from "@/lib/types";
+import { getCheckout, syncCheckout } from "@/lib/checkout-store";
 
 const BUCKET = "partner-assets";
 
@@ -212,6 +213,14 @@ export async function deleteLead(formData: FormData) {
     await supabase.from("leads").delete().eq("id", id);
     revalidatePath("/admin");
   }
+}
+
+/** Confere no Mercado Pago um checkout que ficou parado (webhook perdido, boleto). */
+export async function syncCheckoutAction(formData: FormData) {
+  await requireAdmin();
+  const c = await getCheckout(String(formData.get("id") ?? ""));
+  if (c) await syncCheckout(c);
+  revalidatePath("/admin");
 }
 
 export async function signOut() {
