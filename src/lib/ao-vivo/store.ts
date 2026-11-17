@@ -265,9 +265,11 @@ export async function iniciarSessao(
   return sessao;
 }
 
-async function avancar(sessaoId: string): Promise<void> {
-  const { error } = await db().rpc("ao_vivo_avancar", { p_sessao: sessaoId, p_gap_s: GAP_S });
+/** Roda o relógio da live e devolve a hora do banco (a referência de tudo). */
+async function avancar(sessaoId: string): Promise<string> {
+  const { data, error } = await db().rpc("ao_vivo_avancar", { p_sessao: sessaoId, p_gap_s: GAP_S });
   if (error) throw new Error(error.message);
+  return typeof data === "string" ? new Date(data).toISOString() : new Date().toISOString();
 }
 
 async function insercoesDa(sessaoId: string): Promise<Insercao[]> {
@@ -403,7 +405,7 @@ export async function estadoRegie(quadro: QuadroId): Promise<EstadoRegie> {
     };
   }
 
-  await avancar(sessao.id);
+  const agoraDb = await avancar(sessao.id);
   const [ins, parceiros] = await Promise.all([
     insercoesDa(sessao.id),
     db()
@@ -431,7 +433,7 @@ export async function estadoRegie(quadro: QuadroId): Promise<EstadoRegie> {
   }));
   return {
     ...base,
-    agora: new Date().toISOString(),
+    agora: agoraDb,
     sessao: {
       id: sessao.id,
       status: sessao.status,
@@ -446,8 +448,6 @@ export async function estadoRegie(quadro: QuadroId): Promise<EstadoRegie> {
     episodios: [],
   };
 }
-
-const segundosDesde = (iso: string) => Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
 
 async function sessaoDoQuadro(quadro: QuadroId): Promise<Sessao> {
   const s = await sessaoAtiva(quadro);
@@ -485,7 +485,8 @@ export async function acaoRegie(quadro: QuadroId, a: AcaoRegie): Promise<void> {
       const i = await insercaoDa(s, a.id);
       if (i.status !== "pendente") throw new Error("Essa inserção já saiu da fila.");
       // Fura a fila e o respiro; se algo estiver no ar, entra logo depois.
-      ok(await tab().update({ disparo: "manual", previsto_s: segundosDesde(s.iniciada_em) }).eq("id", i.id).eq("status", "pendente"));
+      // A do encerramento não tem hora: ganha 0 só para o relógio enxergá-la.
+      ok(await tab().update({ disparo: "manual", previsto_s: i.previsto_s ?? 0 }).eq("id", i.id).eq("status", "pendente"));
       if (s.segurando) ok(await db().from("ao_vivo_sessoes").update({ segurando: false }).eq("id", s.id));
       break;
     }
@@ -501,14 +502,16 @@ export async function acaoRegie(quadro: QuadroId, a: AcaoRegie): Promise<void> {
       const i = await insercaoDa(s, a.id);
       if (i.status !== "no_ar") throw new Error("Essa inserção não está no ar.");
       // Fica como exibida, com o tempo real: é o que vai para o relatório.
-      ok(await tab().update({ status: "exibida", fim_em: new Date().toISOString() }).eq("id", i.id).eq("status", "no_ar"));
+      // Hora do banco, como a de entrada: relógio do servidor atrasado dava tempo negativo.
+      ok(await tab().update({ status: "exibida", fim_em: await avancar(s.id) }).eq("id", i.id).eq("status", "no_ar"));
       break;
     }
 
     case "encerramento":
       ok(
         await tab()
-          .update({ previsto_s: segundosDesde(s.iniciada_em) })
+          // 0 = já na vez; no encerramento o relógio as põe antes das "durante" atrasadas.
+          .update({ previsto_s: 0 })
           .eq("sessao_id", s.id)
           .eq("status", "pendente")
           .eq("momento", "encerramento")
@@ -517,7 +520,8 @@ export async function acaoRegie(quadro: QuadroId, a: AcaoRegie): Promise<void> {
       break;
 
     case "encerrar": {
-      const agora = new Date().toISOString();
+      // O avancar fecha o que já cumpriu o tempo e dá a hora do banco para o resto.
+      const agora = await avancar(s.id);
       ok(await tab().update({ status: "exibida", fim_em: agora }).eq("sessao_id", s.id).eq("status", "no_ar"));
       ok(await tab().update({ status: "perdida" }).eq("sessao_id", s.id).eq("status", "pendente"));
       ok(await db().from("ao_vivo_sessoes").update({ status: "encerrada", encerrada_em: agora, segurando: false }).eq("id", s.id));

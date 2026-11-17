@@ -123,8 +123,11 @@ create trigger ao_vivo_cotas_touch before update on public.ao_vivo_cotas
 -- (faixa, QR, vinheta: um por vez, com p_gap_s de respiro entre um e outro).
 -- Segurar só impede que algo novo entre; o que está no ar termina.
 -- ---------------------------------------------------------------------
+-- Devolve a hora do banco: a régie mede o cronômetro por ela, não pelo
+-- relógio do servidor da página (um PC atrasado errava a contagem).
+drop function if exists public.ao_vivo_avancar(uuid, int);
 create or replace function public.ao_vivo_avancar(p_sessao uuid, p_gap_s int default 15)
-returns void language plpgsql as $$
+returns timestamptz language plpgsql as $$
 declare
   s       record;
   agora   timestamptz := clock_timestamp();
@@ -135,7 +138,7 @@ begin
   perform pg_advisory_xact_lock(hashtext('ao_vivo:' || p_sessao::text));
 
   select * into s from public.ao_vivo_sessoes where id = p_sessao;
-  if not found or s.status = 'encerrada' then return; end if;
+  if not found or s.status = 'encerrada' then return agora; end if;
   decor := extract(epoch from agora - s.iniciada_em);
 
   -- 1. O que cumpriu o tempo sai do ar (duracao_s = 0 é logo do episódio todo).
@@ -145,7 +148,7 @@ begin
    where sessao_id = p_sessao and status = 'no_ar' and duracao_s > 0
      and inicio_em + make_interval(secs => duracao_s::double precision) <= agora;
 
-  if s.segurando then return; end if;
+  if s.segurando then return agora; end if;
 
   -- 2. Canto: todos os logos que chegaram na hora.
   update public.ao_vivo_insercoes
@@ -156,7 +159,7 @@ begin
   -- 3. Destaque: um por vez.
   if exists (select 1 from public.ao_vivo_insercoes
               where sessao_id = p_sessao and status = 'no_ar' and tipo <> 'logo') then
-    return;
+    return agora;
   end if;
 
   select max(fim_em) into ultimo from public.ao_vivo_insercoes
@@ -169,7 +172,8 @@ begin
      -- "Agora" da régie fura o respiro; o automático espera.
      and (disparo = 'manual' or ultimo is null
           or ultimo + make_interval(secs => p_gap_s::double precision) <= agora)
-   order by (disparo = 'manual') desc,
+   -- coalesce: disparo é nulo na fila automática, e em DESC o nulo viria antes do manual.
+   order by coalesce(disparo = 'manual', false) desc,
             (s.status = 'encerramento' and momento = 'encerramento') desc,
             previsto_s, prioridade desc, created_at
    limit 1;
@@ -179,6 +183,7 @@ begin
        set status = 'no_ar', inicio_em = agora, disparo = coalesce(disparo, 'auto')
      where id = prox;
   end if;
+  return agora;
 end $$;
 
 revoke execute on function public.ao_vivo_avancar(uuid, int) from public, anon, authenticated;

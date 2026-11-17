@@ -178,7 +178,8 @@ function Faixa({ item }: { item: Vivo }) {
       {item.parceiro.logo && (
         <div className="flex items-center justify-center" style={{ background: "#fff", padding: "0.8vw 1.1vw" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={item.parceiro.logo} alt="" style={{ maxHeight: "4vw", maxWidth: "9vw", objectFit: "contain" }} />
+          {/* Altura fixa: SVG sem tamanho próprio encolhia a zero dentro da faixa. */}
+          <img src={item.parceiro.logo} alt="" style={{ height: "3.6vw", width: "auto", maxWidth: "9vw", objectFit: "contain" }} />
         </div>
       )}
       <div
