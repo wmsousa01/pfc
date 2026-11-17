@@ -9,7 +9,7 @@
  */
 import { quadros, quadroSponsorship, type Quadro } from "@/lib/config";
 import { campanhaAtiva, ehQuadroFundador, ofertaFundador } from "@/lib/campanha";
-import { plans, planById } from "@/lib/planos";
+import { plans, planById, REGRAS_PRECO } from "@/lib/planos";
 
 // ---------------------------------------------------------------- briefing
 
@@ -80,7 +80,8 @@ export function handleInstagram(v: string): string | null {
 
 // ---------------------------------------------------------------- seleção
 
-export const DURACOES = [1, 3, 6, 12] as const;
+/** Tudo que é recorrente tem mínimo de 3 meses (REGRAS_PRECO.minMeses). */
+export const DURACOES = [3, 6, 12] as const;
 export type Meses = (typeof DURACOES)[number];
 
 export type Selecao = {
@@ -194,7 +195,11 @@ export function recomendar(b: Briefing): Recomendacao {
 // ---------------------------------------------------------------- cálculo
 
 export const VISITA_AVULSO = 1690;
-/** Preço de cliente com plano ou cota ativa (já é desconto: só à vista). */
+/**
+ * Preço de cliente (já é desconto: só à vista). Vale para quem contrata plano
+ * ou cota — e, como todo contrato recorrente tem no mínimo 3 meses, ninguém
+ * leva a Visita barata assinando um mês só.
+ */
 export const VISITA_CLIENTE = 1350;
 
 export type Linha = {
@@ -227,7 +232,7 @@ export function orcar(sel: Selecao): Orcamento {
   const qs = sel.quadros.filter((s) => livres.has(s));
   const mods = modalidadesLivres().filter((m) => sel.modalidades.includes(m.key));
 
-  const minMeses = qs.length || mods.length ? quadroSponsorship.minMonths : 1;
+  const minMeses = REGRAS_PRECO.minMeses;
   const meses = (DURACOES.find((d) => d >= Math.max(sel.meses, minMeses)) ?? 12) as Meses;
 
   const linhas: Linha[] = [];
@@ -239,14 +244,14 @@ export function orcar(sel: Selecao): Orcamento {
       key: `plano:${plano.id}`,
       label: `Plano ${plano.name}`,
       detalhe: anual
-        ? `Anual com 20% off (economia de ${brl(plano.savings)})`
-        : `${brl(plano.monthlyPrice)}/mês × ${meses} ${meses === 1 ? "mês" : "meses"}`,
+        ? `Anual com ${REGRAS_PRECO.anualPixOff}% off no Pix (economia de ${brl(plano.savings)}); no cartão em 3x, ${brl(plano.yearlyCardPrice)}`
+        : `${brl(plano.monthlyPrice)}/mês × ${meses} meses`,
       valor: anual ? plano.yearlyPrice : plano.monthlyPrice * meses,
     });
     pagamento.push(
       anual
-        ? "Plano anual: Pix à vista ou até 3x sem juros no cartão."
-        : "Plano: cobrança mensal no Pix ou cartão.",
+        ? `Plano anual: ${REGRAS_PRECO.anualPixOff}% off no Pix à vista ou ${REGRAS_PRECO.anualCartaoOff}% off em até 3x sem juros no cartão.`
+        : `Plano: cobrança mensal no Pix ou cartão, contrato mínimo de ${REGRAS_PRECO.minMeses} meses.`,
     );
   }
 
@@ -261,19 +266,21 @@ export function orcar(sel: Selecao): Orcamento {
       valor: quadroSponsorship.master.monthlyPrice * meses,
     });
   }
-  if (qs.length) pagamento.push("Cotas de quadro: cobrança mensal, contrato mínimo de 3 meses.");
+  if (qs.length) pagamento.push(`Cotas de quadro: cobrança mensal, contrato mínimo de ${quadroSponsorship.minMonths} meses.`);
 
   for (const m of mods) {
     linhas.push({
       key: `modalidade:${m.key}`,
       label: `Apoio ${m.nome} · ${m.quadro.name}`,
-      detalhe: `Só nos episódios de ${m.nome.toLowerCase()} · ${meses} meses`,
-      valor: null,
+      detalhe: `Só nos episódios de ${m.nome.toLowerCase()} · ${brl(quadroSponsorship.apoio.modalidadePrice)}/mês × ${meses} meses`,
+      valor: quadroSponsorship.apoio.modalidadePrice * meses,
     });
   }
+  if (mods.length && !qs.length)
+    pagamento.push(`Apoio por modalidade: cobrança mensal, contrato mínimo de ${quadroSponsorship.minMonths} meses.`);
 
   if (sel.visita) {
-    const cliente = !!plano || qs.length > 0;
+    const cliente = !!plano || qs.length > 0 || mods.length > 0;
     linhas.push({
       key: "visita",
       label: "PFC Visita",
@@ -312,7 +319,7 @@ export function resumo(b: Briefing, o: Orcamento): string {
     ...(b.instagram ? [`Instagram: @${b.instagram}`] : []),
     `Objetivos: ${obj || "não informado"}`,
     `Verba: ${verba}${b.exclusividade ? " · quer exclusividade" : ""}`,
-    `Duração: ${o.meses} ${o.meses === 1 ? "mês" : "meses"}`,
+    `Duração: ${o.meses} meses`,
     "Itens:",
     ...o.linhas.map((l) => `- ${l.label}: ${l.valor === null ? "sob consulta" : brl(l.valor)}`),
     `Total estimado: ${brl(o.total)}${o.sobConsulta.length ? " + itens sob consulta" : ""}`,

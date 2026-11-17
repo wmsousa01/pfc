@@ -14,7 +14,7 @@ export const CAMPANHA = {
   fundador: {
     /** Meses com o preço da cota master travado, sem reajuste. */
     precoTravadoMeses: 12,
-    bonus: "um PFC Visita de brinde ao completar 3 meses",
+    bonus: "um PFC Visita de brinde no 4º mês, com a 4ª mensalidade paga",
   },
   apresentador: {
     /** Bônus sobre a comissão quando o patrocínio é para o quadro que ele apresenta. */

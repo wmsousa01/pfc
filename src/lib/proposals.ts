@@ -5,6 +5,12 @@
  * negociada (desconto de fidelidade, bônus) que não pode virar referência
  * pública da tabela. A rota fica fora do sitemap e bloqueada no robots.
  *
+ * Teto de desconto (regra de 16/11/2026, lib/planos REGRAS_PRECO): descontos
+ * não se somam e o LÍQUIDO recebido nunca fica mais de 25% abaixo da tabela
+ * mensal × meses — conte a taxa do Mercado Pago que o PFC absorver. Condição
+ * de parceiro antigo substitui o desconto do anual. A proposta da Real
+ * Consultoria (44% abaixo) é anterior à regra e não é precedente.
+ *
  * O pagamento é um Link de Pagamento criado à mão no painel do Mercado Pago,
  * com o valor exato da proposta. Enquanto `paymentUrl` estiver vazio, o botão
  * cai no WhatsApp — a página nunca fica sem saída.

@@ -12,6 +12,7 @@ import { brl } from "@/lib/money";
 import { commissionLabel, couponFor, discountLabel } from "@/lib/commission";
 import { qrDataUrl } from "@/lib/qr";
 import { whatsapp } from "@/lib/config";
+import { campanhaAtiva } from "@/lib/campanha";
 import { MicIcon, WhatsAppIcon } from "@/components/icons";
 import {
   DELIVERY_LABEL,
@@ -89,7 +90,7 @@ export default async function ResellerDashboard() {
         </h1>
         <p className="text-white/45 text-sm mt-1">
           {reseller.role_label ? `${reseller.role_label} · ` : ""}
-          Comissão na loja: <span className="text-gold-500">{commissionLabel(reseller)}</span> · patrocínio: 1 mensalidade
+          Comissão na loja: <span className="text-gold-500">{commissionLabel(reseller)}</span> · patrocínio: {campanhaAtiva() ? "1 mensalidade" : "30% do contrato"}
         </p>
 
         {/* Números */}

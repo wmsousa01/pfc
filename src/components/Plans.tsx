@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { installmentLabel, PAYMENT_TERMS } from "@/lib/payment";
-import { plans, type Plan } from "@/lib/planos";
+import { installmentLabel } from "@/lib/payment";
+import { plans, REGRAS_PRECO, type Plan } from "@/lib/planos";
 
 function fmt(value: number): string {
   return value.toLocaleString("pt-BR");
@@ -40,6 +40,7 @@ function PlanCard({ plan, isYearly }: { plan: Plan; isYearly: boolean }) {
     highlighted,
     monthlyPrice,
     yearlyPrice,
+    yearlyCardPrice,
     savings,
     features,
     ctaLabel,
@@ -107,13 +108,14 @@ function PlanCard({ plan, isYearly }: { plan: Plan; isYearly: boolean }) {
               >
                 R$&nbsp;{fmt(yearlyPrice)}
               </span>
-              <span className="text-white/40 text-sm">/ano</span>
+              <span className="text-white/40 text-sm">/ano no Pix</span>
             </div>
             <p className="text-white/50 text-sm mt-1.5">
-              Pix à vista ou{" "}
+              No cartão: R$&nbsp;{fmt(yearlyCardPrice)}, em{" "}
               <strong className="text-white/80">
-                {installmentLabel(yearlyPrice)}
-              </strong>
+                {installmentLabel(yearlyCardPrice)}
+              </strong>{" "}
+              ({REGRAS_PRECO.anualCartaoOff}% off)
             </p>
             <div className="mt-2.5 inline-flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold px-2.5 py-1 rounded-full">
               <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
@@ -135,11 +137,11 @@ function PlanCard({ plan, isYearly }: { plan: Plan; isYearly: boolean }) {
               <span className="text-white/40 text-sm">/mês</span>
             </div>
             <p className="text-white/40 text-xs mt-1.5">
-              Ou{" "}
+              Contrato mínimo de {REGRAS_PRECO.minMeses} meses. Ou{" "}
               <span className="text-gold-500/80 font-semibold">
                 R$&nbsp;{fmt(yearlyPrice)}/ano
               </span>{" "}
-              no plano anual, 20% mais barato
+              no Pix, {REGRAS_PRECO.anualPixOff}% mais barato
             </p>
           </>
         )}
@@ -197,8 +199,8 @@ export default function Plans() {
             <span className="text-gradient-gold">participar do PFC</span>
           </h2>
           <p className="text-white/50 mt-4 max-w-2xl mx-auto leading-relaxed">
-            Planos mensais para começar agora ou assinatura anual com{" "}
-            <span className="text-gold-500 font-semibold">20% de desconto</span>{" "}
+            Planos mensais (mínimo de {REGRAS_PRECO.minMeses} meses) ou assinatura anual com{" "}
+            <span className="text-gold-500 font-semibold">{REGRAS_PRECO.anualPixOff}% de desconto no Pix</span>{" "}
             para marcas que querem presença contínua.
           </p>
         </div>
@@ -236,7 +238,7 @@ export default function Plans() {
               Anual
             </span>
             <span className="bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wide">
-              20% OFF
+              até {REGRAS_PRECO.anualPixOff}% OFF
             </span>
           </div>
         </div>
@@ -275,9 +277,10 @@ export default function Plans() {
 
         {/* Fine print */}
         <p className="text-center text-white/25 text-xs mt-4">
-          Mensal: Pix ou cartão, mês a mês. Anual: {PAYMENT_TERMS} Os planos
-          podem ser personalizados conforme o objetivo da marca e
-          disponibilidade editorial.
+          Mensal: Pix ou cartão, mês a mês, contrato mínimo de {REGRAS_PRECO.minMeses} meses. Anual:{" "}
+          {REGRAS_PRECO.anualPixOff}% off no Pix à vista ou {REGRAS_PRECO.anualCartaoOff}% off em até 3x sem juros no
+          cartão; acima de 3x, o Mercado Pago cobra juros do comprador. Descontos não se somam. Os planos podem ser
+          personalizados conforme o objetivo da marca e disponibilidade editorial.
         </p>
       </div>
     </section>

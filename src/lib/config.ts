@@ -220,11 +220,21 @@ export const quadros: Quadro[] = [
 /**
  * Patrocínio por quadro: a marca "apresenta" um quadro específico em vez de
  * aparecer no canal inteiro. Cota master é exclusiva (1 por quadro); as de
- * apoio são menores, sem exclusividade, e têm preço sob consulta. Contrato
- * mínimo de 3 meses nas duas.
+ * apoio são menores e sem exclusividade. Contrato mínimo de 3 meses em todas.
+ *
+ * Por que a cota master de UM quadro (R$ 997) custa mais que o Patrocinador do
+ * canal todo (R$ 797): os preços seguem ~R$ 60 por episódio × episódios no mês
+ * × fator de exclusividade (docs/precificacao.md). O Patrocinador é um logo
+ * entre vários em ~13 episódios (fator 1); a cota master dá o nome do quadro à
+ * marca em ~4 episódios (fator 4). Apoio de quadro: 4 eps × 60 → R$ 397 com
+ * a story por episódio; apoio de modalidade: ~2 eps/mês × 60 × 2 → R$ 247.
+ *
+ * Exclusividade: o segmento de um cliente do Plano Master fica bloqueado nas
+ * cotas (master, apoio e modalidade) de todos os quadros enquanto o contrato
+ * durar — um concorrente dele não entra pela porta do quadro.
  */
 export const quadroSponsorship = {
-  /** Contratação mínima, vale para as duas cotas. */
+  /** Contratação mínima, vale para todas as cotas. */
   minMonths: 3,
   master: {
     name: "Cota Master do quadro",
@@ -241,6 +251,9 @@ export const quadroSponsorship = {
   },
   apoio: {
     name: "Cota de Apoio",
+    monthlyPrice: 397,
+    /** Apoio de uma modalidade só (quadros com `modalidades`). */
+    modalidadePrice: 247,
     features: [
       "Menção do apresentador nos episódios do quadro",
       "Logo nos créditos finais",
