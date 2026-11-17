@@ -9,6 +9,7 @@ export type NavKey =
   | "parceiros"
   | "entregas"
   | "pedidos"
+  | "ofertas"
   | "revendedores"
   | "produtos";
 
@@ -25,6 +26,7 @@ export const ICONES = {
   parceiros:
     "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75",
   entregas: "M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11",
+  ofertas: "M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82zM7 7h.01",
   pedidos: "M6 2l-2 4v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6l-2-4zM4 6h16M16 10a4 4 0 0 1-8 0",
   revendedores:
     "M18 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4",
@@ -60,6 +62,7 @@ export const NAV: NavGrupo[] = [
     itens: [
       { key: "parceiros", href: "/admin", label: "Parceiros", icon: ICONES.parceiros },
       { key: "entregas", href: "/admin/entregas", label: "Entregas", icon: ICONES.entregas },
+      { key: "ofertas", href: "/admin/ofertas", label: "Ofertas", icon: ICONES.ofertas },
       { key: "pedidos", href: "/admin/pedidos", label: "Pedidos", icon: ICONES.pedidos },
       { key: "revendedores", href: "/admin/revendedores", label: "Revendedores", icon: ICONES.revendedores },
       { key: "produtos", href: "/admin/produtos", label: "Produtos", icon: ICONES.produtos },
