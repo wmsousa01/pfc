@@ -3,8 +3,9 @@ import { listJobCuts, isContentaConfigured, type ContentaCut } from "@/lib/produ
 import { TEXT_MODEL, generate, isGeminiConfigured } from "@/lib/producao/gemini";
 import { refreshCuttingLives, type ProducaoLive } from "@/lib/producao/lives";
 import { db, getConfig, setConfig } from "@/lib/producao/store";
-import { defaultCaption } from "./caption";
-import { RITMO } from "./ritmo";
+import { defaultCaption, instagramCaption } from "./caption";
+import { IG_MAX_SEGUNDOS, IG_TESTES_POR_DIA, RITMO } from "./ritmo";
+import type { Platform } from "./store";
 
 /**
  * Publicação automática dos Shorts no YouTube (16/11/2026).
@@ -16,6 +17,11 @@ import { RITMO } from "./ritmo";
  *
  * Live que já tem qualquer post de YouTube do job de shorts é pulada: a equipe
  * programou à mão, ou a automação já passou por ela.
+ *
+ * Instagram automático (17/11/2026): os mesmos cortes, na mesma ordem da IA,
+ * saem como Reel de teste (a Meta promove sozinha os que forem bem, meta.ts)
+ * nos HORARIOS_IG. Só cortes verticais de até IG_MAX_SEGUNDOS. O Reel do
+ * perfil continua à mão. Pausa e marco inicial próprios (ig_auto_*).
  */
 
 /** Chave em producao_config: "1" pausa a automação. */
@@ -45,6 +51,21 @@ const isShort = (c: ContentaCut) => c.durationSec == null || (c.durationSec >= 8
 export async function isYoutubeAutoPaused(): Promise<boolean> {
   return (await getConfig(YT_AUTO_PAUSA)) === "1";
 }
+
+/** Chave em producao_config: "1" pausa o Instagram automático. */
+export const IG_AUTO_PAUSA = "ig_auto_pausado";
+/** Lives disparadas antes disso não vão para o Instagram automático. */
+const IG_AUTO_DESDE = "ig_auto_desde";
+/** Horários dos Reels de teste: uma hora depois de cada Short, um por vaga de teste do dia. */
+export const HORARIOS_IG = [11, 14, 17, 20].slice(0, IG_TESTES_POR_DIA);
+
+export async function isInstagramAutoPaused(): Promise<boolean> {
+  return (await getConfig(IG_AUTO_PAUSA)) === "1";
+}
+
+/** Reel do Instagram: só vertical e até IG_MAX_SEGUNDOS (16:9 deu 0 views). */
+const serveInstagram = (c: ContentaCut, outputFormat: string | null) =>
+  outputFormat !== "landscape" && isShort(c) && (c.durationSec == null || c.durationSec <= IG_MAX_SEGUNDOS);
 
 /**
  * Ordena os cortes do melhor para o pior, pelo que a auditoria do canal
@@ -97,13 +118,13 @@ Ordene TODOS os cortes do mais para o menos promissor como Short. Responda só c
   }
 }
 
-/** Os próximos `n` horários livres do YouTube a partir de agora. */
-async function proximosHorarios(n: number): Promise<Date[]> {
+/** Os próximos `n` horários livres da rede a partir de agora. */
+async function proximosHorarios(platform: Platform, horarios: number[], n: number): Promise<Date[]> {
   const agora = Date.now();
   const { data } = await db()
     .from("social_posts")
     .select("scheduled_at")
-    .eq("platform", "youtube")
+    .eq("platform", platform)
     .in("status", ["agendado", "publicando", "processando", "publicado"])
     .gte("scheduled_at", new Date(agora - DIA).toISOString());
   const ocupados = (data ?? []).map((r) => Date.parse(r.scheduled_at as string));
@@ -111,7 +132,7 @@ async function proximosHorarios(n: number): Promise<Date[]> {
   const minimo = agora + 15 * 60_000;
   for (let d = 0; d < 60 && out.length < n; d++) {
     const dia = meiaNoiteBrt(agora) + d * DIA;
-    for (const h of HORARIOS) {
+    for (const h of horarios) {
       const t = dia + h * 3_600_000;
       if (t < minimo) continue;
       // Vaga tomada por post já agendado perto dela (à mão ou rodada anterior).
@@ -123,26 +144,68 @@ async function proximosHorarios(n: number): Promise<Date[]> {
   return out;
 }
 
-export type AutoYoutubeResult = { live: string; agendados: number; ranking: string[] } | string;
+type Rede = {
+  platform: "youtube" | "instagram";
+  /** Marco inicial (ISO): lives disparadas antes dele não entram. */
+  desde: string;
+  horarios: number[];
+  serve: (c: ContentaCut, outputFormat: string | null) => boolean;
+  caption: (c: ContentaCut) => string;
+  trial: boolean;
+};
 
-/** Uma rodada: agenda no máximo uma live (o ranking custa uma chamada ao Gemini). */
+export type AutoYoutubeResult =
+  | { live: string; agendados: Partial<Record<Rede["platform"], number>>; ranking: string[] }
+  | string;
+
+/** Marco inicial da rede, gravado na primeira rodada para não postar o arquivo. */
+async function desdeDe(chave: string, agora: number): Promise<string> {
+  const v = await getConfig(chave);
+  if (v) return v;
+  const novo = new Date(agora).toISOString();
+  await setConfig(chave, novo);
+  return novo;
+}
+
+/**
+ * Uma rodada: agenda no máximo uma live (o ranking custa uma chamada ao
+ * Gemini), no YouTube e no Instagram, cada rede com a sua pausa.
+ */
 export async function runYoutubeAuto(): Promise<AutoYoutubeResult> {
   if (!isContentaConfigured()) return "sem Contenta";
-  if (await isYoutubeAutoPaused()) return "pausado";
+  const [ytPausado, igPausado] = await Promise.all([isYoutubeAutoPaused(), isInstagramAutoPaused()]);
+  if (ytPausado && igPausado) return "pausado";
 
   const agora = Date.now();
   const ultima = await getConfig(YT_AUTO_ULTIMA);
   if (ultima && agora - Date.parse(ultima) < INTERVALO_MS) return "aguardando";
   await setConfig(YT_AUTO_ULTIMA, new Date(agora).toISOString());
 
-  let desde = await getConfig(YT_AUTO_DESDE);
-  if (!desde) {
-    desde = new Date(agora).toISOString();
-    await setConfig(YT_AUTO_DESDE, desde);
+  const redes: Rede[] = [];
+  if (!ytPausado) {
+    redes.push({
+      platform: "youtube",
+      desde: await desdeDe(YT_AUTO_DESDE, agora),
+      horarios: HORARIOS,
+      serve: isShort,
+      caption: defaultCaption,
+      trial: false,
+    });
   }
+  if (!igPausado) {
+    redes.push({
+      platform: "instagram",
+      desde: await desdeDe(IG_AUTO_DESDE, agora),
+      horarios: HORARIOS_IG,
+      serve: serveInstagram,
+      caption: instagramCaption,
+      trial: true,
+    });
+  }
+  const desde = redes.map((r) => r.desde).sort()[0];
 
   // Sem isso, um job pronto no Contenta só vira "done" quando alguém abre o painel.
-  await refreshCuttingLives().catch((e) => console.warn("[yt-auto] refresh:", e));
+  await refreshCuttingLives().catch((e) => console.warn("[auto] refresh:", e));
 
   const { data } = await db()
     .from("producao_lives")
@@ -156,41 +219,55 @@ export async function runYoutubeAuto(): Promise<AutoYoutubeResult> {
   for (const live of lives) {
     const job = live.jobs.find((j) => j.mode === "shorts" && j.status === "done");
     if (!job) continue;
-    const { count } = await db()
-      .from("social_posts")
-      .select("id", { count: "exact", head: true })
-      .eq("platform", "youtube")
-      .eq("contenta_job_id", job.jobId);
-    if ((count ?? 0) > 0) continue;
+    const disparada = Date.parse(live.triggered_at ?? live.created_at);
 
-    const cuts = (await listJobCuts(job.jobId)).items.filter(isShort);
-    if (cuts.length === 0) continue;
-    const escolhidos = (await ranquear(cuts, live.title)).slice(0, AUTO_POR_LIVE);
-    const horarios = await proximosHorarios(escolhidos.length);
-
-    let agendados = 0;
-    for (let i = 0; i < escolhidos.length; i++) {
-      const cut = escolhidos[i];
-      const at = horarios[i];
-      if (!at) break;
-      const { error } = await db().from("social_posts").insert({
-        platform: "youtube",
-        contenta_job_id: job.jobId,
-        cut_file: cut.file,
-        video_url: cut.url,
-        thumb_url: cut.thumbUrl,
-        // O publicador reescreve o título se vier na fórmula "Tema: o X" (youtube-meta.ts).
-        title: (cut.title || cut.file).slice(0, 100),
-        caption: defaultCaption(cut),
-        scheduled_at: at.toISOString(),
-        created_by: "automático",
-        trial: false,
-        collaborators: [],
-      });
-      if (!error) agendados++;
-      else if (error.code !== "23505") throw new Error(error.message);
+    // Redes sem nenhum post desse job: quem já tem foi programado à mão ou por rodada anterior.
+    const pendentes: Rede[] = [];
+    for (const r of redes) {
+      if (disparada < Date.parse(r.desde)) continue;
+      const { count } = await db()
+        .from("social_posts")
+        .select("id", { count: "exact", head: true })
+        .eq("platform", r.platform)
+        .eq("contenta_job_id", job.jobId);
+      if ((count ?? 0) === 0) pendentes.push(r);
     }
-    return { live: live.title, agendados, ranking: escolhidos.map((c) => c.title ?? c.file) };
+    if (pendentes.length === 0) continue;
+
+    const { items, outputFormat } = await listJobCuts(job.jobId);
+    const cuts = items.filter((c) => pendentes.some((r) => r.serve(c, outputFormat)));
+    if (cuts.length === 0) continue;
+    const ranking = await ranquear(cuts, live.title);
+
+    const agendados: Partial<Record<Rede["platform"], number>> = {};
+    for (const r of pendentes) {
+      const escolhidos = ranking.filter((c) => r.serve(c, outputFormat)).slice(0, AUTO_POR_LIVE);
+      const horarios = await proximosHorarios(r.platform, r.horarios, escolhidos.length);
+      let n = 0;
+      for (let i = 0; i < escolhidos.length; i++) {
+        const cut = escolhidos[i];
+        const at = horarios[i];
+        if (!at) break;
+        const { error } = await db().from("social_posts").insert({
+          platform: r.platform,
+          contenta_job_id: job.jobId,
+          cut_file: cut.file,
+          video_url: cut.url,
+          thumb_url: cut.thumbUrl,
+          // O publicador reescreve o título do YouTube se vier na fórmula "Tema: o X" (youtube-meta.ts).
+          title: (cut.title || cut.file).slice(0, 100),
+          caption: r.caption(cut),
+          scheduled_at: at.toISOString(),
+          created_by: "automático",
+          trial: r.trial,
+          collaborators: [],
+        });
+        if (!error) n++;
+        else if (error.code !== "23505") throw new Error(error.message);
+      }
+      agendados[r.platform] = n;
+    }
+    return { live: live.title, agendados, ranking: ranking.slice(0, AUTO_POR_LIVE).map((c) => c.title ?? c.file) };
   }
   return "nada novo";
 }

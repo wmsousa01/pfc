@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import type { ActionState } from "@/app/admin/producao/actions";
 import { clearConfig, db, setConfig } from "@/lib/producao/store";
-import { YT_AUTO_PAUSA } from "@/lib/social/auto-youtube";
+import { IG_AUTO_PAUSA, YT_AUTO_PAUSA } from "@/lib/social/auto-youtube";
 import { cancelarNumeros, gerarNumeros, programarNumeros, salvarLegenda } from "@/lib/social/numeros-semana";
 import { IG_TESTES_POR_DIA, JANELA_HORAS, dentroDaJanela, isSegunda } from "@/lib/social/ritmo";
 
@@ -106,12 +106,13 @@ export async function devolverTestesAction(_prev: ActionState): Promise<ActionSt
   }
 }
 
-/** Liga ou pausa o agendamento automático dos Shorts no YouTube. */
+/** Liga ou pausa o agendamento automático no YouTube ou (rede=instagram) no Instagram. */
 export async function youtubeAutoAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   await requireAdmin();
   try {
-    if (str(form, "pausar") === "1") await setConfig(YT_AUTO_PAUSA, "1");
-    else await clearConfig(YT_AUTO_PAUSA);
+    const chave = str(form, "rede") === "instagram" ? IG_AUTO_PAUSA : YT_AUTO_PAUSA;
+    if (str(form, "pausar") === "1") await setConfig(chave, "1");
+    else await clearConfig(chave);
     refresh();
     return { ok: true, error: null };
   } catch (e) {
