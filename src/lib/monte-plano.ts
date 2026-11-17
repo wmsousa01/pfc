@@ -208,6 +208,8 @@ export type Linha = {
   detalhe: string;
   /** null = sob consulta. */
   valor: number | null;
+  /** Vantagem incluída no contrato, sem custo. */
+  bonus?: boolean;
 };
 
 export type Orcamento = {
@@ -294,6 +296,16 @@ export function orcar(sel: Selecao): Orcamento {
     );
   }
 
+  if (meses >= REGRAS_PRECO.vantagemMeses && (plano || qs.length || mods.length)) {
+    linhas.push({
+      key: "bonus:convidado",
+      label: REGRAS_PRECO.vantagem,
+      detalhe: `Vantagem de contrato a partir de ${REGRAS_PRECO.vantagemMeses} meses · ${REGRAS_PRECO.vantagemDetalhe}`,
+      valor: 0,
+      bonus: true,
+    });
+  }
+
   const total = linhas.reduce((s, l) => s + (l.valor ?? 0), 0);
   const fundador = campanhaAtiva()
     ? qs.filter(ehQuadroFundador).map((slug) => quadros.find((x) => x.slug === slug)!.name)
@@ -321,7 +333,7 @@ export function resumo(b: Briefing, o: Orcamento): string {
     `Verba: ${verba}${b.exclusividade ? " · quer exclusividade" : ""}`,
     `Duração: ${o.meses} meses`,
     "Itens:",
-    ...o.linhas.map((l) => `- ${l.label}: ${l.valor === null ? "sob consulta" : brl(l.valor)}`),
+    ...o.linhas.map((l) => `- ${l.label}: ${l.bonus ? "incluso" : l.valor === null ? "sob consulta" : brl(l.valor)}`),
     `Total estimado: ${brl(o.total)}${o.sobConsulta.length ? " + itens sob consulta" : ""}`,
     ...(o.fundador.length ? [`Patrocinador fundador (${o.fundador.join(", ")}): ${ofertaFundador()}`] : []),
   ].join("\n");

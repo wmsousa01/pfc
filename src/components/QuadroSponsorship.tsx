@@ -58,7 +58,8 @@ export default function QuadroSponsorship() {
               <span className="text-white/40 text-sm">/mês</span>
             </div>
             <p className="text-white/40 text-xs mt-1.5">
-              Contrato mínimo de {minMonths} meses, cobrança mensal no Pix ou cartão. Contrato anual sob proposta.
+              Contrato mínimo de {minMonths} meses, cobrança mensal no Pix ou cartão. Com 6 meses ou mais, sua marca
+              participa como convidada em um episódio. Contrato anual sob proposta.
             </p>
             <ul className="mt-5 flex flex-col gap-2.5 flex-1">
               {master.features.map((f) => (
@@ -78,7 +79,8 @@ export default function QuadroSponsorship() {
               <span className="text-white/40 text-sm">/mês</span>
             </div>
             <p className="text-white/40 text-xs mt-1.5">
-              Contrato mínimo de {minMonths} meses, cobrança mensal no Pix ou cartão.
+              Contrato mínimo de {minMonths} meses, cobrança mensal no Pix ou cartão. Com 6 meses ou mais, sua marca
+              participa como convidada em um episódio.
             </p>
             <p className="text-white/60 text-sm mt-4 leading-relaxed bg-white/[0.03] border border-white/[0.08] rounded-xl p-3">
               <span className="text-gold-500 font-semibold">Por modalidade ({brl(apoio.modalidadePrice)}/mês): </span>

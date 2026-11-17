@@ -68,6 +68,13 @@ decidir se ela precisa de compensação em shorts quando a meta não for atingid
    mensalidade paga, para não virar 36% de desconto para quem cancela no fim do
    mínimo.
 
+9. **Vantagem de 6 meses:** contrato de 6 meses ou mais (o anual incluso) dá
+   uma participação da marca como convidada especialista em um episódio do
+   quadro que combina com ela. A vantagem é em mídia, não em dinheiro: custa
+   quase nada e não conta no teto de 25%. É uma participação por contrato, com
+   data combinada com a produção. Sem ela, o contrato de 6 meses não tinha
+   motivo para existir entre o mínimo e o anual.
+
 ### Pontos conhecidos que ficaram de fora
 
 - O bônus de +20% do apresentador na campanha leva a comissão a 36% do

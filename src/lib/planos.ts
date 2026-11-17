@@ -9,6 +9,11 @@
  * - Descontos não se somam e o desconto efetivo nunca passa de 25% da tabela
  *   mensal (12 mensalidades). Condição de parceiro antigo SUBSTITUI o desconto
  *   do anual, não soma.
+ * - Contrato de 6 meses ou mais ganha uma vantagem em mídia, não em dinheiro:
+ *   a marca participa como convidada especialista em um episódio. Custa quase
+ *   nada (o quadro precisa de convidado de qualquer jeito) e não entra no
+ *   teto de desconto. Vale também no anual, para o de 12 meses nunca ter
+ *   menos que o de 6.
  */
 
 export const REGRAS_PRECO = {
@@ -20,6 +25,13 @@ export const REGRAS_PRECO = {
   anualCartaoOff: 10,
   /** Teto de desconto efetivo sobre a tabela mensal, somando tudo, em %. */
   tetoDescontoPercent: 25,
+  /** A partir de quantos meses de contrato entra a vantagem. */
+  vantagemMeses: 6,
+  /** Nome curto da vantagem, para chip e linha de orçamento. */
+  vantagem: "Sua marca como convidada em 1 episódio",
+  /** Texto completo, com a condição de agenda. */
+  vantagemDetalhe:
+    "Um representante da marca participa como convidado especialista em um episódio do quadro que combina com o seu segmento, com data combinada com a produção dentro do contrato.",
 } as const;
 
 export type Plan = {

@@ -539,13 +539,14 @@ export default function MonteSeuPlano() {
                     >
                       <span className="block font-bold">{d === 12 ? "1 ano" : `${d} meses`}</span>
                       {d === 12 && <span className="block text-[10px] text-emerald-400 font-bold">até 20% OFF no plano</span>}
+                      {d === 6 && <span className="block text-[10px] text-emerald-400 font-bold">+ você como convidado</span>}
                     </button>
                   );
                 })}
               </div>
               <p className="text-white/35 text-xs mt-2">
-                Planos e cotas têm contrato mínimo de {orc.minMeses} meses. No anual, 20% off no Pix à vista ou 10% off
-                em até 3x no cartão.
+                Planos e cotas têm contrato mínimo de {orc.minMeses} meses. A partir de 6 meses, sua marca participa como
+                convidada em um episódio. No anual, também 20% off no Pix à vista ou 10% off em até 3x no cartão.
               </p>
             </section>
 
@@ -593,7 +594,7 @@ export default function MonteSeuPlano() {
                       <div className="text-white font-semibold leading-tight">{l.label}</div>
                       <div className="text-white/40 text-xs mt-0.5">{l.detalhe}</div>
                     </div>
-                    <div className="text-white font-bold whitespace-nowrap">{l.valor === null ? "a consultar" : brl(l.valor)}</div>
+                    <div className="text-white font-bold whitespace-nowrap">{l.bonus ? <span className="text-emerald-400">incluso</span> : l.valor === null ? "a consultar" : brl(l.valor)}</div>
                   </li>
                 ))}
               </ul>

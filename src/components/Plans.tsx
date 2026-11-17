@@ -137,7 +137,8 @@ function PlanCard({ plan, isYearly }: { plan: Plan; isYearly: boolean }) {
               <span className="text-white/40 text-sm">/mês</span>
             </div>
             <p className="text-white/40 text-xs mt-1.5">
-              Contrato mínimo de {REGRAS_PRECO.minMeses} meses. Ou{" "}
+              Contrato mínimo de {REGRAS_PRECO.minMeses} meses; com {REGRAS_PRECO.vantagemMeses}, sua marca vira
+              convidada de um episódio. Ou{" "}
               <span className="text-gold-500/80 font-semibold">
                 R$&nbsp;{fmt(yearlyPrice)}/ano
               </span>{" "}
@@ -277,7 +278,8 @@ export default function Plans() {
 
         {/* Fine print */}
         <p className="text-center text-white/25 text-xs mt-4">
-          Mensal: Pix ou cartão, mês a mês, contrato mínimo de {REGRAS_PRECO.minMeses} meses. Anual:{" "}
+          Mensal: Pix ou cartão, mês a mês, contrato mínimo de {REGRAS_PRECO.minMeses} meses. A partir de{" "}
+          {REGRAS_PRECO.vantagemMeses} meses, sua marca participa como convidada em um episódio. Anual:{" "}
           {REGRAS_PRECO.anualPixOff}% off no Pix à vista ou {REGRAS_PRECO.anualCartaoOff}% off em até 3x sem juros no
           cartão; acima de 3x, o Mercado Pago cobra juros do comprador. Descontos não se somam. Os planos podem ser
           personalizados conforme o objetivo da marca e disponibilidade editorial.
