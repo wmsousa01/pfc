@@ -4,6 +4,7 @@ export type NavKey =
   | "pendencias"
   | "agenda"
   | "producao"
+  | "aoVivo"
   | "marketing"
   | "campanhas"
   | "parceiros"
@@ -20,6 +21,7 @@ export const ICONES = {
     "M22 12h-6l-2 3h-4l-2-3H2M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z",
   agenda: "M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
   producao: "M4 4h16v16H4zM8 4v16M16 4v16M4 9h4M4 15h4M16 9h4M16 15h4",
+  aoVivo: "M2 7h20v12H2zM12 13h.01M7 3l5 4 5-4",
   marketing: "M3 11v2a1 1 0 0 0 1 1h3l5 4V6L7 10H4a1 1 0 0 0-1 1zM16 8a5 5 0 0 1 0 8",
   campanhas: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
   parceiros:
@@ -51,6 +53,7 @@ export const NAV: NavGrupo[] = [
     itens: [
       { key: "agenda", href: "/admin/agenda", label: "Agenda", icon: ICONES.agenda },
       { key: "producao", href: "/admin/producao", label: "Produção", icon: ICONES.producao },
+      { key: "aoVivo", href: "/admin/ao-vivo", label: "Ao vivo", icon: ICONES.aoVivo },
       { key: "marketing", href: "/admin/marketing", label: "Marketing", icon: ICONES.marketing },
       { key: "campanhas", href: "/admin/campanhas", label: "Campanhas", icon: ICONES.campanhas },
     ],
