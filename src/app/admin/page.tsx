@@ -10,7 +10,13 @@ import {
   deleteHighlight,
   updateLeadStatus,
   deleteLead,
+  syncCheckoutAction,
 } from "./actions";
+import CopyButton from "@/components/CopyButton";
+import { listCheckouts } from "@/lib/checkout-store";
+import { STATUS_CHECKOUT, PERIODO_NOME, type Periodo } from "@/lib/checkout";
+import { plans } from "@/lib/planos";
+import { site } from "@/lib/config";
 
 const LEAD_STATUS_STYLES: Record<string, string> = {
   novo: "bg-gold-500/15 border-gold-500/40 text-gold-400",
@@ -42,6 +48,11 @@ export default async function AdminDashboard() {
   const partners = await getPartnersWithStats();
   const highlights = await getAllIgHighlights();
   const leads = await getLeads();
+  const checkouts = await listCheckouts();
+  const checkoutPorLead = new Map<string, (typeof checkouts)[number]>();
+  for (const c of checkouts) if (c.lead_id && !checkoutPorLead.has(c.lead_id)) checkoutPorLead.set(c.lead_id, c);
+  const pagos = checkouts.filter((c) => c.status === "pago");
+  const receita = pagos.reduce((sum, c) => sum + Number(c.valor), 0);
   const shop = summarizeShop(await getOrders({ limit: 500 }));
 
   const totalClicks30d = partners.reduce((s, p) => s + p.clicks_30d, 0);
@@ -55,9 +66,10 @@ export default async function AdminDashboard() {
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
         {/* Summary */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-8">
           {[
             { v: newLeads, l: "Leads novos" },
+            { v: pagos.length, l: "Vendas pelo site" },
             { v: partners.length, l: "Parceiros" },
             { v: activeCount, l: "Ativos" },
             { v: totalClicks30d, l: "Acessos (30 dias)" },
@@ -108,11 +120,15 @@ export default async function AdminDashboard() {
                     <th className="text-left font-medium px-3 py-3">Contato</th>
                     <th className="text-left font-medium px-3 py-3">Data</th>
                     <th className="text-left font-medium px-3 py-3">Status</th>
+                    <th className="text-left font-medium px-3 py-3">Jornada</th>
                     <th className="text-right font-medium px-5 py-3">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {leads.map((l) => (
+                  {leads.map((l) => {
+                    const ck = checkoutPorLead.get(l.id);
+                    const wa = l.whatsapp.length <= 11 ? `55${l.whatsapp}` : l.whatsapp;
+                    return (
                     <tr key={l.id} className="border-b border-[#1a1a1a] last:border-0 hover:bg-white/[0.02] align-top">
                       <td className="px-5 py-3">
                         <div className="text-white font-medium">{l.company}</div>
@@ -156,6 +172,40 @@ export default async function AdminDashboard() {
                           ))}
                         </form>
                       </td>
+                      <td className="px-3 py-3 min-w-[190px]">
+                        {ck ? (
+                          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${STATUS_CHECKOUT[ck.status]?.cor ?? ""}`}>
+                            {STATUS_CHECKOUT[ck.status]?.label ?? ck.status}
+                            {ck.status === "pago" && (ck.onboarding_done_at ? " · material ok" : " · sem material")}
+                          </span>
+                        ) : (
+                          <details className="text-xs">
+                            <summary className="cursor-pointer text-gold-500 hover:text-gold-400 font-medium">
+                              Mandar link de checkout
+                            </summary>
+                            <div className="mt-2 flex flex-col gap-1.5">
+                              {plans.map((p) => {
+                                const link = `${site.url}/contratar/${p.id}?lead=${l.id}`;
+                                const msg = `Oi, ${l.name.split(" ")[0]}! Segue o link para contratar o Plano ${p.name} do PFC, já com seus dados: ${link}`;
+                                return (
+                                  <div key={p.id} className="flex items-center gap-2">
+                                    <span className="text-white/60 w-24">{p.name}</span>
+                                    <CopyButton value={link} label="Copiar" className="text-white/50 hover:text-white" />
+                                    <a
+                                      href={`https://wa.me/${wa}?text=${encodeURIComponent(msg)}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-emerald-400 hover:text-emerald-300"
+                                    >
+                                      WhatsApp
+                                    </a>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </details>
+                        )}
+                      </td>
                       <td className="px-5 py-3 text-right">
                         <form action={deleteLead}>
                           <input type="hidden" name="id" value={l.id} />
@@ -165,7 +215,100 @@ export default async function AdminDashboard() {
                         </form>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Vendas pelo site (checkout → onboarding) */}
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold text-white">Vendas pelo site</h2>
+          <span className="text-white/40 text-sm">
+            {pagos.length} pagas · {receita.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+          </span>
+        </div>
+        <div className="bg-[#111] border border-[#222] rounded-xl overflow-hidden mb-12">
+          {checkouts.length === 0 ? (
+            <div className="p-8 text-center text-white/40 text-sm">
+              Nenhum checkout ainda. Apoio e Patrocinador são contratados direto em /parcerias; para o Master, mande o
+              link de checkout do lead acima.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-white/40 text-xs uppercase tracking-wider border-b border-[#222]">
+                    <th className="text-left font-medium px-5 py-3">Cliente</th>
+                    <th className="text-left font-medium px-3 py-3">Plano</th>
+                    <th className="text-right font-medium px-3 py-3">Valor</th>
+                    <th className="text-left font-medium px-3 py-3">Status</th>
+                    <th className="text-left font-medium px-3 py-3">Onboarding</th>
+                    <th className="text-right font-medium px-5 py-3">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {checkouts.map((c) => {
+                    const st = STATUS_CHECKOUT[c.status] ?? { label: c.status, cor: "" };
+                    const onboarding = `${site.url}/comecar/${c.onboarding_token}`;
+                    const wa = c.whatsapp.startsWith("55") ? c.whatsapp : `55${c.whatsapp}`;
+                    return (
+                      <tr key={c.id} className="border-b border-[#1a1a1a] last:border-0 align-top">
+                        <td className="px-5 py-3">
+                          <div className="text-white font-medium">{c.company}</div>
+                          <div className="text-white/40 text-xs">
+                            {c.name} · {new Date(c.created_at).toLocaleDateString("pt-BR")}
+                            {c.origem === "admin" && " · link do comercial"}
+                          </div>
+                        </td>
+                        <td className="px-3 py-3 text-white/60">
+                          {c.plan} · {PERIODO_NOME[c.periodo as Periodo] ?? c.periodo} · {c.metodo}
+                        </td>
+                        <td className="px-3 py-3 text-right text-white/80 whitespace-nowrap">
+                          {Number(c.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                        </td>
+                        <td className="px-3 py-3">
+                          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${st.cor}`}>{st.label}</span>
+                          {c.erro && <div className="text-red-400/80 text-xs mt-1 max-w-[220px]">{c.erro}</div>}
+                        </td>
+                        <td className="px-3 py-3 text-xs">
+                          {c.status !== "pago" ? (
+                            <span className="text-white/30">—</span>
+                          ) : c.onboarding_done_at ? (
+                            <span className="text-emerald-400">Material recebido</span>
+                          ) : (
+                            <span className="text-gold-400">Aguardando material</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3 text-right whitespace-nowrap text-xs">
+                          {c.status === "pago" ? (
+                            <div className="flex flex-col items-end gap-1">
+                              <a
+                                href={`https://wa.me/${wa}?text=${encodeURIComponent(`Oi, ${c.name.split(" ")[0]}! Seu onboarding no PFC: ${onboarding}`)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-emerald-400 hover:text-emerald-300"
+                              >
+                                Mandar onboarding
+                              </a>
+                              {c.partner_id && (
+                                <a href={`/admin/parceiros/${c.partner_id}`} className="text-gold-500 hover:text-gold-400">
+                                  Página do parceiro
+                                </a>
+                              )}
+                            </div>
+                          ) : (
+                            <form action={syncCheckoutAction}>
+                              <input type="hidden" name="id" value={c.id} />
+                              <button className="text-gold-500 hover:text-gold-400">Conferir no MP</button>
+                            </form>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

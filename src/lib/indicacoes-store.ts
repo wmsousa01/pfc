@@ -29,7 +29,7 @@ export async function parceiroDoCookie(): Promise<Reseller | null> {
 export async function gravarLead(
   lead: LeadPayload,
   extra: { interesse?: string; quadro?: string | null } = {},
-): Promise<{ error: string | null }> {
+): Promise<{ error: string | null; id?: string }> {
   const admin = createAdminSupabase();
   if (!admin) return { error: "sem service role" };
 
@@ -64,5 +64,5 @@ export async function gravarLead(
       origem: "link",
     });
   }
-  return { error: null };
+  return { error: null, id: leadId };
 }
