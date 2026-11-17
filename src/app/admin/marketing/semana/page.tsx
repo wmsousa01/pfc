@@ -185,7 +185,7 @@ export default async function SemanaPage({ searchParams }: { searchParams: { s?:
       cor: "yellow",
       texto: (
         <>
-          <b>{paraPromover.length}</b> Reel(s) de teste prontos para promover ao perfil (
+          <b>{paraPromover.length}</b> Reel(s) de teste anteriores a 17/11 (promoção manual) prontos para promover ao perfil (
           {paraPromover
             .slice(0, 3)
             .map((p) => p.title)
@@ -516,7 +516,8 @@ export default async function SemanaPage({ searchParams }: { searchParams: { s?:
               <p className="text-white/45 text-sm mt-2">Sem métricas nesta semana.</p>
             )}
             <p className="text-white/35 text-[11px] mt-2">
-              &quot;Promover&quot; = teste há {PROMOVER.aposHoras} h no ar com {PROMOVER.assistidoMs / 1000} s ou mais de tempo
+              Testes publicados desde 17/11 são promovidos automaticamente pelo Instagram. Para os anteriores,
+              &quot;promover&quot; = teste há {PROMOVER.aposHoras} h no ar com {PROMOVER.assistidoMs / 1000} s ou mais de tempo
               médio assistido e {int(PROMOVER.minViews)}+ views, ou {int(PROMOVER.views)} views. A promoção é feita no app; depois marque em{" "}
               <a href="/admin/marketing?view=testes" className="underline">
                 Reels de teste
