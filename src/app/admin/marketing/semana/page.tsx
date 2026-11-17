@@ -15,6 +15,7 @@ import {
 } from "@/lib/social/numeros-semana";
 import {
   IG_TESTES_BLOQUEIO,
+  IG_MAX_SEGUNDOS,
   JANELA,
   METAS,
   METRICAS_DIAS,
@@ -28,7 +29,7 @@ import {
   type LinhaSemana,
 } from "@/lib/social/ritmo";
 import { PLATFORMS, type SocialPost } from "@/lib/social/store";
-import { AUTO_POR_LIVE, HORARIOS, isYoutubeAutoPaused } from "@/lib/social/auto-youtube";
+import { AUTO_POR_LIVE, HORARIOS, HORARIOS_IG, isInstagramAutoPaused, isYoutubeAutoPaused } from "@/lib/social/auto-youtube";
 import {
   cancelarNumerosAction,
   devolverTestesAction,
@@ -110,7 +111,10 @@ export default async function SemanaPage({ searchParams }: { searchParams: { s?:
     getConfig(IG_TESTES_BLOQUEIO).catch(() => null),
     getEstado(segunda).catch(() => null),
   ]);
-  const ytAutoPausado = await isYoutubeAutoPaused().catch(() => false);
+  const [ytAutoPausado, igAutoPausado] = await Promise.all([
+    isYoutubeAutoPaused().catch(() => false),
+    isInstagramAutoPaused().catch(() => false),
+  ]);
   const posts = [...((pubRes.data ?? []) as Post[]), ...((abertosRes.data ?? []) as Post[])];
   const futuros = (futurosRes.data ?? []) as { platform: string }[];
   const recusados = recusadosRes.count ?? 0;
@@ -264,6 +268,32 @@ export default async function SemanaPage({ searchParams }: { searchParams: { s?:
         buttonClassName={btnAuto}
       >
         {!ytAutoPausado && <input type="hidden" name="pausar" value="1" />}
+      </ProducaoForm>
+    ),
+  });
+  alertas.push({
+    cor: igAutoPausado ? "yellow" : "violet",
+    texto: igAutoPausado ? (
+      <>
+        O agendamento automático do Instagram está <b>pausado</b>. Os cortes das lives novas só vão para o Instagram se forem programados à mão.
+      </>
+    ) : (
+      <>
+        <b>Instagram automático:</b> os mesmos {AUTO_POR_LIVE} cortes escolhidos pela IA (só verticais de até {IG_MAX_SEGUNDOS} s) saem
+        como Reel de teste às {HORARIOS_IG.map((h) => `${h}h`).join(", ")}, e o Instagram promove sozinho os que forem bem. O Reel do
+        perfil continua à mão.
+      </>
+    ),
+    acao: (
+      <ProducaoForm
+        action={youtubeAutoAction}
+        label={igAutoPausado ? "Retomar" : "Pausar"}
+        pending="Salvando…"
+        okMessage="Salvo."
+        buttonClassName={btnAuto}
+      >
+        <input type="hidden" name="rede" value="instagram" />
+        {!igAutoPausado && <input type="hidden" name="pausar" value="1" />}
       </ProducaoForm>
     ),
   });
