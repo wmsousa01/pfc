@@ -729,6 +729,14 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
                 <CopyButton value={`${espelho}/tela`} label="Copiar" className={btn2} />
                 <CopyButton value={`${espelho}/tela?fundo=transparente`} label="Copiar com fundo transparente" className={btn2} />
               </div>
+              {ep.quadro === "pfc-news" && (
+                <div className="flex flex-wrap items-center gap-2 text-xs text-white/50">
+                  <span>Telejornal para o OBS (por cima da câmera), com a imagem ao lado do apresentador e o GC:</span>
+                  <CopyButton value={`${espelho}/jornal?so=imagem`} label="Copiar só a imagem" className={btn2} />
+                  <CopyButton value={`${espelho}/jornal?so=gc`} label="Copiar só o GC" className={btn2} />
+                  <a href={`${espelho}/jornal?previa=2`} target="_blank" className={btn2}>Conferir ↗</a>
+                </div>
+              )}
               <p className="text-white/50 text-xs">
                 {blocos.length} blocos · {noEspelho} {noEspelho === 1 ? "imagem" : "imagens"} no espelho
                 {ep.espelho_atual != null && <> · no ar: bloco {ep.espelho_atual + 1}</>}

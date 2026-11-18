@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { episodioPorEspelho, escolherTela, imagemNaTela, materiaisDoEspelho, moverEspelho, revisaoEspelho } from "@/lib/agenda/espelho";
+import { episodioPorEspelho, escolherTela, imagemNaTela, jornalNoAr, materiaisDoEspelho, moverEspelho, revisaoEspelho } from "@/lib/agenda/espelho";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +14,7 @@ export async function GET(_req: Request, { params }: Ctx) {
   if (!ep) return NextResponse.json({ error: "Link inválido." }, { status: 404 });
   const materiais = await materiaisDoEspelho(ep.id);
   return NextResponse.json(
-    { atual: ep.espelho_atual, tela: imagemNaTela(ep, materiais), rev: revisaoEspelho(ep, materiais) },
+    { atual: ep.espelho_atual, tela: imagemNaTela(ep, materiais), jornal: jornalNoAr(ep, materiais), rev: revisaoEspelho(ep, materiais) },
     { headers: { "Cache-Control": "no-store" } }
   );
 }
