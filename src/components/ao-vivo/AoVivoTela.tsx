@@ -1,11 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ANIMACAO_L_MS, ESCALA_L, ObsPrograma, configDoHash, type ObsStatus } from "@/lib/ao-vivo/obs";
 import type { EstadoTela, ItemTela, Posicao } from "@/lib/ao-vivo/tipos";
 
 const POLL_NO_AR_MS = 1000;
 const POLL_PARADO_MS = 3000;
-const SAIDA_MS = 500;
+const SAIDA_MS = ANIMACAO_L_MS;
+/** O que sobra para o patrocinador no L, em vw (a fonte é 16:9). */
+const L_DIREITA = (1 - ESCALA_L) * 100;
+const L_BAIXO = (1 - ESCALA_L) * 56.25;
 /** Dois logos no mesmo canto se revezam. */
 const RODIZIO_MS = 8000;
 
@@ -24,6 +28,22 @@ export default function AoVivoTela({ token, teste }: { token: string; teste: boo
   const [destaque, setDestaque] = useState<Vivo[]>([]);
   const [status, setStatus] = useState("conectando");
   const [giro, setGiro] = useState(0);
+  const [obsStatus, setObsStatus] = useState<ObsStatus | null>(null);
+  const obs = useRef<ObsPrograma | null>(null);
+  const placasBaixadas = useRef(new Set<string>());
+
+  // A senha do OBS vem depois do # na URL da fonte; sem ela, o L só cobre as bordas.
+  useEffect(() => {
+    const cfg = configDoHash(window.location.hash);
+    if (!cfg) return;
+    const o = new ObsPrograma(cfg, setObsStatus);
+    obs.current = o;
+    o.iniciar();
+    return () => {
+      o.parar();
+      obs.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     const fundo = teste ? "#1b1f24" : "transparent";
@@ -52,6 +72,11 @@ export default function AoVivoTela({ token, teste }: { token: string; teste: boo
           setStatus(e.sessao ? `live ${e.sessao.status}` : "sem live no ar");
           setCanto((cs) => trocar(cs, e.canto));
           setDestaque((ds) => trocar(ds, e.destaque ? [e.destaque] : []));
+          for (const id of e.placasDaFila) {
+            if (placasBaixadas.current.has(id)) continue;
+            placasBaixadas.current.add(id);
+            new Image().src = `/ao-vivo/tela/${token}/placa/${id}`;
+          }
         } else {
           setStatus(`erro ${r.status}`);
         }
@@ -78,30 +103,44 @@ export default function AoVivoTela({ token, teste }: { token: string; teste: boo
   }, [canto, destaque]);
 
   const vinheta = destaque.find((d) => d.tipo === "vinheta" && !d.saindo);
+  const emL = destaque.some((d) => d.tipo === "l" && !d.saindo);
+  useEffect(() => obs.current?.espremer(emL), [emL, obsStatus]);
   const porCanto = new Map<Posicao, Vivo[]>();
   for (const c of canto) porCanto.set(c.posicao, [...(porCanto.get(c.posicao) ?? []), c]);
 
   return (
     <div className="fixed inset-0 overflow-hidden select-none" style={{ fontFamily: "Inter, Arial, sans-serif" }}>
       <style>{CSS}</style>
-      {!vinheta &&
-        Array.from(porCanto.entries()).map(([pos, itens]) => {
-          const ativos = itens.filter((i) => !i.saindo);
-          const mostra = ativos.length ? ativos[giro % ativos.length] : itens[0];
-          return <Logo key={`${pos}-${mostra.id}`} item={mostra} saindo={mostra.saindo || !ativos.length} />;
-        })}
+      {/* No L, os logos acompanham o vídeo encolhido em vez de cair sobre a arte. */}
+      <div
+        className="absolute top-0 left-0"
+        style={{
+          right: emL ? `${L_DIREITA}vw` : 0,
+          bottom: emL ? `${L_BAIXO}vw` : 0,
+          transition: `right ${ANIMACAO_L_MS}ms ${CURVA_L}, bottom ${ANIMACAO_L_MS}ms ${CURVA_L}`,
+        }}
+      >
+        {!vinheta &&
+          Array.from(porCanto.entries()).map(([pos, itens]) => {
+            const ativos = itens.filter((i) => !i.saindo);
+            const mostra = ativos.length ? ativos[giro % ativos.length] : itens[0];
+            return <Logo key={`${pos}-${mostra.id}`} item={mostra} saindo={mostra.saindo || !ativos.length} />;
+          })}
+      </div>
       {destaque.map((d) =>
         d.tipo === "vinheta" ? (
           <Vinheta key={d.id} item={d} />
+        ) : d.tipo === "l" ? (
+          <InsercaoL key={d.id} item={d} />
         ) : d.tipo === "qr" ? (
-          <Qr key={d.id} item={d} />
+          <Qr key={d.id} item={d} token={token} />
         ) : (
           <Faixa key={d.id} item={d} />
         )
       )}
       {teste && (
         <div className="absolute top-3 left-3 text-white/70 text-sm bg-black/50 rounded px-2 py-1">
-          Tela do OBS · {status}
+          Tela do OBS · {status}{obsStatus ? ` · OBS: ${obsStatus}` : ""}
         </div>
       )}
     </div>
@@ -116,6 +155,8 @@ function trocar(atual: Vivo[], novos: ItemTela[]): Vivo[] {
   // A URL assinada muda de vez em quando: o item que já está no ar mantém a dele.
   return [...fica, ...novos.filter((n) => !tem.has(n.id)).map((n) => ({ ...n, saindo: false }))];
 }
+
+const CURVA_L = "cubic-bezier(.45,0,.55,1)";
 
 const anim = (saindo: boolean, entra: string) => ({
   animation: `${saindo ? "aoSai" : entra} ${saindo ? SAIDA_MS : 650}ms cubic-bezier(.2,.8,.2,1) both`,
@@ -197,48 +238,122 @@ function Faixa({ item }: { item: Vivo }) {
   );
 }
 
-function Qr({ item }: { item: Vivo }) {
+/** Canto superior esquerdo, com 463 px de altura em 1080: o lugar da placa usada hoje no OBS. */
+const POS_PLACA: React.CSSProperties = { left: 0, top: 0 };
+const ALTURA_PLACA = "24.1vw";
+
+function Qr({ item, token }: { item: Vivo; token: string }) {
+  const [carregou, setCarregou] = useState(false);
+  const [falhou, setFalhou] = useState(false);
   const arte = item.midia?.mime.startsWith("image/") ? item.midia.url : null;
-  const pos: React.CSSProperties = { right: "3vw", top: "50%", transform: "translateY(-50%)" };
-  if (arte)
+
+  if (!falhou)
     return (
-      <div className="absolute" style={pos}>
+      <div className="absolute" style={{ ...POS_PLACA, visibility: carregou ? "visible" : "hidden", ...(carregou ? anim(item.saindo, "aoEsq") : {}) }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={arte} alt="" style={{ maxWidth: "24vw", maxHeight: "44vw", ...anim(item.saindo, "aoDir") }} />
+        <img
+          src={arte ?? `/ao-vivo/tela/${token}/placa/${item.id}`}
+          alt=""
+          onLoad={() => setCarregou(true)}
+          onError={() => setFalhou(true)}
+          style={{ height: ALTURA_PLACA, width: "auto", display: "block" }}
+        />
       </div>
     );
+
+  // A placa não gerou: o QR simples garante a entrega do parceiro.
   return (
-    <div className="absolute" style={pos}>
+    <div
+      className="absolute flex flex-col items-center"
+      style={{
+        ...POS_PLACA,
+        width: "13vw",
+        background: "#fff",
+        borderRadius: "0.8vw",
+        padding: "0.8vw",
+        borderTop: `0.35vw solid ${item.parceiro.cor}`,
+        ...anim(item.saindo, "aoEsq"),
+      }}
+    >
+      {item.qr && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={item.qr} alt="" style={{ width: "11.4vw", height: "11.4vw", imageRendering: "pixelated" }} />
+      )}
+      <span className="text-center" style={{ fontSize: "0.9vw", fontWeight: 800, color: "#111", marginTop: "0.4vw", lineHeight: 1.2 }}>
+        {item.texto || "Aponte a câmera do celular"}
+      </span>
+      {item.link && <span style={{ fontSize: "0.62vw", color: "#555", marginTop: "0.2vw" }}>{item.link}</span>}
+    </div>
+  );
+}
+
+/** Coluna da direita e faixa de baixo; o buraco do L é onde o vídeo encolhido fica. */
+function InsercaoL({ item }: { item: Vivo }) {
+  const arte = item.midia?.mime.startsWith("image/") ? item.midia.url : null;
+  const painel = (entra: string, sai: string): React.CSSProperties => ({
+    background: item.parceiro.fundo,
+    animation: `${item.saindo ? sai : entra} ${ANIMACAO_L_MS}ms ${CURVA_L} both`,
+  });
+  return (
+    <>
       <div
-        className="flex flex-col items-center"
+        className="absolute flex flex-col items-center"
         style={{
-          width: "15vw",
-          background: "#fff",
-          borderRadius: "1vw",
-          padding: "1.1vw",
-          boxShadow: "0 1vw 3vw rgba(0,0,0,.45)",
-          borderTop: `0.45vw solid ${item.parceiro.cor}`,
-          ...anim(item.saindo, "aoDir"),
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: `${L_DIREITA}vw`,
+          padding: "1.6vw 1.4vw",
+          borderLeft: `0.22vw solid ${item.parceiro.cor}`,
+          ...painel("aoLDir", "aoLDirSai"),
         }}
       >
-        {item.parceiro.logo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.parceiro.logo} alt="" style={{ maxHeight: "3vw", maxWidth: "11vw", objectFit: "contain" }} />
-        ) : (
-          <span style={{ fontSize: "1.2vw", fontWeight: 800, color: "#111" }}>{item.parceiro.nome}</span>
-        )}
-        {item.qr && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.qr} alt="" style={{ width: "12.4vw", height: "12.4vw", marginTop: "0.7vw", imageRendering: "pixelated" }} />
-        )}
-        <span className="text-center" style={{ fontSize: "1vw", fontWeight: 800, color: "#111", marginTop: "0.5vw", lineHeight: 1.2 }}>
-          {item.texto || "Aponte a câmera do celular"}
+        <span className="uppercase" style={{ fontSize: "0.9vw", letterSpacing: "0.22em", fontWeight: 800, color: "rgba(255,255,255,.8)" }}>
+          Oferecimento
         </span>
-        {item.link && (
-          <span style={{ fontSize: "0.7vw", color: "#555", marginTop: "0.3vw" }}>{item.link}</span>
+        <div className="flex-1 min-h-0 w-full flex flex-col items-center justify-center" style={{ margin: "1vw 0" }}>
+          {arte ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={arte} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+          ) : (
+            item.qr && (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={item.qr} alt="" style={{ width: "15vw", height: "15vw", borderRadius: "0.6vw", imageRendering: "pixelated" }} />
+                <span style={{ fontSize: "1.05vw", fontWeight: 800, color: "#fff", marginTop: "0.8vw" }}>Aponte a câmera</span>
+                {item.link && <span style={{ fontSize: "0.72vw", color: "rgba(255,255,255,.7)", marginTop: "0.2vw" }}>{item.link}</span>}
+              </>
+            )
+          )}
+        </div>
+        {/* Placa branca: logo escuro sumiria no fundo da marca. */}
+        <div className="flex items-center justify-center" style={{ background: "#fff", borderRadius: "0.7vw", padding: "0.7vw 1vw", width: "100%", height: "6.4vw" }}>
+          {item.parceiro.logo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={item.parceiro.logo} alt={item.parceiro.nome} style={{ height: "100%", width: "auto", maxWidth: "100%", objectFit: "contain" }} />
+          ) : (
+            <span style={{ fontSize: "1.7vw", fontWeight: 800, color: "#111" }}>{item.parceiro.nome}</span>
+          )}
+        </div>
+      </div>
+      <div
+        className="absolute flex flex-col justify-center"
+        style={{
+          left: 0,
+          bottom: 0,
+          width: `${100 - L_DIREITA}vw`,
+          height: `${L_BAIXO}vw`,
+          padding: "0.8vw 2.4vw",
+          borderTop: `0.22vw solid ${item.parceiro.cor}`,
+          ...painel("aoLBaixo", "aoLBaixoSai"),
+        }}
+      >
+        <span style={{ fontSize: "3vw", lineHeight: 1.12, fontWeight: 800, color: "#fff" }}>{item.texto || item.parceiro.nome}</span>
+        {item.legenda && (
+          <span style={{ fontSize: "0.78vw", lineHeight: 1.3, color: "rgba(255,255,255,.72)", marginTop: "0.6vw" }}>{item.legenda}</span>
         )}
       </div>
-    </div>
+    </>
   );
 }
 
@@ -277,4 +392,8 @@ const CSS = `
 @keyframes aoEsq { from { opacity: 0; transform: translateX(-4vw) } to { opacity: 1; transform: none } }
 @keyframes aoDir { from { opacity: 0; transform: translateX(4vw) } to { opacity: 1; transform: none } }
 @keyframes aoSai { from { opacity: 1 } to { opacity: 0 } }
+@keyframes aoLDir { from { transform: translateX(100%) } to { transform: none } }
+@keyframes aoLBaixo { from { transform: translateY(100%) } to { transform: none } }
+@keyframes aoLDirSai { from { transform: none } to { transform: translateX(100%) } }
+@keyframes aoLBaixoSai { from { transform: none } to { transform: translateY(100%) } }
 `;

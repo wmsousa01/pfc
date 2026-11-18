@@ -73,6 +73,13 @@ async function Quadros({ telas, cotas }: { telas: Awaited<ReturnType<typeof gara
           <li>Pronto: ela fica transparente até a live começar. Quem opera abre a <b>régie</b> no celular e aperta &quot;Começar a live&quot;.</li>
           <li>Para conferir sem o OBS, abra a tela com <code>?teste=1</code> no navegador.</li>
         </ol>
+        <p className="text-white font-semibold mt-4">Para a inserção em L encolher o vídeo (uma vez por computador)</p>
+        <ol className="list-decimal pl-5 mt-2 space-y-1.5">
+          <li>No OBS, abra <b>Ferramentas → Configurações do servidor WebSocket</b>, ative o servidor e copie a senha.</li>
+          <li>No fim da URL da fonte Navegador, acrescente <code>#obs=SENHA</code>. O que vem depois do # fica só no OBS e não é enviado ao site.</li>
+          <li>O vídeo que encolhe é a fonte <b>ATEM</b>. Se a sua tiver outro nome, acrescente <code>&amp;fonte=NOME</code>.</li>
+          <li>Só encolhe quando o ATEM está em tela cheia. Em cenas como a &quot;Tela + cam&quot;, ou sem esses passos, o L cobre as bordas do vídeo.</li>
+        </ol>
       </details>
       <div className="grid gap-3 mt-4 md:grid-cols-2">
         {ordenadas.map((t, i) => {

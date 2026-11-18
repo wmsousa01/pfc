@@ -6,6 +6,7 @@ import { quadros as quadrosSite, site } from "@/lib/config";
 import { BUCKET, db } from "@/lib/producao/store";
 import { QUADROS, QUADRO_IDS, isQuadroId, type QuadroId } from "@/lib/producao/quadros";
 import { trackingUrl } from "@/lib/qr";
+import type { Partner } from "@/lib/types";
 import { montarFila, type CotaPlano } from "./plano";
 import type {
   EstadoRegie,
@@ -38,6 +39,7 @@ export type Cota = {
   vezes: number | null;
   a_cada_min: number | null;
   texto: string | null;
+  legenda: string | null;
   midia_path: string | null;
   midia_mime: string | null;
   posicao: Posicao;
@@ -314,23 +316,26 @@ async function qrDo(slug: string): Promise<string> {
 
 export async function estadoTela(quadro: QuadroId): Promise<EstadoTela> {
   const sessao = await sessaoAtiva(quadro);
-  if (!sessao) return { sessao: null, canto: [], destaque: null };
+  if (!sessao) return { sessao: null, canto: [], destaque: null, placasDaFila: [] };
   await avancar(sessao.id);
 
-  const { data, error } = await db()
-    .from("ao_vivo_insercoes")
-    .select("id, tipo, momento, cota:ao_vivo_cotas(texto, midia_path, midia_mime, posicao), parceiro:partners(slug, name, logo_url, accent)")
-    .eq("sessao_id", sessao.id)
-    .eq("status", "no_ar")
-    .order("inicio_em");
+  const [{ data, error }, { data: fila }] = await Promise.all([
+    db()
+      .from("ao_vivo_insercoes")
+      .select("id, tipo, momento, cota:ao_vivo_cotas(texto, legenda, midia_path, midia_mime, posicao), parceiro:partners(slug, name, logo_url, accent, color_bg)")
+      .eq("sessao_id", sessao.id)
+      .eq("status", "no_ar")
+      .order("inicio_em"),
+    db().from("ao_vivo_insercoes").select("id").eq("sessao_id", sessao.id).eq("status", "pendente").eq("tipo", "qr").limit(8),
+  ]);
   if (error) throw new Error(error.message);
 
   type Linha = {
     id: string;
     tipo: TipoInsercao;
     momento: Momento;
-    cota: { texto: string | null; midia_path: string | null; midia_mime: string | null; posicao: Posicao } | null;
-    parceiro: { slug: string; name: string; logo_url: string | null; accent: string | null } | null;
+    cota: { texto: string | null; legenda: string | null; midia_path: string | null; midia_mime: string | null; posicao: Posicao } | null;
+    parceiro: { slug: string; name: string; logo_url: string | null; accent: string | null; color_bg: string | null } | null;
   };
   const itens: ItemTela[] = await Promise.all(
     ((data ?? []) as unknown as Linha[]).map(async (l) => ({
@@ -339,24 +344,41 @@ export async function estadoTela(quadro: QuadroId): Promise<EstadoTela> {
       momento: l.momento,
       posicao: l.cota?.posicao ?? "inferior-direito",
       texto: l.cota?.texto ?? null,
+      legenda: l.cota?.legenda ?? null,
       parceiro: {
         nome: l.parceiro?.name ?? "",
         logo: l.parceiro?.logo_url ?? null,
         cor: l.parceiro?.accent || "#FFD700",
+        fundo: l.parceiro?.color_bg || "#0c0c0c",
       },
       midia:
         l.cota?.midia_path && l.cota.midia_mime
           ? await urlDa(l.cota.midia_path).then((url) => (url ? { url, mime: l.cota!.midia_mime! } : null))
           : null,
-      qr: l.tipo === "qr" && l.parceiro ? await qrDo(l.parceiro.slug) : null,
-      link: l.tipo === "qr" && l.parceiro ? `${site.url.replace(/^https?:\/\/(www\.)?/, "")}/go/${l.parceiro.slug}` : null,
+      qr: (l.tipo === "qr" || l.tipo === "l") && l.parceiro ? await qrDo(l.parceiro.slug) : null,
+      link: (l.tipo === "qr" || l.tipo === "l") && l.parceiro ? `${site.url.replace(/^https?:\/\/(www\.)?/, "")}/go/${l.parceiro.slug}` : null,
     }))
   );
   return {
     sessao: { id: sessao.id, status: sessao.status },
     canto: itens.filter((i) => i.tipo === "logo"),
     destaque: itens.find((i) => i.tipo !== "logo") ?? null,
+    placasDaFila: (fila ?? []).map((f) => f.id as string),
   };
+}
+
+/** O parceiro da placa, se a inserção de QR é mesmo de uma live deste link da tela. */
+export async function parceiroDaPlaca(token: string, insercaoId: string): Promise<Partner | null> {
+  const quadro = await quadroDaTela(token);
+  if (!quadro || !/^[0-9a-f-]{36}$/i.test(insercaoId)) return null;
+  const { data } = await db()
+    .from("ao_vivo_insercoes")
+    .select("tipo, sessao:ao_vivo_sessoes!inner(quadro), parceiro:partners(*)")
+    .eq("id", insercaoId)
+    .eq("tipo", "qr")
+    .eq("sessao.quadro", quadro)
+    .maybeSingle();
+  return (data as unknown as { parceiro: Partner | null } | null)?.parceiro ?? null;
 }
 
 // ---------------------------------------------------------------- régie

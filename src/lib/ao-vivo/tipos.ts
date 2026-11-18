@@ -3,7 +3,7 @@
  * também usa (tela do OBS, régie e formulário das cotas).
  */
 
-export type TipoInsercao = "logo" | "faixa" | "qr" | "vinheta";
+export type TipoInsercao = "logo" | "faixa" | "l" | "qr" | "vinheta";
 export type Momento = "abertura" | "durante" | "encerramento" | "continuo";
 export type Posicao = "superior-esquerdo" | "superior-direito" | "inferior-esquerdo" | "inferior-direito";
 export type StatusInsercao = "pendente" | "no_ar" | "exibida" | "pulada" | "perdida";
@@ -12,7 +12,8 @@ export type StatusSessao = "no_ar" | "encerramento" | "encerrada";
 export const TIPOS: Record<TipoInsercao, { label: string; dica: string; duracao: number }> = {
   logo: { label: "Logo no canto", dica: "A marca num canto da tela, por um tempo ou o episódio todo.", duracao: 60 },
   faixa: { label: "Faixa (lower third)", dica: "“Oferecimento” com uma frase curta, na parte de baixo.", duracao: 12 },
-  qr: { label: "QR na tela", dica: "O QR com tracking do parceiro (/go/slug?src=qr) e uma chamada.", duracao: 20 },
+  l: { label: "L (vídeo encolhe)", dica: "O vídeo vai para o canto e a marca ocupa a coluna da direita e a faixa de baixo.", duracao: 20 },
+  qr: { label: "Placa do QR", dica: "A placa do parceiro no canto superior esquerdo, com o QR de tracking. O texto vem do cadastro da placa.", duracao: 20 },
   vinheta: { label: "Vinheta em vídeo", dica: "Vídeo em tela cheia, com som. A duração vem do arquivo.", duracao: 8 },
 };
 
@@ -49,12 +50,14 @@ export type ItemTela = {
   momento: Momento;
   posicao: Posicao;
   texto: string | null;
-  parceiro: { nome: string; logo: string | null; cor: string };
+  /** Letras miúdas do L. */
+  legenda: string | null;
+  parceiro: { nome: string; logo: string | null; cor: string; fundo: string };
   /** Vídeo da vinheta ou arte própria (imagem), com URL assinada. */
   midia: { url: string; mime: string } | null;
-  /** QR em data URL (PNG), só no tipo qr. */
+  /** QR em data URL (PNG), nos tipos qr e l. */
   qr: string | null;
-  /** O link do QR escrito por extenso (pfctv.com.br/go/slug), só no tipo qr. */
+  /** O link do QR escrito por extenso (pfctv.com.br/go/slug), nos tipos qr e l. */
   link: string | null;
 };
 
@@ -63,6 +66,8 @@ export type EstadoTela = {
   sessao: { id: string; status: StatusSessao } | null;
   canto: ItemTela[];
   destaque: ItemTela | null;
+  /** Inserções de QR que vêm aí: a tela já baixa as placas para entrarem sem atraso. */
+  placasDaFila: string[];
 };
 
 /** Uma linha da fila, como a régie vê. */
