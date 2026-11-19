@@ -30,6 +30,18 @@ export const AJUSTES_PADRAO: Ajustes = {
   profundidade: 25,
 };
 
+/** Faixa de cada régua, usada na tela e para validar o ajuste salvo. */
+export const LIMITES: Record<keyof Ajustes, [number, number]> = {
+  faixas: [0, 200],
+  exposicao: [-100, 100],
+  altas: [0, 100],
+  sombras: [-100, 100],
+  contraste: [0, 100],
+  cor: [0, 100],
+  nitidez: [0, 100],
+  profundidade: [0, 100],
+};
+
 export const SEM_TRATAMENTO: Omit<Ajustes, "faixas"> = {
   exposicao: 0,
   altas: 0,

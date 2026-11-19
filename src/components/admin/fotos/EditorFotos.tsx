@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { restaurarPresetAction, salvarPresetAction } from "@/app/admin/fotos/actions";
 import type { ModoDirecao } from "@/lib/fotos/faixas";
 import { calcularRecorte, ENQUADRO_PADRAO, FORMATOS, tamanhoFinal, type Enquadro, type Qualidade } from "@/lib/fotos/enquadro";
-import { AJUSTES_PADRAO, SEM_TRATAMENTO, type Ajustes } from "@/lib/fotos/tratamento";
+import { mesmoPreset, PRESET_PADRAO, type Preset } from "@/lib/fotos/preset";
+import { SEM_TRATAMENTO, type Ajustes } from "@/lib/fotos/tratamento";
 import type { Pedido, Resposta, ResumoFaixas } from "@/lib/fotos/worker";
 
 type Foto = {
@@ -106,11 +108,20 @@ function nomeFinal(nome: string): string {
   return `${nome.replace(/\.[^.]+$/, "").replace(/\.(jpe?g|png|webp)$/i, "")}-pfc.jpg`;
 }
 
-export default function EditorFotos() {
+export type QuadroFoto = { id: string; nome: string; cor: string };
+
+const LEMBRAR_QUADRO = "pfc-fotos-quadro";
+
+export default function EditorFotos({ quadros, presets }: { quadros: QuadroFoto[]; presets: Record<string, Preset> }) {
+  const [salvos, setSalvos] = useState(presets);
+  const [quadro, setQuadro] = useState(quadros[0]?.id ?? "");
+  const presetDe = (q: string) => salvos[q] ?? PRESET_PADRAO;
   const [fotos, setFotos] = useState<Foto[]>([]);
   const [ativaId, setAtivaId] = useState<string | null>(null);
-  const [ajustes, setAjustes] = useState<Ajustes>(AJUSTES_PADRAO);
-  const [qualidade, setQualidade] = useState<Qualidade>("instagram");
+  const [ajustes, setAjustes] = useState<Ajustes>(() => presetDe(quadros[0]?.id ?? "").ajustes);
+  const [qualidade, setQualidade] = useState<Qualidade>(() => presetDe(quadros[0]?.id ?? "").qualidade);
+  const [salvando, iniciarSalvar] = useTransition();
+  const [aviso, setAviso] = useState<string | null>(null);
   const [corte, setCorte] = useState(50);
   const [processando, setProcessando] = useState(false);
   const [exportando, setExportando] = useState<string | null>(null);
@@ -127,6 +138,30 @@ export default function EditorFotos() {
   const ativa = fotos.find((f) => f.id === ativaId) ?? null;
 
   const enviar = useCallback((p: Pedido) => workerRef.current?.postMessage(p), []);
+
+  /** Cada quadro abre com o ajuste salvo dele; as fotos já abertas mudam de formato junto. */
+  function escolherQuadro(q: string) {
+    const preset = presetDe(q);
+    setQuadro(q);
+    setAjustes(preset.ajustes);
+    setQualidade(preset.qualidade);
+    setAviso(null);
+    setFotos((l) => l.map((f) => (f.enquadro.formato === preset.formato ? f : { ...f, enquadro: { ...f.enquadro, formato: preset.formato, zoom: 1 } })));
+    try {
+      localStorage.setItem(LEMBRAR_QUADRO, q);
+    } catch {
+      // Sem armazenamento: só não lembra o quadro na próxima visita.
+    }
+  }
+
+  useEffect(() => {
+    try {
+      const q = localStorage.getItem(LEMBRAR_QUADRO);
+      if (q && q !== quadro && quadros.some((x) => x.id === q)) escolherQuadro(q);
+    } catch {
+      // Sem armazenamento: fica o primeiro quadro.
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const worker = new Worker(new URL("../../../lib/fotos/worker.ts", import.meta.url));
@@ -192,7 +227,7 @@ export default function EditorFotos() {
     for (const arquivo of Array.from(lista)) {
       if (!arquivo.type.startsWith("image/") && !/\.(heic|heif)$/i.test(arquivo.name)) continue;
       const id = crypto.randomUUID();
-      novas.push({ id, nome: arquivo.name, largura: 0, altura: 0, estado: "abrindo", enquadro: ENQUADRO_PADRAO, modo: "auto" });
+      novas.push({ id, nome: arquivo.name, largura: 0, altura: 0, estado: "abrindo", enquadro: { ...ENQUADRO_PADRAO, formato: presetDe(quadro).formato }, modo: "auto" });
       enviar({ tipo: "abrir", id, arquivo });
     }
     if (!novas.length) {
@@ -259,6 +294,83 @@ export default function EditorFotos() {
       ? tamanhoFinal(calcularRecorte(ativa.largura, ativa.altura, ativa.enquadro), ativa.enquadro.formato, qualidade)
       : null;
   const tratamentoLigado = CONTROLES.some((c) => ajustes[c.chave] !== SEM_TRATAMENTO[c.chave]);
+  const salvo = presetDe(quadro);
+  const atual: Preset = { ajustes, qualidade, formato: ativa?.enquadro.formato ?? salvo.formato };
+  const alterado = !mesmoPreset(atual, salvo);
+  const nomeQuadro = quadros.find((q) => q.id === quadro)?.nome ?? "quadro";
+
+  function salvar() {
+    setAviso(null);
+    iniciarSalvar(async () => {
+      const r = await salvarPresetAction(quadro, atual);
+      if (r.ok && r.preset) {
+        setSalvos((s) => ({ ...s, [quadro]: r.preset! }));
+        setAviso(`Ajuste do ${nomeQuadro} salvo para toda a equipe.`);
+      } else setAviso(r.erro ?? "Não consegui salvar.");
+    });
+  }
+
+  function restaurar() {
+    setAviso(null);
+    iniciarSalvar(async () => {
+      const r = await restaurarPresetAction(quadro);
+      if (!r.ok) return setAviso(r.erro ?? "Não consegui restaurar.");
+      setSalvos((s) => {
+        const resto = { ...s };
+        delete resto[quadro];
+        return resto;
+      });
+      setAjustes(PRESET_PADRAO.ajustes);
+      setQualidade(PRESET_PADRAO.qualidade);
+      setAviso(`O ${nomeQuadro} voltou ao ajuste padrão.`);
+    });
+  }
+
+  const seletorQuadro = (
+    <section className="rounded-xl border border-[#1f1f1f] bg-[#111] p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-white text-sm font-semibold">Quadro</h2>
+        <span className={`text-xs ${alterado ? "text-yellow-300" : "text-white/45"}`}>
+          {alterado ? "Alterado, ainda não salvo" : salvos[quadro] ? "Usando o ajuste salvo" : "Usando o ajuste padrão"}
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-1.5 mt-3">
+        {quadros.map((q) => (
+          <Opcao key={q.id} ativa={quadro === q.id} onClick={() => escolherQuadro(q.id)}>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: q.cor }} aria-hidden />
+              {q.nome}
+            </span>
+          </Opcao>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center gap-2 mt-3">
+        <button
+          type="button"
+          disabled={!alterado || salvando}
+          onClick={salvar}
+          className="min-h-9 px-3 rounded-lg bg-gold-500 text-black text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {salvando ? "Salvando…" : `Salvar como ajuste do ${nomeQuadro}`}
+        </button>
+        {alterado && (
+          <button type="button" onClick={() => escolherQuadro(quadro)} className="min-h-9 px-2 text-xs text-white/65 hover:text-white">
+            Desfazer mudanças
+          </button>
+        )}
+        {salvos[quadro] && !alterado && (
+          <button type="button" disabled={salvando} onClick={restaurar} className="min-h-9 px-2 text-xs text-white/65 hover:text-white">
+            Voltar ao padrão
+          </button>
+        )}
+      </div>
+      {aviso && (
+        <p role="status" className="text-xs text-white/70 mt-2">
+          {aviso}
+        </p>
+      )}
+    </section>
+  );
 
   const seletor = (
     <input
@@ -276,8 +388,9 @@ export default function EditorFotos() {
 
   if (!fotos.length) {
     return (
-      <div className="mt-6">
+      <div className="mt-6 space-y-4">
         {seletor}
+        {seletorQuadro}
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
@@ -371,6 +484,7 @@ export default function EditorFotos() {
       </div>
 
       <aside className="space-y-4">
+        {seletorQuadro}
         {ativa && info && (
           <section className="rounded-xl border border-[#1f1f1f] bg-[#111] p-4">
             <h2 className="text-white text-sm font-semibold">Faixas de luz</h2>
@@ -394,7 +508,7 @@ export default function EditorFotos() {
             <h2 className="text-white text-sm font-semibold">Acabamento PFC</h2>
             <button
               type="button"
-              onClick={() => setAjustes((a) => (tratamentoLigado ? { ...a, ...SEM_TRATAMENTO } : { ...AJUSTES_PADRAO, faixas: a.faixas }))}
+              onClick={() => setAjustes((a) => (tratamentoLigado ? { ...a, ...SEM_TRATAMENTO } : { ...salvo.ajustes, faixas: a.faixas }))}
               className="text-xs text-gold-400 hover:text-gold-300"
             >
               {tratamentoLigado ? "Desligar" : "Aplicar padrão"}
