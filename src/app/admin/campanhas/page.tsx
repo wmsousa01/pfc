@@ -11,7 +11,9 @@ import {
   type ContaGoogle,
   type GoogleCampanha,
 } from "@/lib/campanhas/google-ads";
+import DiagnosticoMeta from "@/components/admin/DiagnosticoMeta";
 import { metaCampanhas, type MetaCampanha } from "@/lib/campanhas/meta-ads";
+import { diagnosticarMeta, type Diagnostico } from "@/lib/campanhas/meta-diagnostico";
 import { MODELOS } from "@/lib/campanhas/modelos";
 import { OBJETIVOS, listEntregas, listEstrategias, reais, type EstrategiaStatus, type Metricas } from "@/lib/campanhas/store";
 import { isMetaConfigured } from "@/lib/social/meta";
@@ -72,8 +74,13 @@ export default async function CampanhasPage({ searchParams }: { searchParams: { 
     }
   }
 
+  // Diagnóstico da Meta roda no servidor só na aba Contas (algumas chamadas à Graph API).
+  const diag: Diagnostico | null = metaAds && view === "contas" ? await diagnosticarMeta() : null;
+  // A trava de segurança da Meta aparece como erro na subida do anúncio.
+  const metaTravada = entregas.some((x) => x.status === "erro" && /authenticate your account|tried to access your account/i.test(x.erro ?? ""));
+
   const schemaMissing = estrategias === null;
-  const contasAlerta = !metaAds || !googleAds || googlePendente || (metaExpira !== null && metaExpira <= 7);
+  const contasAlerta = !metaAds || !googleAds || googlePendente || metaTravada || (metaExpira !== null && metaExpira <= 7);
 
   const COLUNAS: { s: EstrategiaStatus; titulo: string; vazio: string }[] = [
     { s: "rascunho", titulo: "Rascunhos", vazio: "Nenhum rascunho." },
@@ -124,6 +131,12 @@ export default async function CampanhasPage({ searchParams }: { searchParams: { 
           {schemaMissing && (
             <div className="p-3 rounded-lg border border-gold-500/30 bg-gold-500/10 text-gold-300 text-sm">
               Rode <code>supabase/020_campanhas.sql</code> no SQL Editor do Supabase para ativar esta área.
+            </div>
+          )}
+          {metaTravada && view !== "contas" && (
+            <div className="p-3 rounded-lg border border-red-500/30 bg-red-500/10 text-red-300 text-sm">
+              A Meta travou a criação de anúncios nesta conta até alguém confirmar a identidade no Gerenciador de Anúncios.{" "}
+              <a href="/admin/campanhas?view=contas" className="underline">Ver o diagnóstico →</a>
             </div>
           )}
         </div>
@@ -348,6 +361,7 @@ export default async function CampanhasPage({ searchParams }: { searchParams: { 
             </div>
           </section>
         )}
+        {view === "contas" && diag && <DiagnosticoMeta d={diag} />}
       </div>
     </div>
   );
