@@ -13,7 +13,7 @@ export const TIPOS: Record<TipoInsercao, { label: string; dica: string; duracao:
   logo: { label: "Logo no canto", dica: "A marca num canto da tela, por um tempo ou o episódio todo.", duracao: 60 },
   faixa: { label: "Faixa (lower third)", dica: "“Oferecimento” com uma frase curta, na parte de baixo.", duracao: 12 },
   l: { label: "L (vídeo encolhe)", dica: "O vídeo vai para o canto e a marca ocupa a coluna da direita e a faixa de baixo.", duracao: 20 },
-  qr: { label: "Placa do QR", dica: "A placa do parceiro no canto superior esquerdo, com o QR de tracking. O texto vem do cadastro da placa.", duracao: 20 },
+  qr: { label: "Placa do QR", dica: "A placa do parceiro no canto superior esquerdo, com o QR de tracking. O texto vem do cadastro da placa.", duracao: 45 },
   vinheta: { label: "Vinheta em vídeo", dica: "Vídeo em tela cheia, com som. A duração vem do arquivo.", duracao: 8 },
 };
 
