@@ -47,7 +47,7 @@ async function postsDe(igId: string, token: string, username: string): Promise<P
     .slice(0, 6);
 }
 
-async function perfilDe(username: string, nomeAgenda: string): Promise<PerfilTela> {
+export async function perfilDe(username: string, nomeAgenda: string): Promise<PerfilTela> {
   const c = cache.get(username);
   if (c && c.ate > Date.now()) return c.perfil;
   const qr = await QRCode.toDataURL(`https://www.instagram.com/${username}/`, { width: 420, margin: 1, errorCorrectionLevel: "M" });
