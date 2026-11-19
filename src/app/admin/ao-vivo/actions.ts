@@ -90,6 +90,7 @@ export async function salvarCotaAction(form: FormData): Promise<ActionState> {
       vezes: durante && freq !== "minutos" ? Math.min(n!, 30) : null,
       a_cada_min: durante && freq === "minutos" ? Math.min(n!, 180) : null,
       texto: str(form, "texto").slice(0, 140) || null,
+      legenda: tipo === "l" ? str(form, "legenda").slice(0, 400) || null : null,
       midia_path,
       midia_mime,
       posicao,

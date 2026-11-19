@@ -17,6 +17,7 @@ export type CotaInicial = {
   vezes: number | null;
   a_cada_min: number | null;
   texto: string | null;
+  legenda: string | null;
   midia_path: string | null;
   midia_mime: string | null;
   posicao: string;
@@ -229,10 +230,10 @@ export default function CotaForm({
       )}
 
       <div className="grid gap-3 sm:grid-cols-3">
-        {tipo !== "vinheta" && (
+        {tipo !== "vinheta" && tipo !== "qr" && (
           <label className="sm:col-span-2">
             <span className={rotulo}>
-              {tipo === "faixa" ? "Frase da faixa" : tipo === "qr" ? "Chamada do QR" : "Rótulo acima do logo"}
+              {tipo === "faixa" ? "Frase da faixa" : tipo === "l" ? "Frase principal (faixa de baixo)" : "Rótulo acima do logo"}
             </span>
             <input
               name="texto"
@@ -241,8 +242,8 @@ export default function CotaForm({
               placeholder={
                 tipo === "faixa"
                   ? "Ex.: 20% off na primeira consulta"
-                  : tipo === "qr"
-                    ? "Aponte a câmera do celular"
+                  : tipo === "l"
+                    ? "Ex.: Consulta com 20% off até sexta"
                     : "Oferecimento / Apresentado por"
               }
               className={input}
@@ -263,9 +264,16 @@ export default function CotaForm({
         )}
       </div>
 
+      {tipo === "l" && (
+        <label className="block">
+          <span className={rotulo}>Letras miúdas (opcional: regulamento, validade)</span>
+          <input name="legenda" maxLength={400} defaultValue={inicial?.legenda ?? ""} className={input} />
+        </label>
+      )}
+
       <div>
         <span className={rotulo}>
-          {tipo === "vinheta" ? "Vídeo da vinheta (obrigatório, até 50 MB)" : "Arte própria (opcional: substitui a arte gerada)"}
+          {tipo === "vinheta" ? "Vídeo da vinheta (obrigatório, até 50 MB)" : tipo === "l" ? "Arte da coluna da direita, em pé (opcional: sem ela entra o QR do parceiro)" : tipo === "qr" ? "Arte própria (opcional: substitui a placa do parceiro)" : "Arte própria (opcional: substitui a arte gerada)"}
         </span>
         {inicial?.midia_path && !removerMidia && (
           <p className="text-xs text-white/60 mb-1">
