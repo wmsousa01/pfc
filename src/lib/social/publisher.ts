@@ -11,7 +11,7 @@ import {
   igReelInsights,
 } from "./meta";
 import { IG_TESTES_BLOQUEIO, IG_TESTES_POR_DIA, METRICAS_DIAS, RITMO, dentroDaJanela } from "./ritmo";
-import { activeConnection, revokeConnection, updatePost, type Platform, type SocialPost } from "./store";
+import { activeConnection, connectionById, revokeConnection, updatePost, type Platform, type SocialPost } from "./store";
 import { youtubeShortMeta } from "./youtube-meta";
 
 /** Um "publicando" mais velho que isso morreu no meio (timeout da função). */
@@ -59,6 +59,17 @@ async function meta(platform: "instagram" | "facebook") {
   return c;
 }
 
+/** Conta do Instagram do post: o perfil extra escolhido (ex.: Lado A Lado B) ou a principal. */
+async function igDe(perfilId: number | null) {
+  if (!perfilId) return meta("instagram");
+  const c = await connectionById(perfilId);
+  if (!c) throw new Error("O perfil do Instagram escolhido para este post foi desconectado (/admin/marketing, aba Contas).");
+  return c;
+}
+
+/** O bloqueio dos testes vale por conta: cada perfil tem o seu limite na Meta. */
+const bloqueioTestes = (perfilId: number | null) => (perfilId ? `${IG_TESTES_BLOQUEIO}:${perfilId}` : IG_TESTES_BLOQUEIO);
+
 async function published(p: SocialPost, externalId: string, url: string | null) {
   await updatePost(p.id, {
     status: "publicado",
@@ -71,7 +82,7 @@ async function published(p: SocialPost, externalId: string, url: string | null) 
 
 /** Termina um Reel: espera o container ficar pronto e publica. false = ainda processando. */
 async function finishReel(p: SocialPost, waitMs: number): Promise<boolean> {
-  const c = await meta("instagram");
+  const c = await igDe(p.perfil_id);
   const until = Date.now() + waitMs;
   for (;;) {
     const s = await igContainerStatus(p.container_id!, c.token);
@@ -100,7 +111,7 @@ async function publishOne(p: SocialPost): Promise<void> {
       return;
     }
     case "instagram": {
-      const c = await meta("instagram");
+      const c = await igDe(p.perfil_id);
       const collab = p.collaborators ?? [];
       let containerId: string;
       try {
@@ -134,7 +145,7 @@ async function failed(p: SocialPost, e: unknown): Promise<void> {
   // 24 h e o post volta para a fila, sem gastar tentativa.
   if (p.platform === "instagram" && p.trial && TRIAL_LIMIT.test(msg(e))) {
     const ate = Date.now() + 86_400_000;
-    await setConfig(IG_TESTES_BLOQUEIO, new Date(ate).toISOString());
+    await setConfig(bloqueioTestes(p.perfil_id), new Date(ate).toISOString());
     await updatePost(p.id, {
       status: "agendado",
       container_id: null,
@@ -163,16 +174,18 @@ const TRIAL_LIMIT = /maximum number of trial reels/i;
  * null = a rede pode receber o post agora; senão, o próximo horário permitido
  * pela janela (10h–22h), pelo teto por 24h e pelo intervalo da rede (ritmo.ts).
  * No Instagram, os testes têm teto próprio e param enquanto durar o bloqueio.
+ * Cada perfil (principal ou extra) tem o seu ritmo: as contas não dividem o teto.
  */
-async function proximoHorario(platform: Platform, trial: boolean): Promise<Date | null> {
+async function proximoHorario(platform: Platform, trial: boolean, perfilId: number | null): Promise<Date | null> {
   const day = 86_400_000;
   const now = Date.now();
   const r = RITMO[platform];
-  const { data } = await db()
+  let q = db()
     .from("social_posts")
     .select("published_at, updated_at, trial")
-    .eq("platform", platform)
-    .or(`status.eq.processando,and(status.eq.publicado,published_at.gte.${new Date(now - day).toISOString()})`);
+    .eq("platform", platform);
+  q = perfilId ? q.eq("perfil_id", perfilId) : q.is("perfil_id", null);
+  const { data } = await q.or(`status.eq.processando,and(status.eq.publicado,published_at.gte.${new Date(now - day).toISOString()})`);
   const rows = (data ?? []).map((x) => ({ t: new Date(x.published_at ?? x.updated_at).getTime(), trial: !!x.trial }));
   const times = rows.map((x) => x.t).sort((a, b) => a - b);
 
@@ -183,12 +196,12 @@ async function proximoHorario(platform: Platform, trial: boolean): Promise<Date 
   if (platform === "instagram" && trial) {
     const testes = rows.filter((x) => x.trial).map((x) => x.t).sort((a, b) => a - b);
     if (testes.length >= IG_TESTES_POR_DIA) next = Math.max(next, testes[testes.length - IG_TESTES_POR_DIA] + day);
-    const bloqueio = Date.parse((await getConfig(IG_TESTES_BLOQUEIO).catch(() => null)) ?? "");
+    const bloqueio = Date.parse((await getConfig(bloqueioTestes(perfilId)).catch(() => null)) ?? "");
     if (bloqueio > now) next = Math.max(next, bloqueio);
   }
 
   if (next <= now && platform === "instagram") {
-    const c = await activeConnection("instagram");
+    const c = await igDe(perfilId).catch(() => null);
     const usage = c ? await igPublishingUsage(c.accountId, c.token).catch(() => 0) : 0;
     if (usage >= IG_API_STOP) next = now + 3 * 3_600_000;
   }
@@ -198,12 +211,17 @@ async function proximoHorario(platform: Platform, trial: boolean): Promise<Date 
 
 /** Atualiza os insights dos Reels publicados nos últimos METRICAS_DIAS. */
 async function refreshIgMetrics(started: number): Promise<number> {
-  const c = await activeConnection("instagram");
-  if (!c) return 0;
+  // Cada Reel é lido com o token da conta que publicou (principal ou perfil extra).
+  const contas = new Map<number, Awaited<ReturnType<typeof igDe>> | null>();
+  const contaDe = async (perfilId: number | null) => {
+    const k = perfilId ?? 0;
+    if (!contas.has(k)) contas.set(k, await igDe(perfilId).catch(() => null));
+    return contas.get(k) ?? null;
+  };
   const now = Date.now();
   const { data } = await db()
     .from("social_posts")
-    .select("id, external_id, published_at, metrics, metrics_at")
+    .select("id, external_id, published_at, metrics, metrics_at, perfil_id")
     .eq("platform", "instagram")
     .eq("status", "publicado")
     .gte("published_at", new Date(now - METRICAS_DIAS * 86_400_000).toISOString())
@@ -218,6 +236,8 @@ async function refreshIgMetrics(started: number): Promise<number> {
   let n = 0;
   for (const p of due.slice(0, 10)) {
     if (!p.external_id || Date.now() - started > BUDGET_MS + 60_000) break;
+    const c = await contaDe(p.perfil_id);
+    if (!c) continue;
     try {
       const metrics = await igReelInsights(p.external_id, c.token);
       await updatePost(p.id, { metrics, metrics_at: new Date().toISOString() });
@@ -275,7 +295,7 @@ export async function runSocialQueue(limit = 4) {
 
   const { data: due } = await db()
     .from("social_posts")
-    .select("id, platform, trial")
+    .select("id, platform, trial, perfil_id")
     .eq("status", "agendado")
     .lte("scheduled_at", now)
     .order("scheduled_at", { ascending: true })
@@ -283,7 +303,7 @@ export async function runSocialQueue(limit = 4) {
   for (const row of due ?? []) {
     if (Date.now() - started > BUDGET_MS) break;
     {
-      const slot = await proximoHorario(row.platform as Platform, !!row.trial);
+      const slot = await proximoHorario(row.platform as Platform, !!row.trial, row.perfil_id ?? null);
       if (slot) {
         await db()
           .from("social_posts")
