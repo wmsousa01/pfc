@@ -1,7 +1,8 @@
 import "server-only";
 import { createAdminSupabase } from "@/lib/supabase/admin";
+import * as storage from "@/lib/storage";
 
-export const BUCKET = "producao";
+export const BUCKET = "producao" satisfies storage.Area;
 export const LOGO_PATH = "config/logo.png";
 
 export type ProducaoStatus =
@@ -100,21 +101,21 @@ export async function getVideo(id: string): Promise<ProducaoVideo | null> {
   return (data as ProducaoVideo) ?? null;
 }
 
+// Arquivos da produção (thumbs, fotos, materiais, mídias das cotas) ficam no R2, na área "producao".
+
 export async function upload(path: string, body: Buffer, contentType: string) {
-  const { error } = await db().storage.from(BUCKET).upload(path, body, { contentType, upsert: true });
-  if (error) throw new Error(`Storage: ${error.message}`);
+  await storage.upload(BUCKET, path, body, contentType);
 }
 
 export async function download(path: string): Promise<Buffer | null> {
-  const { data } = await db().storage.from(BUCKET).download(path);
-  return data ? Buffer.from(await data.arrayBuffer()) : null;
+  return (await storage.download(BUCKET, path))?.buf ?? null;
+}
+
+export async function remover(paths: (string | null | undefined)[]): Promise<void> {
+  await storage.remover(BUCKET, paths);
 }
 
 /** URLs assinadas (1 h) para mostrar as imagens privadas no painel. */
 export async function signedUrls(paths: string[]): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
-  if (paths.length === 0) return out;
-  const { data } = await db().storage.from(BUCKET).createSignedUrls(paths, 3600);
-  for (const d of data ?? []) if (d.path && d.signedUrl) out.set(d.path, d.signedUrl);
-  return out;
+  return storage.urlsAssinadas(BUCKET, paths, 3600);
 }

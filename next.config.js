@@ -20,6 +20,9 @@ const nextConfig = {
       { protocol: "https", hostname: "*.ytimg.com" },
       { protocol: "https", hostname: "yt3.googleusercontent.com" },
       { protocol: "https", hostname: "*.supabase.co" },
+      // Logos e capas dos parceiros, servidos do R2 pela rota /arquivos.
+      { protocol: "https", hostname: "pfctv.com.br", pathname: "/arquivos/**" },
+      { protocol: "https", hostname: "www.pfctv.com.br", pathname: "/arquivos/**" },
     ],
     // Logos de parceiros (curados pelo admin) podem ser SVG.
     dangerouslyAllowSVG: true,

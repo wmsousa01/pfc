@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { driveIdDe, listarPasta, type ArquivoDrive } from "@/lib/agenda/video";
 import { listJobCuts } from "@/lib/producao/contenta";
 import { BUCKET, getConfig } from "@/lib/producao/store";
+import { conferirEnvio, urlDeEnvio } from "@/lib/storage";
 import { CAMPANHAS_DIR, FORMATOS, addCriativo, db, type Criativo, type Formato } from "./store";
 
 /**
@@ -113,22 +114,17 @@ function nomeSeguro(nome: string): string {
 }
 
 /** URL assinada para o navegador subir o criativo direto no Storage. */
-export async function pedirUploadCriativo(nome: string, mime: string, tamanho: number): Promise<{ path: string; token: string }> {
+export async function pedirUploadCriativo(nome: string, mime: string, tamanho: number): Promise<{ path: string; url: string }> {
   if (!/^(image|video)\//.test(mime)) throw new Error("Mande vídeo ou imagem.");
   if (tamanho > MAX_UPLOAD) throw new Error("Arquivo acima de 50 MB: coloque na pasta do Drive e importe por lá.");
   const path = `${UPLOAD_DIR}${randomUUID().slice(0, 8)}-${nomeSeguro(nome)}`;
-  const { data, error } = await db().storage.from(BUCKET).createSignedUploadUrl(path);
-  if (error || !data) throw new Error(`Storage: ${error?.message ?? "sem URL"}`);
-  return { path, token: data.token };
+  return { path, url: await urlDeEnvio(BUCKET, path, mime) };
 }
 
 /** Registra o upload, conferindo que o arquivo chegou. */
 export async function registrarUpload(path: string, nome: string, mime: string, formato: string, actor: string): Promise<Criativo> {
   if (!path.startsWith(UPLOAD_DIR) || path.includes("..")) throw new Error("Arquivo fora da pasta de criativos.");
-  const file = path.slice(UPLOAD_DIR.length);
-  const { data: lista } = await db().storage.from(BUCKET).list(UPLOAD_DIR.slice(0, -1), { search: file, limit: 5 });
-  const obj = (lista ?? []).find((o) => o.name === file);
-  if (!obj) throw new Error("O arquivo não chegou. Tente enviar de novo.");
+  const { tamanho } = await conferirEnvio(BUCKET, path, MAX_UPLOAD);
   return addCriativo({
     nome: nome.replace(/\.[^.]+$/, "").slice(0, 120),
     tipo: mime.startsWith("video/") ? "video" : "imagem",
@@ -136,7 +132,7 @@ export async function registrarUpload(path: string, nome: string, mime: string, 
     ref: path,
     thumb_url: null,
     mime,
-    tamanho: Number((obj.metadata as { size?: number } | null)?.size ?? 0),
+    tamanho,
     duracao_s: null,
     formato: formatoDe(formato) ?? formatoDoNome(nome),
     gerado_com: null,

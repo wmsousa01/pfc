@@ -48,7 +48,7 @@ import {
 } from "@/lib/agenda/store";
 import { normalizeWhatsapp } from "@/lib/lead-triage";
 import { isQuadroId } from "@/lib/producao/quadros";
-import { clearConfig, setConfig } from "@/lib/producao/store";
+import { clearConfig, remover as removerArquivos, setConfig } from "@/lib/producao/store";
 
 const PATH = "/admin/agenda";
 const refresh = () => revalidatePath(PATH, "layout");
@@ -449,7 +449,7 @@ export async function agendaSyncAction(_prev: ActionState, form: FormData): Prom
 
 // ---- Materiais do episódio ----
 
-type Upload = { ok: true; path: string; token: string } | { ok: false; error: string };
+type Upload = { ok: true; path: string; url: string } | { ok: false; error: string };
 
 export async function pedirUploadAction(episodioId: string, nome: string, mime: string, tamanho: number): Promise<Upload> {
   await requireAdmin();
@@ -553,7 +553,7 @@ export async function apresentadorToggleAction(form: FormData): Promise<void> {
 export async function apresentadorRemoverAction(form: FormData): Promise<void> {
   await requireAdmin();
   const { data } = await db().from("agenda_apresentadores").delete().eq("id", str(form, "apresentador")).select("foto_path").maybeSingle();
-  if (data?.foto_path) await db().storage.from("producao").remove([data.foto_path]);
+  if (data?.foto_path) await removerArquivos([data.foto_path]);
   refresh();
 }
 

@@ -98,7 +98,7 @@ export async function salvarDadosAction(_prev: ActionState, form: FormData): Pro
   }
 }
 
-type Upload = { ok: true; path: string; token: string } | { ok: false; error: string };
+type Upload = { ok: true; path: string; url: string } | { ok: false; error: string };
 
 export async function pedirUploadAction(token: string, nome: string, mime: string, tamanho: number): Promise<Upload> {
   try {

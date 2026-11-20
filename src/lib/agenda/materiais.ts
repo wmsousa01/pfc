@@ -1,7 +1,8 @@
 import "server-only";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
-import { BUCKET, download } from "@/lib/producao/store";
+import { BUCKET, download, remover } from "@/lib/producao/store";
+import { conferirEnvio, urlDeEnvio } from "@/lib/storage";
 import { db, logAgenda, type Material, type MaterialTipo } from "./store";
 
 /**
@@ -24,16 +25,14 @@ function nomeSeguro(nome: string): string {
   return s || "arquivo";
 }
 
-export type PedidoUpload = { path: string; token: string };
+export type PedidoUpload = { path: string; url: string };
 
 /** URL assinada para o navegador subir um arquivo do episódio. */
 export async function pedirUpload(episodioId: string, nome: string, mime: string, tamanho: number): Promise<PedidoUpload> {
   if (!ACEITOS.test(mime)) throw new Error("Mande imagem, vídeo ou PDF.");
   if (tamanho > MAX_MATERIAL) throw new Error("Arquivo acima de 50 MB.");
   const path = `${dirDe(episodioId)}${randomUUID().slice(0, 8)}-${nomeSeguro(nome)}`;
-  const { data, error } = await db().storage.from(BUCKET).createSignedUploadUrl(path);
-  if (error || !data) throw new Error(`Storage: ${error?.message ?? "sem URL"}`);
-  return { path, token: data.token };
+  return { path, url: await urlDeEnvio(BUCKET, path, mime) };
 }
 
 export type NovoMaterial = {
@@ -53,11 +52,7 @@ export type NovoMaterial = {
 export async function registrarMaterial(m: NovoMaterial): Promise<Material> {
   const dir = dirDe(m.episodio_id);
   if (!m.path.startsWith(dir) || m.path.includes("..")) throw new Error("Arquivo fora do episódio.");
-  const file = m.path.slice(dir.length);
-  const { data: lista } = await db().storage.from(BUCKET).list(dir.slice(0, -1), { search: file, limit: 5 });
-  const obj = (lista ?? []).find((o) => o.name === file);
-  if (!obj) throw new Error("O arquivo não chegou. Tente enviar de novo.");
-  const tamanho = Number((obj.metadata as { size?: number } | null)?.size ?? 0);
+  const { tamanho } = await conferirEnvio(BUCKET, m.path, MAX_MATERIAL);
 
   const { data, error } = await db()
     .from("agenda_materiais")
@@ -72,7 +67,7 @@ export async function registrarMaterial(m: NovoMaterial): Promise<Material> {
 export async function removerMaterial(id: string, actor: string): Promise<void> {
   const { data } = await db().from("agenda_materiais").delete().eq("id", id).select("*").maybeSingle();
   if (!data) return;
-  await db().storage.from(BUCKET).remove([data.path]);
+  await remover([data.path]);
   await logAgenda(data.episodio_id, actor, "apagou material", data.nome);
 }
 
