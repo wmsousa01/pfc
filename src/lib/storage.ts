@@ -1,12 +1,17 @@
 import "server-only";
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListPartsCommand,
   NoSuchKey,
   NotFound,
   PutObjectCommand,
   S3Client,
+  UploadPartCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { site } from "@/lib/config";
@@ -17,7 +22,7 @@ import { site } from "@/lib/config";
  * `client-files/…`, `partner-assets/…`), então os caminhos gravados no banco
  * continuam valendo do jeito que estão.
  */
-export type Area = "producao" | "client-files" | "partner-assets";
+export type Area = "producao" | "client-files" | "partner-assets" | "arquivos";
 
 /** Áreas que qualquer um pode ler pela rota /arquivos (logos e capas dos parceiros). */
 export const AREAS_PUBLICAS: Area[] = ["partner-assets"];
@@ -160,4 +165,60 @@ export function urlPublica(area: Area, path: string): string {
   if (!AREAS_PUBLICAS.includes(area)) throw new Error(`Área ${area} não é pública.`);
   const base = process.env.R2_PUBLIC_BASE?.trim().replace(/\/+$/, "") || `${site.url}/arquivos`;
   return `${base}/${chave(area, path)}`;
+}
+
+// ---- Envio em partes (multipart): arquivos grandes, com retomada ----
+//
+// O navegador sobe cada parte por PUT assinado. O ETag de cada parte não é
+// lido no navegador (exigiria ExposeHeaders no CORS): na hora de concluir, o
+// servidor lista as partes no R2 e monta a lista ele mesmo. A mesma listagem
+// diz o que já subiu quando o envio é retomado. Envio largado no meio some
+// sozinho pela regra padrão do R2 (7 dias).
+
+export async function iniciarEnvioEmPartes(area: Area, path: string, contentType: string): Promise<string> {
+  const r = await s3().send(new CreateMultipartUploadCommand({ Bucket: bucket(), Key: chave(area, path), ContentType: contentType }));
+  if (!r.UploadId) throw new Error("O R2 não abriu o envio.");
+  return r.UploadId;
+}
+
+export async function urlDeParte(area: Area, path: string, uploadId: string, parte: number, segundos = 3600): Promise<string> {
+  return getSignedUrl(s3(), new UploadPartCommand({ Bucket: bucket(), Key: chave(area, path), UploadId: uploadId, PartNumber: parte }), {
+    expiresIn: segundos,
+  });
+}
+
+export type Parte = { numero: number; etag: string; tamanho: number };
+
+/** As partes que já chegaram ao R2, em ordem. */
+export async function partesEnviadas(area: Area, path: string, uploadId: string): Promise<Parte[]> {
+  const out: Parte[] = [];
+  let marcador: string | undefined;
+  for (;;) {
+    const r = await s3().send(
+      new ListPartsCommand({ Bucket: bucket(), Key: chave(area, path), UploadId: uploadId, PartNumberMarker: marcador, MaxParts: 1000 })
+    );
+    for (const p of r.Parts ?? []) if (p.PartNumber && p.ETag) out.push({ numero: p.PartNumber, etag: p.ETag, tamanho: p.Size ?? 0 });
+    if (!r.IsTruncated || !r.NextPartNumberMarker) break;
+    marcador = r.NextPartNumberMarker;
+  }
+  return out.sort((a, b) => a.numero - b.numero);
+}
+
+export async function concluirEnvioEmPartes(area: Area, path: string, uploadId: string, partes: Parte[]): Promise<void> {
+  await s3().send(
+    new CompleteMultipartUploadCommand({
+      Bucket: bucket(),
+      Key: chave(area, path),
+      UploadId: uploadId,
+      MultipartUpload: { Parts: partes.map((p) => ({ PartNumber: p.numero, ETag: p.etag })) },
+    })
+  );
+}
+
+export async function cancelarEnvioEmPartes(area: Area, path: string, uploadId: string): Promise<void> {
+  try {
+    await s3().send(new AbortMultipartUploadCommand({ Bucket: bucket(), Key: chave(area, path), UploadId: uploadId }));
+  } catch (e) {
+    if (!naoAchou(e)) throw e;
+  }
 }
