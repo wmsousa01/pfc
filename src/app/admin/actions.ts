@@ -3,11 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { createAdminSupabase } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth";
+import * as storage from "@/lib/storage";
 import type { PartnerSection } from "@/lib/types";
 
-const BUCKET = "partner-assets";
+const BUCKET = "partner-assets" satisfies storage.Area;
 
 const EXT_BY_MIME: Record<string, string> = {
   "image/png": "png",
@@ -34,19 +34,16 @@ async function resolveAsset(
   const file = formData.get(`${kind}_file`);
   if (!(file instanceof File) || file.size === 0) return currentUrl;
 
-  const admin = createAdminSupabase();
-  if (!admin) return currentUrl;
-
   const ext = EXT_BY_MIME[file.type] ?? "png";
   const path = `${slug}/${kind}-${Date.now()}.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());
 
-  const { error } = await admin.storage
-    .from(BUCKET)
-    .upload(path, buffer, { contentType: file.type, upsert: true });
-  if (error) throw new Error(`Falha no upload do ${kind}: ${error.message}`);
-
-  return admin.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+  try {
+    await storage.upload(BUCKET, path, buffer, file.type || "image/png");
+  } catch (e) {
+    throw new Error(`Falha no upload do ${kind}: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  return storage.urlPublica(BUCKET, path);
 }
 
 /** Telefone em dígitos com DDI 55 (formato que o wa.me espera). */

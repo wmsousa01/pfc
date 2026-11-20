@@ -2,7 +2,8 @@ import "server-only";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
 import { db, newToken } from "@/lib/agenda/store";
-import { BUCKET, download } from "@/lib/producao/store";
+import { BUCKET, download, remover, upload } from "@/lib/producao/store";
+import { conferirEnvio, urlDeEnvio } from "@/lib/storage";
 import { isQuadroId, type QuadroId } from "@/lib/producao/quadros";
 
 /**
@@ -149,9 +150,7 @@ export async function pedirUploadApresentador(c: Cadastro, nome: string, mime: s
     .eq("cadastro_id", c.id);
   if ((count ?? 0) >= MAX_ARQUIVOS) throw new Error(`Limite de ${MAX_ARQUIVOS} arquivos. Apague algum para mandar outro.`);
   const path = `${dirDe(c.id)}${randomUUID().slice(0, 8)}-${nomeSeguro(nome)}`;
-  const { data, error } = await db().storage.from(BUCKET).createSignedUploadUrl(path);
-  if (error || !data) throw new Error(`Storage: ${error?.message ?? "sem URL"}`);
-  return { path, token: data.token };
+  return { path, url: await urlDeEnvio(BUCKET, path, mime) };
 }
 
 /** Registra o arquivo que o navegador acabou de subir, conferindo que ele está mesmo lá. */
@@ -161,11 +160,7 @@ export async function registrarMaterialApresentador(
 ): Promise<void> {
   const dir = dirDe(c.id);
   if (!m.path.startsWith(dir) || m.path.includes("..")) throw new Error("Arquivo fora do seu cadastro.");
-  const file = m.path.slice(dir.length);
-  const { data: lista } = await db().storage.from(BUCKET).list(dir.slice(0, -1), { search: file, limit: 5 });
-  const obj = (lista ?? []).find((o) => o.name === file);
-  if (!obj) throw new Error("O arquivo não chegou. Tente enviar de novo.");
-  const tamanho = Number((obj.metadata as { size?: number } | null)?.size ?? 0);
+  const { tamanho } = await conferirEnvio(BUCKET, m.path, MAX_ARQUIVO);
   const { error } = await db()
     .from("apresentadores_materiais")
     .insert({ cadastro_id: c.id, ...m, nome: m.nome.slice(0, 200), tamanho });
@@ -180,7 +175,7 @@ export async function removerMaterialApresentador(cadastroId: string, materialId
     .eq("cadastro_id", cadastroId)
     .select("path")
     .maybeSingle();
-  if (data?.path) await db().storage.from(BUCKET).remove([data.path]);
+  if (data?.path) await remover([data.path]);
 }
 
 // ---- Aprovação: o cadastro vira apresentador dos quadros ----
@@ -256,11 +251,10 @@ export async function usarComoFotoPadrao(cadastroId: string, materialId: string,
   for (const id of ids) {
     // Nome novo a cada troca: a URL assinada antiga não mostra a foto velha do cache.
     const path = `agenda/apresentadores/${id}-${Date.now().toString(36)}.jpg`;
-    const { error } = await db().storage.from(BUCKET).upload(path, jpeg, { contentType: "image/jpeg", upsert: true });
-    if (error) throw new Error(`Storage: ${error.message}`);
+    await upload(path, jpeg, "image/jpeg");
     const { data: antes } = await db().from("agenda_apresentadores").select("foto_path").eq("id", id).maybeSingle();
     await db().from("agenda_apresentadores").update({ foto_path: path }).eq("id", id);
-    if (antes?.foto_path) await db().storage.from(BUCKET).remove([antes.foto_path]);
+    if (antes?.foto_path) await remover([antes.foto_path]);
   }
 }
 

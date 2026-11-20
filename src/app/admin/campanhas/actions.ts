@@ -363,7 +363,7 @@ export async function importarContentaAction(_prev: ActionState, form: FormData)
   }
 }
 
-type Upload = { ok: true; path: string; token: string } | { ok: false; error: string };
+type Upload = { ok: true; path: string; url: string } | { ok: false; error: string };
 
 export async function pedirUploadAction(nome: string, mime: string, tamanho: number): Promise<Upload> {
   await requireAdmin();

@@ -1,5 +1,6 @@
 import "server-only";
 import { BUCKET, db, signedUrls } from "@/lib/producao/store";
+import { download, urlAssinada } from "@/lib/storage";
 import { driveUrl } from "@/lib/agenda/video";
 
 export { db };
@@ -229,9 +230,7 @@ export async function updateEntrega(id: string, patch: Partial<Entrega>): Promis
 export async function urlPublica(c: Criativo): Promise<string> {
   if (c.origem === "contenta") return c.ref;
   if (c.origem === "drive") return driveUrl(c.ref);
-  const { data, error } = await db().storage.from(BUCKET).createSignedUrl(c.ref, 6 * 3600);
-  if (error || !data) throw new Error(`Storage: ${error?.message ?? "sem URL"}`);
-  return data.signedUrl;
+  return urlAssinada(BUCKET, c.ref, 6 * 3600);
 }
 
 /** Miniatura para o painel: a pública quando há, senão a própria imagem assinada. */
@@ -265,9 +264,9 @@ export async function abrirStream(c: Criativo): Promise<Fonte> {
 /** Baixa o arquivo inteiro (para o Gemini ou para a Meta em bytes). */
 export async function bytesDe(c: Criativo, max = 300 * 1024 * 1024): Promise<{ buf: Buffer; mime: string }> {
   if (c.origem === "upload" || c.origem === "gerado") {
-    const { data } = await db().storage.from(BUCKET).download(c.ref);
-    if (!data) throw new Error("Arquivo não encontrado no Storage.");
-    return { buf: Buffer.from(await data.arrayBuffer()), mime: c.mime ?? data.type ?? "application/octet-stream" };
+    const arq = await download(BUCKET, c.ref);
+    if (!arq) throw new Error("Arquivo não encontrado no armazenamento.");
+    return { buf: arq.buf, mime: c.mime ?? arq.mime ?? "application/octet-stream" };
   }
   const res = await fetch(await urlPublica(c), { cache: "no-store", signal: AbortSignal.timeout(180_000) });
   if (!res.ok) throw new Error(`Não consegui baixar o criativo (${res.status}). No Drive, o arquivo precisa estar com link público.`);

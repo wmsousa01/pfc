@@ -3,9 +3,9 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ActionState } from "@/app/admin/producao/actions";
-import { createBrowserSupabase } from "@/lib/supabase/client";
+import { enviarArquivo } from "@/lib/envio-arquivo";
 
-type Upload = { ok: true; path: string; token: string } | { ok: false; error: string };
+type Upload = { ok: true; path: string; url: string } | { ok: false; error: string };
 type Opcao = { value: string; label: string };
 
 /**
@@ -51,7 +51,6 @@ export default function MaterialUploader({
     }
     setEnviando(true);
     setErro(null);
-    const supabase = createBrowserSupabase();
     let feitos = 0;
     try {
       for (const f of files) {
@@ -59,8 +58,9 @@ export default function MaterialUploader({
         const mime = f.type || "application/octet-stream";
         const p = await pedir(f.name, mime, f.size);
         if (!p.ok) throw new Error(`${f.name}: ${p.error}`);
-        const { error } = await supabase.storage.from("producao").uploadToSignedUrl(p.path, p.token, f, { contentType: mime });
-        if (error) throw new Error(`${f.name}: ${error.message}`);
+        await enviarArquivo(p.url, f, mime).catch((e: Error) => {
+          throw new Error(`${f.name}: ${e.message}`);
+        });
         const r = await registrar(p.path, f.name, mime, tipo, alvo || null, bloco === "" ? null : Number(bloco));
         if (!r.ok) throw new Error(`${f.name}: ${r.error}`);
         feitos++;

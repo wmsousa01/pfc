@@ -6,6 +6,7 @@ import {
   alternarCota,
   apagarCota,
   getCota,
+  MAX_MIDIA,
   modalidadesDo,
   pedirUploadMidia,
   salvarCota,
@@ -13,7 +14,8 @@ import {
   type CotaInput,
 } from "@/lib/ao-vivo/store";
 import { isMomento, isPosicao, isTipo } from "@/lib/ao-vivo/tipos";
-import { BUCKET, db } from "@/lib/producao/store";
+import { BUCKET, remover } from "@/lib/producao/store";
+import { conferirEnvio } from "@/lib/storage";
 import { isQuadroId } from "@/lib/producao/quadros";
 
 export type ActionState = { ok: boolean; error: string | null };
@@ -75,6 +77,7 @@ export async function salvarCotaAction(form: FormData): Promise<ActionState> {
       midia_path = null;
       midia_mime = null;
     }
+    if (midia_path && midia_path !== antes?.midia_path) await conferirEnvio(BUCKET, midia_path, MAX_MIDIA);
 
     const inicio = data(form, "inicio");
     const fim = data(form, "fim");
@@ -101,7 +104,7 @@ export async function salvarCotaAction(form: FormData): Promise<ActionState> {
       observacao: str(form, "observacao").slice(0, 500) || null,
     };
     await salvarCota(id, c);
-    if (antes?.midia_path && antes.midia_path !== midia_path) await db().storage.from(BUCKET).remove([antes.midia_path]);
+    if (antes?.midia_path && antes.midia_path !== midia_path) await remover([antes.midia_path]);
     revalidatePath("/admin/ao-vivo");
     return { ok: true, error: null };
   } catch (e) {

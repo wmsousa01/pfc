@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { pedirUploadAction, salvarCotaAction } from "@/app/admin/ao-vivo/actions";
-import { createBrowserSupabase } from "@/lib/supabase/client";
+import { enviarArquivo } from "@/lib/envio-arquivo";
 import { MOMENTOS, POSICOES, TIPOS, type Momento, type TipoInsercao } from "@/lib/ao-vivo/tipos";
 
 export type CotaInicial = {
@@ -94,10 +94,7 @@ export default function CotaForm({
         const mime = f.type || "application/octet-stream";
         const p = await pedirUploadAction(f.name, mime, f.size);
         if (!p.ok) throw new Error(p.error);
-        const { error } = await createBrowserSupabase()
-          .storage.from("producao")
-          .uploadToSignedUrl(p.path, p.token, f, { contentType: mime });
-        if (error) throw new Error(error.message);
+        await enviarArquivo(p.url, f, mime);
         form.set("midia_path", p.path);
         form.set("midia_mime", mime);
       }

@@ -1,7 +1,7 @@
 import "server-only";
 import sharp from "sharp";
 import { QUADROS, isQuadroId, type QuadroId } from "@/lib/producao/quadros";
-import { download, getConfig, signedUrls, type Headline } from "@/lib/producao/store";
+import { download, getConfig, remover, signedUrls, upload, type Headline } from "@/lib/producao/store";
 import {
   addToPlaylist,
   connectedChannel,
@@ -64,8 +64,7 @@ async function gravarFoto(path: string, file: File): Promise<void> {
     .resize(1600, 1600, { fit: "inside", withoutEnlargement: true })
     .jpeg({ quality: 90 })
     .toBuffer();
-  const { error } = await db().storage.from("producao").upload(path, jpeg, { contentType: "image/jpeg", upsert: true });
-  if (error) throw new Error(`Storage: ${error.message}`);
+  await upload(path, jpeg, "image/jpeg");
 }
 
 export async function salvarFoto(convidadoId: string, file: File): Promise<string> {
@@ -83,7 +82,7 @@ export async function salvarFotoApresentador(id: string, file: File): Promise<vo
   const { data: antes } = await db().from("agenda_apresentadores").select("foto_path").eq("id", id).maybeSingle();
   const { error } = await db().from("agenda_apresentadores").update({ foto_path: path }).eq("id", id);
   if (error) throw new Error(error.message);
-  if (antes?.foto_path) await db().storage.from("producao").remove([antes.foto_path]);
+  if (antes?.foto_path) await remover([antes.foto_path]);
 }
 
 /** Lê o perfil público do convidado. Sem Instagram conectado ou perfil pessoal, grava o motivo. */

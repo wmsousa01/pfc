@@ -88,7 +88,7 @@ export async function acceptTermsAction(
  * ------------------------------------------------------------------- */
 
 export type UploadPrep =
-  | { ok: true; targets: { path: string; token: string; name: string }[] }
+  | { ok: true; targets: { path: string; url: string; name: string; type: string }[] }
   | { ok: false; error: string };
 
 /** 1º passo do envio: URLs assinadas para o navegador subir os arquivos. */

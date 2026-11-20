@@ -2,6 +2,7 @@ import "server-only";
 import { createHash } from "crypto";
 import { site } from "@/lib/config";
 import { BUCKET } from "@/lib/producao/store";
+import { urlAssinada } from "@/lib/storage";
 import { casarNoticias } from "./casar-noticias";
 import { db, getEpisodio, logAgenda, materiaisDe, newToken, type Briefing, type Episodio, type Material, type Materia, type Roteiro } from "./store";
 
@@ -200,8 +201,5 @@ export async function urlMaterialEspelho(token: string, materialId: string, baix
   if (!ep) return null;
   const { data: m } = await db().from("agenda_materiais").select("*").eq("id", materialId).eq("episodio_id", ep.id).maybeSingle();
   if (!m) return null;
-  const { data } = await db()
-    .storage.from(BUCKET)
-    .createSignedUrl(m.path, 3600, baixar ? { download: (m as Material).nome } : undefined);
-  return data?.signedUrl ?? null;
+  return urlAssinada(BUCKET, m.path, 3600, baixar ? (m as Material).nome : undefined).catch(() => null);
 }

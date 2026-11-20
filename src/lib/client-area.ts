@@ -1,5 +1,6 @@
 import "server-only";
 import { createAdminSupabase } from "./supabase/admin";
+import * as storage from "./storage";
 import type { ClientContract, TermsAcceptance } from "./types";
 
 /**
@@ -133,7 +134,7 @@ export async function setJiraChat(partnerId: string, key: string): Promise<void>
  * Arquivos do cliente (bucket privado `client-files`)
  * ------------------------------------------------------------------- */
 
-const BUCKET = "client-files";
+const BUCKET = "client-files" satisfies storage.Area;
 export const MAX_FILE_BYTES = 50 * 1024 * 1024;
 export const MAX_FILES_PER_MESSAGE = 10;
 export const ALLOWED_MIME = [
@@ -162,7 +163,8 @@ export type ClientFile = {
   created_at: string;
 };
 
-export type UploadTarget = { path: string; token: string; name: string };
+/** `type` é o Content-Type assinado: o navegador tem de enviar o mesmo. */
+export type UploadTarget = { path: string; url: string; name: string; type: string };
 
 function safeName(name: string): string {
   const base = name.normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -183,16 +185,16 @@ export async function createUploadTargets(
       return `"${f.name}" não é um formato aceito (imagem, PDF, vídeo MP4/MOV, ZIP ou Office).`;
   }
 
-  const admin = createAdminSupabase();
-  if (!admin) return "Envio indisponível no momento.";
-
   const month = new Date().toISOString().slice(0, 7);
   const targets: UploadTarget[] = [];
-  for (const f of files) {
-    const path = `${partnerId}/${month}/${crypto.randomUUID()}-${safeName(f.name)}`;
-    const { data, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(path);
-    if (error || !data) return "Não foi possível preparar o envio. Tente de novo.";
-    targets.push({ path, token: data.token, name: f.name });
+  try {
+    for (const f of files) {
+      const path = `${partnerId}/${month}/${crypto.randomUUID()}-${safeName(f.name)}`;
+      targets.push({ path, url: await storage.urlDeEnvio(BUCKET, path, f.type), name: f.name, type: f.type });
+    }
+  } catch (e) {
+    console.error("[client-area] envio", e);
+    return "Não foi possível preparar o envio. Tente de novo.";
   }
   return targets;
 }
@@ -213,18 +215,14 @@ export async function registerClientFiles(
   const rows = [];
   for (const u of uploaded) {
     if (!u.path.startsWith(`${partnerId}/`) || u.path.includes("..")) return null;
-    const dir = u.path.slice(0, u.path.lastIndexOf("/"));
-    const file = u.path.slice(u.path.lastIndexOf("/") + 1);
-    const { data } = await admin.storage.from(BUCKET).list(dir, { search: file });
-    const obj = data?.find((o) => o.name === file);
-    if (!obj) return null;
-    const meta = (obj.metadata ?? {}) as { size?: number; mimetype?: string };
+    const meta = await storage.conferirEnvio(BUCKET, u.path, MAX_FILE_BYTES).catch(() => null);
+    if (!meta) return null;
     rows.push({
       partner_id: partnerId,
       storage_path: u.path,
       file_name: u.name.slice(0, 200),
-      size_bytes: meta.size ?? 0,
-      mime: meta.mimetype ?? null,
+      size_bytes: meta.tamanho,
+      mime: meta.mime,
     });
   }
 
@@ -262,12 +260,12 @@ export async function getClientFile(id: string): Promise<ClientFile | null> {
 
 /** Link de download que expira em 5 minutos. */
 export async function signedDownloadUrl(file: ClientFile): Promise<string | null> {
-  const admin = createAdminSupabase();
-  if (!admin) return null;
-  const { data } = await admin.storage
-    .from(BUCKET)
-    .createSignedUrl(file.storage_path, 300, { download: file.file_name });
-  return data?.signedUrl ?? null;
+  try {
+    return await storage.urlAssinada(BUCKET, file.storage_path, 300, file.file_name);
+  } catch (e) {
+    console.error("[client-area] download", e);
+    return null;
+  }
 }
 
 /* ---------------------------------------------------------------------

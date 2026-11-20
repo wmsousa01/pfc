@@ -169,7 +169,7 @@ export async function adicionarAcompanhanteAction(_prev: ActionState, form: Form
 
 // ---- Materiais: fotos, logo e referências que o convidado manda pelo link ----
 
-type Upload = { ok: true; path: string; token: string } | { ok: false; error: string };
+type Upload = { ok: true; path: string; url: string } | { ok: false; error: string };
 
 /** O convidado só mexe no episódio dele, e enquanto ele não foi gravado nem cancelado. */
 async function convidadoAtivo(token: string) {
