@@ -3,6 +3,7 @@
 export type NavKey =
   | "pendencias"
   | "agenda"
+  | "apresentadores"
   | "producao"
   | "aoVivo"
   | "marketing"
@@ -52,6 +53,7 @@ export const NAV: NavGrupo[] = [
     label: "Conteúdo",
     itens: [
       { key: "agenda", href: "/admin/agenda", label: "Agenda", icon: ICONES.agenda },
+      { key: "apresentadores", href: "/admin/apresentadores", label: "Apresentadores", icon: ICONES.mic },
       { key: "producao", href: "/admin/producao", label: "Produção", icon: ICONES.producao },
       { key: "aoVivo", href: "/admin/ao-vivo", label: "Ao vivo", icon: ICONES.aoVivo },
       { key: "marketing", href: "/admin/marketing", label: "Marketing", icon: ICONES.marketing },
