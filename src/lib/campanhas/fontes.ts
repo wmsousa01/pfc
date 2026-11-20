@@ -12,7 +12,13 @@ import { CAMPANHAS_DIR, FORMATOS, addCriativo, db, type Criativo, type Formato }
  * Contenta (MP4 público no R2).
  */
 export const PASTA_KEY = "campanhas_drive_pasta";
-export const MAX_UPLOAD = 50 * 1024 * 1024;
+/**
+ * Teto do envio direto. Vídeo vai do R2 para o Gemini em stream e a Meta baixa
+ * pela URL, então não passa inteiro pela memória da função; imagem vai em bytes.
+ */
+export const MAX_UPLOAD_VIDEO = 1024 * 1024 * 1024;
+export const MAX_UPLOAD_IMAGEM = 50 * 1024 * 1024;
+const maxDe = (mime: string) => (mime.startsWith("video/") ? MAX_UPLOAD_VIDEO : MAX_UPLOAD_IMAGEM);
 
 const VIDEO = /\.(mp4|mov|m4v|webm)$/i;
 const IMAGEM = /\.(jpe?g|png|webp)$/i;
@@ -113,10 +119,10 @@ function nomeSeguro(nome: string): string {
   return s || "arquivo";
 }
 
-/** URL assinada para o navegador subir o criativo direto no Storage. */
+/** URL assinada para o navegador subir o criativo direto no R2. */
 export async function pedirUploadCriativo(nome: string, mime: string, tamanho: number): Promise<{ path: string; url: string }> {
   if (!/^(image|video)\//.test(mime)) throw new Error("Mande vídeo ou imagem.");
-  if (tamanho > MAX_UPLOAD) throw new Error("Arquivo acima de 50 MB: coloque na pasta do Drive e importe por lá.");
+  if (tamanho > maxDe(mime)) throw new Error(mime.startsWith("video/") ? "Vídeo acima de 1 GB: coloque na pasta do Drive e importe por lá." : "Imagem acima de 50 MB.");
   const path = `${UPLOAD_DIR}${randomUUID().slice(0, 8)}-${nomeSeguro(nome)}`;
   return { path, url: await urlDeEnvio(BUCKET, path, mime) };
 }
@@ -124,7 +130,7 @@ export async function pedirUploadCriativo(nome: string, mime: string, tamanho: n
 /** Registra o upload, conferindo que o arquivo chegou. */
 export async function registrarUpload(path: string, nome: string, mime: string, formato: string, actor: string): Promise<Criativo> {
   if (!path.startsWith(UPLOAD_DIR) || path.includes("..")) throw new Error("Arquivo fora da pasta de criativos.");
-  const { tamanho } = await conferirEnvio(BUCKET, path, MAX_UPLOAD);
+  const { tamanho } = await conferirEnvio(BUCKET, path, maxDe(mime));
   return addCriativo({
     nome: nome.replace(/\.[^.]+$/, "").slice(0, 120),
     tipo: mime.startsWith("video/") ? "video" : "imagem",

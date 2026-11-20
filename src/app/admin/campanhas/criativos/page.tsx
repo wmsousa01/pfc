@@ -243,7 +243,7 @@ export default async function CriativosPage({ searchParams }: { searchParams: { 
 
           <div className={card}>
             <h2 className="text-white font-bold">Upload</h2>
-            <p className="text-white/40 text-xs mt-0.5">Até 50 MB por arquivo; maiores, pela pasta do Drive. Escolha o formato da peça.</p>
+            <p className="text-white/40 text-xs mt-0.5">Vídeo até 1 GB, imagem até 50 MB; maiores, pela pasta do Drive. Escolha o formato da peça.</p>
             <div className="mt-3">
               <MaterialUploader
                 pedir={pedirUploadAction}
