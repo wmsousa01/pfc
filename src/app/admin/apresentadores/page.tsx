@@ -128,6 +128,7 @@ function CadastroCard({
         </div>
         <div className="flex flex-wrap gap-2">
           <a href={link} target="_blank" className={btn2}>Abrir link pessoal</a>
+          {c.pasta_id && <a href={`/admin/arquivos?pasta=${c.pasta_id}`} className={btn2}>Arquivos grandes</a>}
           <a
             href={`https://wa.me/${c.whatsapp}?text=${encodeURIComponent(`Oi, ${c.nome.split(" ")[0]}! Seu link para mandar fotos e materiais do Fora da Caixa: ${link}`)}`}
             target="_blank"

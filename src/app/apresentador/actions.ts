@@ -11,6 +11,7 @@ import {
   cadastroPorToken,
   criarCadastro,
   isTipoMaterial,
+  pastaDoCadastro,
   pedirUploadApresentador,
   quadrosDe,
   registrarMaterialApresentador,
@@ -18,6 +19,17 @@ import {
   type NovoCadastro,
 } from "@/lib/apresentadores/store";
 import { normalizeWhatsapp } from "@/lib/lead-triage";
+import type { Inicio, Res } from "@/components/arquivos/EnvioGrande";
+import {
+  MAX_ARQUIVO as MAX_ARQUIVO_GRANDE,
+  apagarArquivo,
+  concluirEnvio,
+  getArquivo,
+  iniciarEnvio,
+  partesProntas,
+  totalDePartes,
+  urlsDasPartes,
+} from "@/lib/arquivos/store";
 
 function str(form: FormData, key: string, max = 2000): string | null {
   const v = String(form.get(key) ?? "").trim().slice(0, max);
@@ -137,4 +149,59 @@ export async function revogarTermoAction(form: FormData): Promise<void> {
   // Sai das artes novas na hora; o que já foi publicado fica (cláusula 3).
   await db().from("agenda_apresentadores").update({ ativo: false }).eq("cadastro_id", c.id);
   revalidatePath(`/apresentador/${token}`);
+}
+
+// ---- Arquivos grandes (central de arquivos, envio em partes) ----
+
+async function tentar<T extends object>(fn: () => Promise<T>): Promise<Res<T>> {
+  try {
+    return { ok: true, ...(await fn()) };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** O arquivo tem de estar na pasta deste cadastro e não ter vindo de um link de envio. */
+async function arquivoDoCadastro(token: string, id: string) {
+  const c = await cadastroAtivo(token);
+  const a = await getArquivo(id);
+  if (!a || !c.pasta_id || a.pasta_id !== c.pasta_id || a.link_id) throw new Error("Envio não encontrado.");
+  return a;
+}
+
+export async function iniciarArquivoAction(token: string, nome: string, mime: string, tamanho: number): Promise<Res<Inicio>> {
+  return tentar(async () => {
+    const c = await cadastroAtivo(token);
+    const pastaId = await pastaDoCadastro(c);
+    return iniciarEnvio({ pastaId, nome, mime, tamanho, enviadoPor: `${c.nome} (apresentador)`, linkId: null, max: MAX_ARQUIVO_GRANDE });
+  });
+}
+
+export async function retomarArquivoAction(token: string, id: string): Promise<Res<Inicio & { prontas: number[] }>> {
+  return tentar(async () => {
+    const a = await arquivoDoCadastro(token, id);
+    return { id: a.id, parteBytes: a.parte_bytes, partes: totalDePartes(a), prontas: await partesProntas(a) };
+  });
+}
+
+export async function urlsArquivoAction(token: string, id: string, numeros: number[]): Promise<Res<{ urls: { numero: number; url: string }[] }>> {
+  return tentar(async () => ({ urls: await urlsDasPartes(await arquivoDoCadastro(token, id), numeros) }));
+}
+
+export async function concluirArquivoAction(token: string, id: string): Promise<Res<object>> {
+  return tentar(async () => {
+    await concluirEnvio(await arquivoDoCadastro(token, id));
+    revalidatePath(`/apresentador/${token}`);
+    revalidatePath("/admin/arquivos");
+    return {};
+  });
+}
+
+export async function cancelarArquivoAction(token: string, id: string): Promise<Res<object>> {
+  return tentar(async () => {
+    const a = await arquivoDoCadastro(token, id);
+    // Só cancela o envio em andamento; o que já chegou fica com a produção.
+    if (a.status === "enviando") await apagarArquivo(a);
+    return {};
+  });
 }
