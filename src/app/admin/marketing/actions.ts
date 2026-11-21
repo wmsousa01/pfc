@@ -8,7 +8,7 @@ import { db } from "@/lib/producao/store";
 import { captionFor, defaultCaption } from "@/lib/social/caption";
 import { IG_DAILY_MAX, runSocialQueue } from "@/lib/social/publisher";
 import { IG_MAX_SEGUNDOS, JANELA_HORAS, dentroDaJanela } from "@/lib/social/ritmo";
-import { PLATFORMS, deleteConnections, type Platform } from "@/lib/social/store";
+import { PLATFORMS, connectionById, deleteConnections, deleteExtraConnection, type Platform } from "@/lib/social/store";
 
 const PATH = "/admin/marketing";
 const refresh = () => revalidatePath(PATH);
@@ -60,6 +60,16 @@ function collaboratorsOf(form: FormData): string[] {
   return unique;
 }
 
+/** Perfil do Instagram (`perfil`): vazio = principal; senão o id de um perfil extra ativo. */
+async function perfilOf(form: FormData): Promise<number | null> {
+  const raw = str(form, "perfil");
+  if (!raw) return null;
+  const id = Number(raw);
+  const c = Number.isInteger(id) ? await connectionById(id) : null;
+  if (!c || c.principal) throw new Error("Perfil do Instagram inválido ou desconectado.");
+  return id;
+}
+
 /** `when` vem do datetime-local, no horário de Brasília (sem horário de verão). */
 function brasilia(when: string): Date {
   const d = new Date(`${when}:00-03:00`);
@@ -94,6 +104,7 @@ type NewPost = {
   actor: string;
   trial: boolean;
   collaborators: string[];
+  perfilId: number | null;
 };
 
 /** Folga aleatória de até 20 min: horários redondos repetidos parecem robô. */
@@ -119,6 +130,7 @@ async function insertPosts(posts: NewPost[]): Promise<{ criados: number; repetid
       created_by: p.actor,
       trial: p.platform === "instagram" && p.trial,
       collaborators: p.platform === "instagram" ? p.collaborators : [],
+      perfil_id: p.platform === "instagram" ? p.perfilId : null,
     });
     if (!error) criados++;
     else if (error.code === "23505") repetidos++;
@@ -151,6 +163,7 @@ export async function scheduleCutAction(_prev: ActionState, form: FormData): Pro
     const custom = typed && typed.replace(/\r\n/g, "\n") !== defaultCaption(cut) ? typed : null;
     const trial = isTrial(form);
     const collaborators = collaboratorsOf(form);
+    const perfilId = await perfilOf(form);
     const r = await insertPosts(
       platforms.map((platform) => ({
         platform,
@@ -162,6 +175,7 @@ export async function scheduleCutAction(_prev: ActionState, form: FormData): Pro
         actor: actorOf(role),
         trial,
         collaborators,
+        perfilId,
       }))
     );
     const q = !when && r.criados > 0 ? await runSocialQueue(r.criados) : null;
@@ -200,14 +214,18 @@ export async function scheduleJobAction(_prev: ActionState, form: FormData): Pro
     }
     const trial = isTrial(form);
     const collaborators = collaboratorsOf(form);
+    const perfilId = await perfilOf(form);
 
     const { cuts, outputFormat } = await cutsOf(jobId);
     const { data: taken } = await db()
       .from("social_posts")
-      .select("platform, cut_file")
+      .select("platform, cut_file, perfil_id")
       .eq("contenta_job_id", jobId)
       .neq("status", "cancelado");
-    const has = new Set((taken ?? []).map((t) => `${t.platform}|${t.cut_file}`));
+    // O Instagram conta por perfil: o mesmo corte pode ir à principal e a um extra.
+    const chave = (platform: string, file: string, perfil: number | null) =>
+      `${platform}|${file}|${platform === "instagram" ? (perfil ?? 0) : 0}`;
+    const has = new Set((taken ?? []).map((t) => chave(t.platform, t.cut_file, t.perfil_id)));
 
     const posts: NewPost[] = [];
     let foraIg = 0;
@@ -216,13 +234,13 @@ export async function scheduleJobAction(_prev: ActionState, form: FormData): Pro
     for (const cut of cuts) {
       const semIg = platforms.includes("instagram") && !!foraDoInstagram(cut, outputFormat);
       if (semIg) foraIg++;
-      const free = platforms.filter((p) => !has.has(`${p}|${cut.file}`) && !(p === "instagram" && semIg));
+      const free = platforms.filter((p) => !has.has(chave(p, cut.file, perfilId)) && !(p === "instagram" && semIg));
       if (free.length === 0) continue;
       const at = jitter(new Date(t));
       t = dentroDaJanela(t + interval * 3_600_000);
       for (const platform of free) {
         const caption = captionFor(cut, platform);
-        posts.push({ platform, cut, jobId, title: cut.title || cut.file, caption, at, actor: actorOf(role), trial, collaborators });
+        posts.push({ platform, cut, jobId, title: cut.title || cut.file, caption, at, actor: actorOf(role), trial, collaborators, perfilId });
       }
     }
     const nota = foraIg
@@ -285,6 +303,14 @@ export async function graduatePostAction(form: FormData): Promise<void> {
 
 export async function disconnectMetaAction(): Promise<void> {
   await requireAdmin();
-  await deleteConnections(["instagram", "facebook"]);
+  await deleteConnections(["instagram", "facebook"], true);
+  refresh();
+}
+
+/** Tira só um perfil extra do Instagram; a conta principal fica. */
+export async function disconnectPerfilAction(form: FormData): Promise<void> {
+  await requireAdmin();
+  const id = Number(str(form, "id"));
+  if (Number.isInteger(id)) await deleteExtraConnection(id);
   refresh();
 }

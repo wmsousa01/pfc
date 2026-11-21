@@ -3,6 +3,7 @@ import { EspacoHeader, selo } from "@/components/admin/Espaco";
 import { ICONES } from "@/components/admin/nav";
 import { requireAdmin } from "@/lib/auth";
 import { quandoLongo, type Convidado, type Episodio } from "@/lib/agenda/store";
+import type { Cadastro } from "@/lib/apresentadores/store";
 import { db, type ProducaoVideo } from "@/lib/producao/store";
 import type { ProducaoLive } from "@/lib/producao/lives";
 import { QUADROS, isQuadroId } from "@/lib/producao/quadros";
@@ -36,12 +37,13 @@ type Secao = { key: string; titulo: string; icone: string; area: string; areaHre
 export default async function PendenciasPage() {
   await requireAdmin();
 
-  const [pedidos, revisar, cortesErro, lives, posts] = await Promise.all([
+  const [pedidos, revisar, cortesErro, lives, posts, cadastros] = await Promise.all([
     linhas<Episodio>(() => db().from("agenda_episodios").select("*").eq("status", "solicitado").order("inicio").limit(50)),
     linhas<ProducaoVideo>(() => db().from("producao_videos").select("*").eq("status", "revisar").order("uploaded_at", { ascending: false }).limit(50)),
     linhas<ProducaoVideo>(() => db().from("producao_videos").select("*").eq("status", "erro").order("updated_at", { ascending: false }).limit(50)),
     linhas<ProducaoLive>(() => db().from("producao_lives").select("*").in("status", ["detectada", "erro"]).order("ended_at", { ascending: false }).limit(30)),
     linhas<SocialPost>(() => db().from("social_posts").select("*").eq("status", "erro").order("scheduled_at", { ascending: false }).limit(50)),
+    linhas<Cadastro>(() => db().from("apresentadores_cadastros").select("*").eq("status", "pendente").order("created_at").limit(50)),
   ]);
 
   const convidados = pedidos.length
@@ -64,6 +66,19 @@ export default async function PendenciasPage() {
         href: `/admin/agenda/${e.id}`,
         titulo: nomes(e),
         detalhe: `${quadro(e.quadro)} · ${quandoLongo(e.inicio)}`,
+      })),
+    },
+    {
+      key: "apresentadores",
+      titulo: "Cadastros de apresentador para aprovar",
+      icone: ICONES.mic,
+      area: "Apresentadores",
+      areaHref: "/admin/apresentadores",
+      itens: cadastros.map((c) => ({
+        id: c.id,
+        href: `/admin/apresentadores#c-${c.id}`,
+        titulo: c.nome,
+        detalhe: `${c.quadros.map((q) => quadro(q)).join(", ")} · ${quando(c.created_at)}`,
       })),
     },
     {

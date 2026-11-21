@@ -3,7 +3,8 @@ import { randomBytes, randomUUID } from "crypto";
 import QRCode from "qrcode";
 import { brtDate } from "@/lib/agenda/store";
 import { quadros as quadrosSite, site } from "@/lib/config";
-import { BUCKET, db } from "@/lib/producao/store";
+import { BUCKET, db, remover } from "@/lib/producao/store";
+import { urlAssinada, urlDeEnvio } from "@/lib/storage";
 import { QUADROS, QUADRO_IDS, isQuadroId, type QuadroId } from "@/lib/producao/quadros";
 import { trackingUrl } from "@/lib/qr";
 import type { Partner } from "@/lib/types";
@@ -170,20 +171,18 @@ export async function apagarCota(id: string): Promise<void> {
   const cota = await getCota(id);
   const { error } = await db().from("ao_vivo_cotas").delete().eq("id", id);
   if (error) throw new Error(error.message);
-  if (cota?.midia_path) await db().storage.from(BUCKET).remove([cota.midia_path]);
+  if (cota?.midia_path) await remover([cota.midia_path]);
 }
 
-const MAX_MIDIA = 50 * 1024 * 1024;
+export const MAX_MIDIA = 50 * 1024 * 1024;
 
 /** URL assinada para o navegador subir a vinheta ou a arte (passa do limite de 4,5 MB da Vercel). */
-export async function pedirUploadMidia(nome: string, mime: string, tamanho: number): Promise<{ path: string; token: string }> {
+export async function pedirUploadMidia(nome: string, mime: string, tamanho: number): Promise<{ path: string; url: string }> {
   if (!/^(image|video)\//.test(mime)) throw new Error("Mande vídeo ou imagem.");
   if (tamanho > MAX_MIDIA) throw new Error("Arquivo acima de 50 MB.");
   const ext = (nome.match(/\.[a-z0-9]{2,5}$/i)?.[0] ?? "").toLowerCase();
   const path = `ao-vivo/${randomUUID()}${ext}`;
-  const { data, error } = await db().storage.from(BUCKET).createSignedUploadUrl(path);
-  if (error || !data) throw new Error(`Storage: ${error?.message ?? "sem URL"}`);
-  return { path, token: data.token };
+  return { path, url: await urlDeEnvio(BUCKET, path, mime) };
 }
 
 /** Cotas que valem hoje para a live do quadro (e da modalidade, se houver). */
@@ -294,10 +293,11 @@ const qrs = new Map<string, string>();
 async function urlDa(path: string): Promise<string | null> {
   const c = urlsAssinadas.get(path);
   if (c && c.ate > Date.now() + 30 * 60_000) return c.url;
-  const { data } = await db().storage.from(BUCKET).createSignedUrl(path, 6 * 3600);
-  if (!data?.signedUrl) return null;
-  urlsAssinadas.set(path, { url: data.signedUrl, ate: Date.now() + 6 * 3600_000 });
-  return data.signedUrl;
+  // O R2 aceita no máximo 7 dias de validade; 6 h basta para a live.
+  const url = await urlAssinada(BUCKET, path, 6 * 3600).catch(() => null);
+  if (!url) return null;
+  urlsAssinadas.set(path, { url, ate: Date.now() + 6 * 3600_000 });
+  return url;
 }
 
 async function qrDo(slug: string): Promise<string> {

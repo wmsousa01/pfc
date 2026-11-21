@@ -210,6 +210,8 @@ export type Apresentador = {
   foto_path: string | null;
   ordem: number;
   ativo: boolean;
+  /** Cadastro de /apresentador de onde veio (null = criado à mão em Configurar). */
+  cadastro_id?: string | null;
   created_at: string;
 };
 

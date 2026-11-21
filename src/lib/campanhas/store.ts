@@ -1,5 +1,6 @@
 import "server-only";
 import { BUCKET, db, signedUrls } from "@/lib/producao/store";
+import { download, urlAssinada } from "@/lib/storage";
 import { driveUrl } from "@/lib/agenda/video";
 
 export { db };
@@ -27,6 +28,57 @@ export const CTAS: Record<string, string> = {
 };
 
 export const FORMATOS: Formato[] = ["9:16", "4:5", "1:1", "16:9"];
+
+/** Onde o anúncio aparece. Guardado em mkt_criativos.posicionamentos. */
+export const POSICIONAMENTOS = {
+  ig_reels: "Instagram Reels",
+  ig_stories: "Instagram Stories",
+  ig_feed: "Instagram Feed",
+  fb_reels: "Facebook Reels",
+  fb_stories: "Facebook Stories",
+  fb_feed: "Facebook Feed",
+  yt_shorts: "YouTube Shorts",
+  yt_instream: "YouTube (antes do vídeo)",
+} as const;
+export type Posicionamento = keyof typeof POSICIONAMENTOS;
+
+/** Padrão pelo formato: vertical vai para tela cheia, o resto para o feed. A equipe ajusta na biblioteca. */
+export function posicionamentosDoFormato(f: Formato | null): Posicionamento[] {
+  if (f === "9:16") return ["ig_reels", "ig_stories", "fb_reels", "fb_stories"];
+  if (f === "4:5" || f === "1:1" || f === "16:9") return ["ig_feed", "fb_feed"];
+  return [];
+}
+
+/** Posicionamento → posição na Meta (o YouTube fica de fora). */
+const NA_META: Partial<Record<Posicionamento, ["facebook" | "instagram", string]>> = {
+  ig_reels: ["instagram", "reels"],
+  ig_stories: ["instagram", "story"],
+  ig_feed: ["instagram", "stream"],
+  fb_reels: ["facebook", "facebook_reels"],
+  fb_stories: ["facebook", "story"],
+  fb_feed: ["facebook", "feed"],
+};
+
+export type PosicoesMeta = { publisher_platforms: string[]; facebook_positions?: string[]; instagram_positions?: string[] };
+
+/** As posições da Meta de uma lista de posicionamentos; null se nenhum é da Meta. */
+export function posicoesMeta(pos: Posicionamento[]): PosicoesMeta | null {
+  const fb: string[] = [];
+  const ig: string[] = [];
+  for (const p of pos) {
+    const m = NA_META[p];
+    if (m) (m[0] === "facebook" ? fb : ig).push(m[1]);
+  }
+  if (!fb.length && !ig.length) return null;
+  return {
+    publisher_platforms: [...(fb.length ? ["facebook"] : []), ...(ig.length ? ["instagram"] : [])],
+    ...(fb.length ? { facebook_positions: fb } : {}),
+    ...(ig.length ? { instagram_positions: ig } : {}),
+  };
+}
+
+export const posicionamentosValidos =(v: string[]): Posicionamento[] =>
+  Array.from(new Set(v)).filter((p): p is Posicionamento => p in POSICIONAMENTOS);
 
 export type Estrategia = {
   id: string;
@@ -99,6 +151,10 @@ export type Criativo = {
   formato: Formato | null;
   /** Código da peça do plano que o criativo cumpre (plano.ts); null = avulso. */
   peca: string | null;
+  /** Onde a peça roda (códigos de POSICIONAMENTOS). */
+  posicionamentos: Posicionamento[];
+  /** A mesma peça no outro formato: sobe junto, num anúncio só, cada uma no seu posicionamento. */
+  par_id: string | null;
   gerado_com: Record<string, unknown> | null;
   analise: Analise | null;
   analise_nota: number | null;
@@ -134,6 +190,8 @@ export type Entrega = {
   analise: Analise | null;
   analise_nota: number | null;
   meta_video_id: string | null;
+  /** O vídeo do par (outro formato) já enviado à Meta. */
+  meta_video_id_par: string | null;
   meta_image_hash: string | null;
   meta_creative_id: string | null;
   meta_ad_id: string | null;
@@ -189,14 +247,19 @@ export async function updateCriativo(id: string, patch: Partial<Criativo>): Prom
 
 /** Grava o criativo; se o mesmo arquivo já está na biblioteca, devolve o existente. */
 export async function addCriativo(
-  c: Omit<Criativo, "id" | "created_at" | "analise" | "analise_nota" | "analisado_em" | "arquivado" | "peca"> & { peca?: string | null }
+  c: Omit<Criativo, "id" | "created_at" | "analise" | "analise_nota" | "analisado_em" | "arquivado" | "peca" | "posicionamentos" | "par_id"> & {
+    peca?: string | null;
+    par_id?: string | null;
+    posicionamentos?: Posicionamento[];
+  }
 ): Promise<Criativo> {
   const { data: existing } = await db().from("mkt_criativos").select("*").eq("origem", c.origem).eq("ref", c.ref).maybeSingle();
   if (existing) {
     if ((existing as Criativo).arquivado) await updateCriativo(existing.id, { arquivado: false });
     return existing as Criativo;
   }
-  const { data, error } = await db().from("mkt_criativos").insert(c).select("*").single();
+  const novo = { ...c, posicionamentos: c.posicionamentos ?? posicionamentosDoFormato(c.formato) };
+  const { data, error } = await db().from("mkt_criativos").insert(novo).select("*").single();
   if (error) throw new Error(error.message);
   return data as Criativo;
 }
@@ -229,9 +292,7 @@ export async function updateEntrega(id: string, patch: Partial<Entrega>): Promis
 export async function urlPublica(c: Criativo): Promise<string> {
   if (c.origem === "contenta") return c.ref;
   if (c.origem === "drive") return driveUrl(c.ref);
-  const { data, error } = await db().storage.from(BUCKET).createSignedUrl(c.ref, 6 * 3600);
-  if (error || !data) throw new Error(`Storage: ${error?.message ?? "sem URL"}`);
-  return data.signedUrl;
+  return urlAssinada(BUCKET, c.ref, 6 * 3600);
 }
 
 /** Miniatura para o painel: a pública quando há, senão a própria imagem assinada. */
@@ -265,9 +326,9 @@ export async function abrirStream(c: Criativo): Promise<Fonte> {
 /** Baixa o arquivo inteiro (para o Gemini ou para a Meta em bytes). */
 export async function bytesDe(c: Criativo, max = 300 * 1024 * 1024): Promise<{ buf: Buffer; mime: string }> {
   if (c.origem === "upload" || c.origem === "gerado") {
-    const { data } = await db().storage.from(BUCKET).download(c.ref);
-    if (!data) throw new Error("Arquivo não encontrado no Storage.");
-    return { buf: Buffer.from(await data.arrayBuffer()), mime: c.mime ?? data.type ?? "application/octet-stream" };
+    const arq = await download(BUCKET, c.ref);
+    if (!arq) throw new Error("Arquivo não encontrado no armazenamento.");
+    return { buf: arq.buf, mime: c.mime ?? arq.mime ?? "application/octet-stream" };
   }
   const res = await fetch(await urlPublica(c), { cache: "no-store", signal: AbortSignal.timeout(180_000) });
   if (!res.ok) throw new Error(`Não consegui baixar o criativo (${res.status}). No Drive, o arquivo precisa estar com link público.`);

@@ -1,5 +1,5 @@
 import "server-only";
-import { BUCKET } from "@/lib/producao/store";
+import { upload } from "@/lib/producao/store";
 import { codigoDoPost } from "./espelho";
 import { escreverMateriaExtra } from "./noticias";
 import { baixarImagem, lerPagina } from "./sites";
@@ -124,8 +124,8 @@ export async function adicionarExtra(
         const ext = img.mime === "image/png" ? "png" : img.mime === "image/webp" ? "webp" : "jpg";
         const nome = `${fonte.replace(/[^\w.-]+/g, "-")}-${(url && codigoDoPost(url)) ?? Date.now()}.${ext}`;
         const path = `agenda/${ep.id}/materiais/news-${nome}`;
-        const { error } = await db().storage.from(BUCKET).upload(path, img.buf, { contentType: img.mime, upsert: true });
-        if (!error) {
+        const enviou = await upload(path, img.buf, img.mime).then(() => true, () => false);
+        if (enviou) {
           await db().from("agenda_materiais").insert({
             episodio_id: ep.id,
             tipo: "outro",

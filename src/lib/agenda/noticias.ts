@@ -1,6 +1,6 @@
 import "server-only";
 import { TEXT_MODEL, generate } from "@/lib/producao/gemini";
-import { BUCKET, getConfig } from "@/lib/producao/store";
+import { getConfig, remover, upload } from "@/lib/producao/store";
 import { MetaError, igBusinessMedia } from "@/lib/social/meta";
 import { activeConnection } from "@/lib/social/store";
 import { comuns, palavras } from "./casar-noticias";
@@ -464,7 +464,7 @@ async function baixarFoto(p: ItemFonte): Promise<{ buf: Buffer; mime: string } |
  */
 async function fotosDasNoticias(epId: string, blocos: BlocoEspelho[], itens: ItemFonte[]): Promise<number> {
   const { data: velhas } = await db().from("agenda_materiais").delete().eq("episodio_id", epId).eq("enviado_por", AUTOR_FOTOS).select("path");
-  if (velhas?.length) await db().storage.from(BUCKET).remove(velhas.map((v) => v.path as string));
+  if (velhas?.length) await remover(velhas.map((v) => v.path as string));
 
   const porUrl = new Map(itens.map((p) => [p.url, p]));
   let n = 0;
@@ -486,8 +486,7 @@ async function fotosDasNoticias(epId: string, blocos: BlocoEspelho[], itens: Ite
         const ext = img.mime === "image/png" ? "png" : img.mime === "image/webp" ? "webp" : "jpg";
         const nome = `${p.handle}-${codigoDoPost(p.url) ?? p.id}.${ext}`;
         const path = `agenda/${epId}/materiais/news-${nome}`;
-        const { error } = await db().storage.from(BUCKET).upload(path, img.buf, { contentType: img.mime, upsert: true });
-        if (error) continue;
+        if (!(await upload(path, img.buf, img.mime).then(() => true, () => false))) continue;
         await db().from("agenda_materiais").insert({
           episodio_id: epId,
           tipo: "outro",
