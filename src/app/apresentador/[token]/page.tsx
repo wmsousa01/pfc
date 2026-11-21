@@ -4,12 +4,20 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ProducaoForm from "@/components/admin/ProducaoForm";
 import MaterialUploader from "@/components/agenda/MaterialUploader";
+import EnvioGrande from "@/components/arquivos/EnvioGrande";
+import { arquivosDa, tamanhoLegivel } from "@/lib/arquivos/store";
 import CadastroFields from "@/components/apresentador/CadastroFields";
 import TermoImagem from "@/components/apresentador/TermoImagem";
 import { TIPOS_MATERIAL, cadastroPorToken, materiaisDoCadastro, type MaterialApresentadorTipo } from "@/lib/apresentadores/store";
 import { whatsapp } from "@/lib/config";
 import { signedUrls } from "@/lib/producao/store";
-import { pedirUploadAction, registrarUploadAction, removerMaterialAction, revogarTermoAction, salvarDadosAction } from "../actions";
+import {
+  cancelarArquivoAction,
+  concluirArquivoAction,
+  iniciarArquivoAction,
+  retomarArquivoAction,
+  urlsArquivoAction,
+  pedirUploadAction, registrarUploadAction, removerMaterialAction, revogarTermoAction, salvarDadosAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +42,8 @@ export default async function ApresentadorPage({ params, searchParams }: { param
   const aberto = c.status !== "arquivado";
   const materiais = await materiaisDoCadastro([c.id]);
   const urls = await signedUrls(materiais.map((m) => m.path));
+  // Só o que chegou por esta página; o que a equipe pôs na pasta não aparece aqui.
+  const grandes = c.pasta_id ? (await arquivosDa(c.pasta_id)).filter((a) => a.status === "pronto" && !a.link_id && a.enviado_por.endsWith("(apresentador)")) : [];
 
   return (
     <>
@@ -59,7 +69,7 @@ export default async function ApresentadorPage({ params, searchParams }: { param
               <h2 className="text-white font-bold">Fotos e materiais</h2>
               <p className="text-white/50 text-sm mt-1">
                 Fotos suas (de frente, boa luz, fundo simples) para as artes e thumbs; vídeos, vinhetas e roteiros para usar
-                nas gravações e na transmissão. Até 50 MB por arquivo.
+                nas gravações e na transmissão. Até 50 MB por arquivo; vídeo maior vai em Arquivos grandes, logo abaixo.
               </p>
               <div className="mt-4">
                 <MaterialUploader
@@ -101,6 +111,43 @@ export default async function ApresentadorPage({ params, searchParams }: { param
                   })}
                 </div>
               )}
+            </section>
+          )}
+
+          {aberto && (
+            <section className="bg-[#111] border border-[#222] rounded-2xl p-6">
+              <h2 className="text-white font-bold">Arquivos grandes</h2>
+              <p className="text-white/50 text-sm mt-1">
+                Vídeo bruto, gravação de tela, pacote de fotos: pode mandar vários GB por arquivo. Se a conexão cair ou a página
+                fechar, escolha o mesmo arquivo de novo neste navegador que o envio continua de onde parou.
+              </p>
+              <div className="mt-4">
+                <EnvioGrande
+                  acoes={{
+                    iniciar: iniciarArquivoAction.bind(null, c.token),
+                    retomar: retomarArquivoAction.bind(null, c.token),
+                    urls: urlsArquivoAction.bind(null, c.token),
+                    concluir: concluirArquivoAction.bind(null, c.token),
+                    cancelar: cancelarArquivoAction.bind(null, c.token),
+                  }}
+                  escopo={`apresentador:${c.id}`}
+                  inputCls="bg-[#0d0d0d] border border-[#2a2a2a] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30"
+                  buttonCls="btn-primary px-5 py-2.5 rounded-lg text-sm font-bold"
+                />
+              </div>
+              {grandes.length > 0 && (
+                <ul className="mt-5 divide-y divide-[#1f1f1f] text-sm">
+                  {grandes.map((a) => (
+                    <li key={a.id} className="py-2 flex justify-between gap-3">
+                      <span className="text-white/80 truncate">{a.nome}</span>
+                      <span className="text-white/40 whitespace-nowrap">
+                        {tamanhoLegivel(a.tamanho)} · {dataHora(a.concluido_em ?? a.created_at)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {grandes.length > 0 && <p className="text-white/30 text-xs mt-2">Mandou algo errado? Avise a produção que ela tira.</p>}
             </section>
           )}
 
@@ -156,7 +203,7 @@ export default async function ApresentadorPage({ params, searchParams }: { param
           </section>
 
           <p className="text-white/40 text-sm">
-            Dúvida ou arquivo grande demais?{" "}
+            Dúvida ou problema no envio?{" "}
             <a href={whatsapp(`Oi! Sou ${c.nome}, apresentador do Fora da Caixa.`)} target="_blank" className="text-gold-400 hover:underline">
               Fale com a produção no WhatsApp
             </a>

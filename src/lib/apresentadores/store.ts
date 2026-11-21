@@ -32,6 +32,7 @@ export type Cadastro = {
   termo_ip: string | null;
   termo_user_agent: string | null;
   termo_revogado_em: string | null;
+  pasta_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -261,4 +262,31 @@ export async function usarComoFotoPadrao(cadastroId: string, materialId: string,
 /** Quadros válidos de um form (checkboxes "quadro"). */
 export function quadrosDe(form: FormData): QuadroId[] {
   return Array.from(new Set(form.getAll("quadro").map(String))).filter(isQuadroId);
+}
+
+/**
+ * Pasta do apresentador na central de arquivos (Apresentadores › <nome>).
+ * Criada no primeiro envio; se a equipe apagar, nasce de novo no próximo.
+ */
+export async function pastaDoCadastro(c: Cadastro): Promise<string> {
+  if (c.pasta_id) {
+    const { data } = await db().from("arquivos_pastas").select("id").eq("id", c.pasta_id).maybeSingle();
+    if (data) return c.pasta_id;
+  }
+  const { data: raiz } = await db().from("arquivos_pastas").select("id").is("parent_id", null).eq("nome", "Apresentadores").limit(1).maybeSingle();
+  let raizId = (raiz?.id as string | undefined) ?? null;
+  if (!raizId) {
+    const { data, error } = await db().from("arquivos_pastas").insert({ nome: "Apresentadores", created_by: "sistema" }).select("id").single();
+    if (error) throw new Error(error.message);
+    raizId = data.id as string;
+  }
+  const { data, error } = await db()
+    .from("arquivos_pastas")
+    .insert({ parent_id: raizId, nome: c.nome.slice(0, 120), created_by: `apresentador:${c.id}` })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  await atualizarCadastro(c.id, { pasta_id: data.id as string });
+  c.pasta_id = data.id as string;
+  return c.pasta_id;
 }
