@@ -29,6 +29,29 @@ export const CTAS: Record<string, string> = {
 
 export const FORMATOS: Formato[] = ["9:16", "4:5", "1:1", "16:9"];
 
+/** Onde o anúncio aparece. Guardado em mkt_criativos.posicionamentos. */
+export const POSICIONAMENTOS = {
+  ig_reels: "Instagram Reels",
+  ig_stories: "Instagram Stories",
+  ig_feed: "Instagram Feed",
+  fb_reels: "Facebook Reels",
+  fb_stories: "Facebook Stories",
+  fb_feed: "Facebook Feed",
+  yt_shorts: "YouTube Shorts",
+  yt_instream: "YouTube (antes do vídeo)",
+} as const;
+export type Posicionamento = keyof typeof POSICIONAMENTOS;
+
+/** Padrão pelo formato: vertical vai para tela cheia, o resto para o feed. A equipe ajusta na biblioteca. */
+export function posicionamentosDoFormato(f: Formato | null): Posicionamento[] {
+  if (f === "9:16") return ["ig_reels", "ig_stories", "fb_reels", "fb_stories"];
+  if (f === "4:5" || f === "1:1" || f === "16:9") return ["ig_feed", "fb_feed"];
+  return [];
+}
+
+export const posicionamentosValidos = (v: string[]): Posicionamento[] =>
+  Array.from(new Set(v)).filter((p): p is Posicionamento => p in POSICIONAMENTOS);
+
 export type Estrategia = {
   id: string;
   nome: string;
@@ -100,6 +123,8 @@ export type Criativo = {
   formato: Formato | null;
   /** Código da peça do plano que o criativo cumpre (plano.ts); null = avulso. */
   peca: string | null;
+  /** Onde a peça roda (códigos de POSICIONAMENTOS). */
+  posicionamentos: Posicionamento[];
   gerado_com: Record<string, unknown> | null;
   analise: Analise | null;
   analise_nota: number | null;
@@ -190,14 +215,18 @@ export async function updateCriativo(id: string, patch: Partial<Criativo>): Prom
 
 /** Grava o criativo; se o mesmo arquivo já está na biblioteca, devolve o existente. */
 export async function addCriativo(
-  c: Omit<Criativo, "id" | "created_at" | "analise" | "analise_nota" | "analisado_em" | "arquivado" | "peca"> & { peca?: string | null }
+  c: Omit<Criativo, "id" | "created_at" | "analise" | "analise_nota" | "analisado_em" | "arquivado" | "peca" | "posicionamentos"> & {
+    peca?: string | null;
+    posicionamentos?: Posicionamento[];
+  }
 ): Promise<Criativo> {
   const { data: existing } = await db().from("mkt_criativos").select("*").eq("origem", c.origem).eq("ref", c.ref).maybeSingle();
   if (existing) {
     if ((existing as Criativo).arquivado) await updateCriativo(existing.id, { arquivado: false });
     return existing as Criativo;
   }
-  const { data, error } = await db().from("mkt_criativos").insert(c).select("*").single();
+  const novo = { ...c, posicionamentos: c.posicionamentos ?? posicionamentosDoFormato(c.formato) };
+  const { data, error } = await db().from("mkt_criativos").insert(novo).select("*").single();
   if (error) throw new Error(error.message);
   return data as Criativo;
 }

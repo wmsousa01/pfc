@@ -27,6 +27,8 @@ import {
   getEntrega,
   getEstrategia,
   listCriativos,
+  posicionamentosDoFormato,
+  posicionamentosValidos,
   updateCriativo,
   updateEntrega,
   updateEstrategia,
@@ -435,7 +437,14 @@ export async function classificarNaPautaAction(_prev: ActionState, _form: FormDa
 export async function classificarCriativoAction(form: FormData): Promise<void> {
   await requireAdmin();
   const peca = pecaPorCodigo(str(form, "peca"));
-  await updateCriativo(str(form, "id"), { formato: formatoDe(str(form, "formato")), peca: peca?.codigo ?? null });
+  const formato = formatoDe(str(form, "formato"));
+  // Nenhum marcado = volta ao padrão do formato (o form sempre manda a lista inteira).
+  const marcados = posicionamentosValidos(form.getAll("pos").map(String));
+  await updateCriativo(str(form, "id"), {
+    formato,
+    peca: peca?.codigo ?? null,
+    posicionamentos: marcados.length ? marcados : posicionamentosDoFormato(formato),
+  });
   refresh();
 }
 
