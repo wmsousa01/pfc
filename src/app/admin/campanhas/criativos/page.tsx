@@ -426,6 +426,17 @@ export default async function CriativosPage({ searchParams }: { searchParams: { 
                           <option key={p.codigo} value={p.codigo}>{p.codigo} · {p.titulo}</option>
                         ))}
                       </select>
+                      {c.tipo === "video" && (
+                        <select name="par_id" defaultValue={c.par_id ?? ""} className={`${input} max-w-[13rem]`} title="A mesma peça no outro formato: sobe junto na Meta, cada versão no seu posicionamento">
+                          <option value="">Sem par (outro formato)</option>
+                          {c.par_id && !criativos.some((o) => o.id === c.par_id) && <option value={c.par_id}>Par atual (arquivado)</option>}
+                          {criativos
+                            .filter((o) => o.id !== c.id && o.tipo === "video")
+                            .map((o) => (
+                              <option key={o.id} value={o.id}>Par: {o.nome}{o.formato && !o.nome.includes(o.formato) ? ` · ${o.formato}` : ""}</option>
+                            ))}
+                        </select>
+                      )}
                       <div className="basis-full flex flex-wrap gap-x-2 gap-y-1 mt-1">
                         {(Object.keys(POSICIONAMENTOS) as Posicionamento[]).map((p) => (
                           <label key={p} className="flex items-center gap-1 text-[11px] text-white/50 has-[:checked]:text-gold-400">

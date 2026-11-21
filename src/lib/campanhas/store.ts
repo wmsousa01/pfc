@@ -49,7 +49,35 @@ export function posicionamentosDoFormato(f: Formato | null): Posicionamento[] {
   return [];
 }
 
-export const posicionamentosValidos = (v: string[]): Posicionamento[] =>
+/** Posicionamento → posição na Meta (o YouTube fica de fora). */
+const NA_META: Partial<Record<Posicionamento, ["facebook" | "instagram", string]>> = {
+  ig_reels: ["instagram", "reels"],
+  ig_stories: ["instagram", "story"],
+  ig_feed: ["instagram", "stream"],
+  fb_reels: ["facebook", "facebook_reels"],
+  fb_stories: ["facebook", "story"],
+  fb_feed: ["facebook", "feed"],
+};
+
+export type PosicoesMeta = { publisher_platforms: string[]; facebook_positions?: string[]; instagram_positions?: string[] };
+
+/** As posições da Meta de uma lista de posicionamentos; null se nenhum é da Meta. */
+export function posicoesMeta(pos: Posicionamento[]): PosicoesMeta | null {
+  const fb: string[] = [];
+  const ig: string[] = [];
+  for (const p of pos) {
+    const m = NA_META[p];
+    if (m) (m[0] === "facebook" ? fb : ig).push(m[1]);
+  }
+  if (!fb.length && !ig.length) return null;
+  return {
+    publisher_platforms: [...(fb.length ? ["facebook"] : []), ...(ig.length ? ["instagram"] : [])],
+    ...(fb.length ? { facebook_positions: fb } : {}),
+    ...(ig.length ? { instagram_positions: ig } : {}),
+  };
+}
+
+export const posicionamentosValidos =(v: string[]): Posicionamento[] =>
   Array.from(new Set(v)).filter((p): p is Posicionamento => p in POSICIONAMENTOS);
 
 export type Estrategia = {
@@ -125,6 +153,8 @@ export type Criativo = {
   peca: string | null;
   /** Onde a peça roda (códigos de POSICIONAMENTOS). */
   posicionamentos: Posicionamento[];
+  /** A mesma peça no outro formato: sobe junto, num anúncio só, cada uma no seu posicionamento. */
+  par_id: string | null;
   gerado_com: Record<string, unknown> | null;
   analise: Analise | null;
   analise_nota: number | null;
@@ -160,6 +190,8 @@ export type Entrega = {
   analise: Analise | null;
   analise_nota: number | null;
   meta_video_id: string | null;
+  /** O vídeo do par (outro formato) já enviado à Meta. */
+  meta_video_id_par: string | null;
   meta_image_hash: string | null;
   meta_creative_id: string | null;
   meta_ad_id: string | null;
@@ -215,8 +247,9 @@ export async function updateCriativo(id: string, patch: Partial<Criativo>): Prom
 
 /** Grava o criativo; se o mesmo arquivo já está na biblioteca, devolve o existente. */
 export async function addCriativo(
-  c: Omit<Criativo, "id" | "created_at" | "analise" | "analise_nota" | "analisado_em" | "arquivado" | "peca" | "posicionamentos"> & {
+  c: Omit<Criativo, "id" | "created_at" | "analise" | "analise_nota" | "analisado_em" | "arquivado" | "peca" | "posicionamentos" | "par_id"> & {
     peca?: string | null;
+    par_id?: string | null;
     posicionamentos?: Posicionamento[];
   }
 ): Promise<Criativo> {

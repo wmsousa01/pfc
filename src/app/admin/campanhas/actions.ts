@@ -275,9 +275,11 @@ export async function subirMetaAction(_prev: ActionState, form: FormData): Promi
     if (!e || !c) throw new Error("Estratégia ou criativo não encontrado.");
     await updateEntrega(en.id, { status: "enviando", erro: null });
     const r = await subirNaMeta(en, e, c);
-    await updateEntrega(en.id, { status: r === "pronto" ? "no_gerenciador" : "enviando" });
+    // O aviso (par recusado) fica no cartão da entrega, mesmo com o anúncio criado.
+    await updateEntrega(en.id, { status: r.estado === "pronto" ? "no_gerenciador" : "enviando", ...(r.aviso ? { erro: r.aviso.slice(0, 500) } : {}) });
     refresh();
-    return r === "pronto"
+    if (r.estado === "pronto" && r.aviso) return { ok: false, error: r.aviso };
+    return r.estado === "pronto"
       ? { ok: true, error: null }
       : { ok: false, error: "A Meta ainda está processando o vídeo. Clique em \"Continuar subida\" em 1–2 minutos." };
   } catch (err) {
@@ -434,17 +436,31 @@ export async function classificarNaPautaAction(_prev: ActionState, _form: FormDa
   }
 }
 
+/** Liga os dois criativos como par (nos dois sentidos) e solta os pares antigos de cada um. */
+async function ligarPar(id: string, parId: string | null): Promise<void> {
+  const atual = await getCriativo(id);
+  if (!atual || atual.par_id === parId) return;
+  const novo = parId && parId !== id ? await getCriativo(parId) : null;
+  if (parId && (!novo || novo.tipo !== atual.tipo)) throw new Error("O par precisa ser outro criativo do mesmo tipo.");
+  const soltar = [atual.par_id, novo?.par_id].filter((x): x is string => !!x && x !== id && x !== parId);
+  if (soltar.length) await db().from("mkt_criativos").update({ par_id: null }).in("id", soltar);
+  await updateCriativo(id, { par_id: novo?.id ?? null });
+  if (novo) await updateCriativo(novo.id, { par_id: id });
+}
+
 export async function classificarCriativoAction(form: FormData): Promise<void> {
   await requireAdmin();
   const peca = pecaPorCodigo(str(form, "peca"));
   const formato = formatoDe(str(form, "formato"));
   // Nenhum marcado = volta ao padrão do formato (o form sempre manda a lista inteira).
   const marcados = posicionamentosValidos(form.getAll("pos").map(String));
-  await updateCriativo(str(form, "id"), {
+  const id = str(form, "id");
+  await updateCriativo(id, {
     formato,
     peca: peca?.codigo ?? null,
     posicionamentos: marcados.length ? marcados : posicionamentosDoFormato(formato),
   });
+  if (form.has("par_id")) await ligarPar(id, str(form, "par_id") || null);
   refresh();
 }
 

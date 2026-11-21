@@ -1,8 +1,11 @@
 import "server-only";
 import { graph } from "@/lib/social/meta";
 import { activeConnection, saveConnection } from "@/lib/social/store";
+import { site } from "@/lib/config";
 import {
   bytesDe,
+  getCriativo,
+  posicoesMeta,
   updateEntrega,
   updateEstrategia,
   urlPublica,
@@ -213,16 +216,21 @@ async function garantirCampanha(e: Estrategia, act: string, token: string): Prom
   return { campaignId, adsetId: s.id };
 }
 
+/** A Meta baixa o vídeo pela URL (o R2 assina por 6 h). */
+async function subirVideo(c: Criativo, act: string, token: string): Promise<string> {
+  const v = await graph<{ id: string }>(
+    `/${act}/advideos`,
+    { file_url: await urlPublica(c), name: c.nome.slice(0, 100), access_token: token },
+    "POST"
+  );
+  return v.id;
+}
+
 /** Vídeo: a Meta baixa da URL; imagem: vai em bytes e volta o hash. */
 async function garantirMidia(en: Entrega, c: Criativo, act: string, token: string): Promise<Partial<Entrega>> {
   if (c.tipo === "video") {
     if (en.meta_video_id) return {};
-    const v = await graph<{ id: string }>(
-      `/${act}/advideos`,
-      { file_url: await urlPublica(c), name: c.nome.slice(0, 100), access_token: token },
-      "POST"
-    );
-    return { meta_video_id: v.id };
+    return { meta_video_id: await subirVideo(c, act, token) };
   }
   if (en.meta_image_hash) return {};
   const { buf } = await bytesDe(c, 30 * 1024 * 1024);
@@ -257,11 +265,77 @@ async function videoPronto(videoId: string, token: string, ateMs: number): Promi
 }
 
 /**
+ * O par do vídeo (a mesma peça no outro formato), quando dá para montar o
+ * anúncio por posicionamento: os dois são vídeo, o par não foi arquivado e
+ * cada um tem posicionamento da Meta marcado.
+ */
+async function parUsavel(c: Criativo): Promise<Criativo | null> {
+  if (c.tipo !== "video" || !c.par_id || !posicoesMeta(c.posicionamentos ?? [])) return null;
+  const par = await getCriativo(c.par_id);
+  if (!par || par.arquivado || par.tipo !== "video" || !posicoesMeta(par.posicionamentos ?? [])) return null;
+  return par;
+}
+
+/**
+ * Um criativo com os dois vídeos, cada um no seu posicionamento (o mesmo que
+ * "personalizar mídia por posicionamento" no Gerenciador). A última regra,
+ * sem posição, é a de reserva: cobre o que sobrar (Explorar, vídeos do
+ * Facebook…) com a versão que não é vertical.
+ */
+async function criativoPorPosicionamento(
+  p: { e: Estrategia; c: Criativo; par: Criativo; videoC: string; thumbC: string; videoPar: string; thumbPar: string; texto: string; headline: string },
+  act: string,
+  token: string,
+  pageId: string,
+  igId: string | null
+): Promise<string> {
+  const { e, c, par } = p;
+  const idade = { age_min: e.idade_min, age_max: e.idade_max };
+  const LC = "pfc_principal";
+  const LP = "pfc_par";
+  const reserva = c.formato === "9:16" && par.formato !== "9:16" ? LP : LC;
+  const spec = {
+    videos: [
+      { video_id: p.videoC, thumbnail_url: p.thumbC, adlabels: [{ name: LC }] },
+      { video_id: p.videoPar, thumbnail_url: p.thumbPar, adlabels: [{ name: LP }] },
+    ],
+    bodies: [{ text: p.texto }],
+    ...(p.headline ? { titles: [{ text: p.headline }] } : {}),
+    link_urls: [{ website_url: e.link ?? site.url }],
+    call_to_action_types: [e.cta],
+    ad_formats: ["SINGLE_VIDEO"],
+    optimization_type: "PLACEMENT",
+    asset_customization_rules: [
+      { customization_spec: { ...posicoesMeta(c.posicionamentos)!, ...idade }, video_label: { name: LC }, priority: 1 },
+      { customization_spec: { ...posicoesMeta(par.posicionamentos)!, ...idade }, video_label: { name: LP }, priority: 2 },
+      { customization_spec: idade, video_label: { name: reserva }, priority: 3 },
+    ],
+  };
+  const cr = await graph<{ id: string }>(
+    `/${act}/adcreatives`,
+    {
+      name: `${e.nome} · ${c.nome} + ${par.formato ?? "par"}`.slice(0, 200),
+      object_story_spec: JSON.stringify({ page_id: pageId, ...(igId ? { instagram_user_id: igId } : {}) }),
+      asset_feed_spec: JSON.stringify(spec),
+      access_token: token,
+    },
+    "POST"
+  );
+  return cr.id;
+}
+
+export type Subida = { estado: "pronto" | "processando"; aviso?: string };
+
+/**
  * Sobe a entrega aprovada como anúncio PAUSADO. Cada passo grava o id na
  * entrega, então chamar de novo continua de onde parou (vídeo grande pode
  * levar mais que uma chamada para processar). Devolve se terminou.
+ *
+ * Vídeo com par (outro formato) vira um anúncio só, cada versão no seu
+ * posicionamento. Se a Meta recusar o par, sobe só o vídeo da entrega, com
+ * posicionamento automático, e devolve o motivo em `aviso`.
  */
-export async function subirNaMeta(en: Entrega, e: Estrategia, c: Criativo): Promise<"pronto" | "processando"> {
+export async function subirNaMeta(en: Entrega, e: Estrategia, c: Criativo): Promise<Subida> {
   if (e.objetivo === "video" && c.tipo !== "video") throw new Error("Objetivo 'visualização de vídeo' só aceita vídeo.");
   if (!e.link && e.objetivo === "trafego") throw new Error("Estratégia de tráfego precisa de link de destino.");
   if (!en.texto.trim()) throw new Error("Escreva o texto do anúncio (ou peça a copy à IA) antes de subir.");
@@ -275,29 +349,19 @@ export async function subirNaMeta(en: Entrega, e: Estrategia, c: Criativo): Prom
   if (Object.keys(midia).length) await updateEntrega(en.id, midia);
   const cur = { ...en, ...midia };
 
-  let creativeId = cur.meta_creative_id;
-  if (!creativeId) {
+  /** O criativo de sempre: um vídeo ou uma imagem, posicionamento automático. */
+  const criativoSimples = async (thumb: string | null): Promise<string> => {
     const cta = e.link ? { type: e.cta, value: { link: e.link } } : undefined;
-    let spec: Record<string, unknown>;
-    if (c.tipo === "video") {
-      const thumb = await videoPronto(cur.meta_video_id!, token, Date.now() + 120_000);
-      if (!thumb) return "processando";
-      spec = {
-        video_id: cur.meta_video_id,
-        image_url: thumb,
-        message: cur.texto,
-        title: cur.headline,
-        ...(cta ? { call_to_action: cta } : {}),
-      };
-    } else {
-      spec = {
-        image_hash: cur.meta_image_hash,
-        link: e.link ?? "https://pfc-landing.vercel.app/parcerias",
-        message: cur.texto,
-        name: cur.headline,
-        ...(cta ? { call_to_action: cta } : {}),
-      };
-    }
+    const spec =
+      c.tipo === "video"
+        ? { video_id: cur.meta_video_id, image_url: thumb, message: cur.texto, title: cur.headline, ...(cta ? { call_to_action: cta } : {}) }
+        : {
+            image_hash: cur.meta_image_hash,
+            link: e.link ?? "https://pfc-landing.vercel.app/parcerias",
+            message: cur.texto,
+            name: cur.headline,
+            ...(cta ? { call_to_action: cta } : {}),
+          };
     const cr = await graph<{ id: string }>(
       `/${act}/adcreatives`,
       {
@@ -311,25 +375,73 @@ export async function subirNaMeta(en: Entrega, e: Estrategia, c: Criativo): Prom
       },
       "POST"
     );
-    creativeId = cr.id;
-    await updateEntrega(en.id, { meta_creative_id: creativeId });
+    await updateEntrega(en.id, { meta_creative_id: cr.id });
+    return cr.id;
+  };
+
+  let creativeId = cur.meta_creative_id;
+  let aviso: string | undefined;
+  let thumb: string | null = null;
+  // Criativo novo montado com o par nesta chamada: se a Meta recusar o anúncio, cai no simples.
+  let comPar: Criativo | null = null;
+  const recusou = (par: Criativo, err: unknown) =>
+    `A Meta recusou o anúncio por posicionamento com “${par.nome}” (${err instanceof Error ? err.message : String(err)}). Subiu só este vídeo, com posicionamento automático.`;
+
+  if (!creativeId) {
+    const par = await parUsavel(c);
+    if (par && !cur.meta_video_id_par) {
+      cur.meta_video_id_par = await subirVideo(par, act, token);
+      await updateEntrega(en.id, { meta_video_id_par: cur.meta_video_id_par });
+    }
+    if (c.tipo === "video") {
+      thumb = await videoPronto(cur.meta_video_id!, token, Date.now() + 120_000);
+      if (!thumb) return { estado: "processando" };
+    }
+    if (par && cur.meta_video_id_par && thumb) {
+      const thumbPar = await videoPronto(cur.meta_video_id_par, token, Date.now() + 60_000);
+      if (!thumbPar) return { estado: "processando" };
+      try {
+        creativeId = await criativoPorPosicionamento(
+          { e, c, par, videoC: cur.meta_video_id!, thumbC: thumb, videoPar: cur.meta_video_id_par, thumbPar, texto: cur.texto, headline: cur.headline },
+          act,
+          token,
+          page.accountId,
+          ig?.accountId ?? null
+        );
+        await updateEntrega(en.id, { meta_creative_id: creativeId });
+        comPar = par;
+      } catch (err) {
+        aviso = recusou(par, err);
+      }
+    }
+    if (!creativeId) creativeId = await criativoSimples(thumb);
   }
 
   if (!cur.meta_ad_id) {
-    const ad = await graph<{ id: string }>(
-      `/${act}/ads`,
-      {
-        name: `${cur.angulo ? `${cur.angulo} · ` : ""}${c.nome}`.slice(0, 200),
-        adset_id: adsetId,
-        creative: JSON.stringify({ creative_id: creativeId }),
-        status: "PAUSED",
-        access_token: token,
-      },
-      "POST"
-    );
+    const criarAnuncio = (creative: string) =>
+      graph<{ id: string }>(
+        `/${act}/ads`,
+        {
+          name: `${cur.angulo ? `${cur.angulo} · ` : ""}${c.nome}`.slice(0, 200),
+          adset_id: adsetId,
+          creative: JSON.stringify({ creative_id: creative }),
+          status: "PAUSED",
+          access_token: token,
+        },
+        "POST"
+      );
+    let ad: { id: string };
+    try {
+      ad = await criarAnuncio(creativeId);
+    } catch (err) {
+      // A Meta às vezes só valida o asset_feed_spec quando o anúncio nasce.
+      if (!comPar) throw err;
+      aviso = recusou(comPar, err);
+      ad = await criarAnuncio(await criativoSimples(thumb));
+    }
     await updateEntrega(en.id, { meta_ad_id: ad.id });
   }
-  return "pronto";
+  return { estado: "pronto", aviso };
 }
 
 /** Link do anúncio no Gerenciador. */
