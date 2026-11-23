@@ -4,6 +4,7 @@ import AdminHeader from "@/components/admin/AdminHeader";
 import PartnerForm from "@/components/admin/PartnerForm";
 import CopyButton from "@/components/CopyButton";
 import { getPartnerById, getPartnerClickTotal } from "@/lib/admin";
+import { requireAcesso } from "@/lib/auth";
 import {
   getOrCreatePanelToken,
   getPartnerLeads,
@@ -34,6 +35,7 @@ export default async function EditPartnerPage({
 }: {
   params: { id: string };
 }) {
+  await requireAcesso("parceiros.ver");
   const partner = await getPartnerById(params.id);
   if (!partner) notFound();
 

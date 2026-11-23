@@ -5,7 +5,7 @@ import CotaForm, { type CotaInicial } from "@/components/ao-vivo/CotaForm";
 import { brtDate } from "@/lib/agenda/store";
 import { garantirTelas, getCota, listCotas, modalidadesDo, relatorio, sessaoAtiva, type Cota } from "@/lib/ao-vivo/store";
 import { MOMENTOS, TIPOS } from "@/lib/ao-vivo/tipos";
-import { requireAdmin } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { site } from "@/lib/config";
 import { db } from "@/lib/producao/store";
 import { QUADROS, QUADRO_IDS, isQuadroId } from "@/lib/producao/quadros";
@@ -33,7 +33,7 @@ function minutos(s: number): string {
 }
 
 export default async function AoVivoPage({ searchParams }: { searchParams: { aba?: string; editar?: string; mes?: string } }) {
-  await requireAdmin();
+  await requireAcesso("ao_vivo.ver");
   const aba: Aba = ABAS.includes(searchParams.aba as Aba) ? (searchParams.aba as Aba) : searchParams.editar ? "cotas" : "quadros";
   const [telas, cotas] = await Promise.all([garantirTelas(), listCotas()]);
   const ativas = cotas.filter((c) => c.ativo);

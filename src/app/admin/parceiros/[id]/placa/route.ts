@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import type { NextRequest } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { getPartnerById } from "@/lib/admin";
 import { renderPlaca } from "@/lib/placa";
 
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 /** PNG da placa do QR. `?download=1` baixa como arquivo. */
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-  await requireAdmin();
+  await requireAcesso("parceiros.ver");
   const partner = await getPartnerById(params.id);
   if (!partner) notFound();
 

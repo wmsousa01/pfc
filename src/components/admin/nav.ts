@@ -1,6 +1,7 @@
 /** Menu do admin: grupos, itens e ícones (traço, viewBox 24). */
 
 export type NavKey =
+  | "meusQuadros"
   | "pendencias"
   | "agenda"
   | "apresentadores"
@@ -14,9 +15,11 @@ export type NavKey =
   | "entregas"
   | "pedidos"
   | "revendedores"
-  | "produtos";
+  | "produtos"
+  | "equipe";
 
-export type NavItem = { key: NavKey; href: string; label: string; icon: string };
+/** perm: permissão que abre o item (ver src/lib/permissoes.ts); "admin" = só administrador. */
+export type NavItem = { key: NavKey; href: string; label: string; icon: string; perm: string };
 export type NavGrupo = { label: string; itens: NavItem[] };
 
 export const ICONES = {
@@ -46,35 +49,41 @@ export const ICONES = {
   recolher: "M11 17l-5-5 5-5M18 17l-5-5 5-5",
   expandir: "M13 17l5-5-5-5M6 17l5-5-5-5",
   mais: "M5 12h.01M12 12h.01M19 12h.01",
+  equipe: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4",
 } as const;
 
 export const NAV: NavGrupo[] = [
   {
     label: "Para você",
-    itens: [{ key: "pendencias", href: "/admin/pendencias", label: "Pendências", icon: ICONES.pendencias }],
+    itens: [
+      { key: "meusQuadros", href: "/admin/meus-quadros", label: "Meus quadros", icon: ICONES.mic, perm: "meus_quadros.ver" },{ key: "pendencias", href: "/admin/pendencias", label: "Pendências", icon: ICONES.pendencias, perm: "pendencias.ver" }],
   },
   {
     label: "Conteúdo",
     itens: [
-      { key: "agenda", href: "/admin/agenda", label: "Agenda", icon: ICONES.agenda },
-      { key: "apresentadores", href: "/admin/apresentadores", label: "Apresentadores", icon: ICONES.mic },
-      { key: "arquivos", href: "/admin/arquivos", label: "Arquivos", icon: ICONES.pasta },
-      { key: "producao", href: "/admin/producao", label: "Produção", icon: ICONES.producao },
-      { key: "aoVivo", href: "/admin/ao-vivo", label: "Ao vivo", icon: ICONES.aoVivo },
-      { key: "marketing", href: "/admin/marketing", label: "Marketing", icon: ICONES.marketing },
-      { key: "campanhas", href: "/admin/campanhas", label: "Campanhas", icon: ICONES.campanhas },
-      { key: "fotos", href: "/admin/fotos", label: "Fotos", icon: ICONES.fotos },
+      { key: "agenda", href: "/admin/agenda", label: "Agenda", icon: ICONES.agenda, perm: "agenda.ver" },
+      { key: "apresentadores", href: "/admin/apresentadores", label: "Apresentadores", icon: ICONES.mic, perm: "apresentadores.ver" },
+      { key: "arquivos", href: "/admin/arquivos", label: "Arquivos", icon: ICONES.pasta, perm: "arquivos.ver" },
+      { key: "producao", href: "/admin/producao", label: "Produção", icon: ICONES.producao, perm: "producao.ver" },
+      { key: "aoVivo", href: "/admin/ao-vivo", label: "Ao vivo", icon: ICONES.aoVivo, perm: "ao_vivo.ver" },
+      { key: "marketing", href: "/admin/marketing", label: "Marketing", icon: ICONES.marketing, perm: "marketing.ver" },
+      { key: "campanhas", href: "/admin/campanhas", label: "Campanhas", icon: ICONES.campanhas, perm: "campanhas.ver" },
+      { key: "fotos", href: "/admin/fotos", label: "Fotos", icon: ICONES.fotos, perm: "fotos.ver" },
     ],
   },
   {
     label: "Comercial",
     itens: [
-      { key: "parceiros", href: "/admin", label: "Parceiros", icon: ICONES.parceiros },
-      { key: "entregas", href: "/admin/entregas", label: "Entregas", icon: ICONES.entregas },
-      { key: "pedidos", href: "/admin/pedidos", label: "Pedidos", icon: ICONES.pedidos },
-      { key: "revendedores", href: "/admin/revendedores", label: "Revendedores", icon: ICONES.revendedores },
-      { key: "produtos", href: "/admin/produtos", label: "Produtos", icon: ICONES.produtos },
+      { key: "parceiros", href: "/admin", label: "Parceiros", icon: ICONES.parceiros, perm: "parceiros.ver" },
+      { key: "entregas", href: "/admin/entregas", label: "Entregas", icon: ICONES.entregas, perm: "entregas.ver" },
+      { key: "pedidos", href: "/admin/pedidos", label: "Pedidos", icon: ICONES.pedidos, perm: "pedidos.ver" },
+      { key: "revendedores", href: "/admin/revendedores", label: "Revendedores", icon: ICONES.revendedores, perm: "revendedores.ver" },
+      { key: "produtos", href: "/admin/produtos", label: "Produtos", icon: ICONES.produtos, perm: "produtos.ver" },
     ],
+  },
+  {
+    label: "Gestão",
+    itens: [{ key: "equipe", href: "/admin/equipe", label: "Equipe e acessos", icon: ICONES.equipe, perm: "admin" }],
   },
 ];
 

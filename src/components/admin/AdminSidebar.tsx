@@ -43,12 +43,14 @@ function Marca() {
 
 function Menu({
   contadores,
+  permitidos,
   ativo,
   filtro,
   grande,
   aoNavegar,
 }: {
   contadores: Contadores;
+  permitidos: NavKey[];
   ativo: NavKey | null;
   filtro: string;
   grande?: boolean;
@@ -59,7 +61,7 @@ function Menu({
   return (
     <>
       {NAV.map((g) => {
-        const itens = g.itens.filter((i) => !f || i.label.toLowerCase().includes(f));
+        const itens = g.itens.filter((i) => permitidos.includes(i.key) && (!f || i.label.toLowerCase().includes(f)));
         if (itens.length === 0) return null;
         return (
           <nav key={g.label} aria-label={g.label} className="flex flex-col gap-0.5 mb-2.5">
@@ -123,7 +125,7 @@ function Rodape({ grande }: { grande?: boolean }) {
   );
 }
 
-export default function AdminSidebar({ contadores }: { contadores: Contadores }) {
+export default function AdminSidebar({ contadores, permitidos }: { contadores: Contadores; permitidos: NavKey[] }) {
   const pathname = usePathname();
   const ativo = itemAtivo(pathname);
   const [aberto, setAberto] = useState(false);
@@ -163,7 +165,7 @@ export default function AdminSidebar({ contadores }: { contadores: Contadores })
   const irPrimeiro = (e: React.FormEvent) => {
     e.preventDefault();
     const f = filtro.trim().toLowerCase();
-    const alvo = NAV.flatMap((g) => g.itens).find((i) => i.label.toLowerCase().includes(f));
+    const alvo = NAV.flatMap((g) => g.itens).find((i) => permitidos.includes(i.key) && i.label.toLowerCase().includes(f));
     if (alvo) window.location.href = alvo.href;
   };
 
@@ -218,7 +220,7 @@ export default function AdminSidebar({ contadores }: { contadores: Contadores })
           </label>
         </form>
 
-        <Menu contadores={contadores} ativo={ativo} filtro={filtro} />
+        <Menu contadores={contadores} permitidos={permitidos} ativo={ativo} filtro={filtro} />
         <div className="flex-1" />
         <Rodape />
       </aside>
@@ -233,7 +235,7 @@ export default function AdminSidebar({ contadores }: { contadores: Contadores })
           className="relative flex items-center justify-center w-11 h-11 rounded-lg text-white/80"
         >
           <Icone d={ICONES.menu} size={22} />
-          {(contadores.pendencias?.n ?? 0) > 0 && (
+          {permitidos.includes("pendencias") && (contadores.pendencias?.n ?? 0) > 0 && (
             <span
               aria-hidden="true"
               className={`absolute top-2 right-2 w-2 h-2 rounded-full ${contadores.pendencias?.alerta ? "bg-red-400" : "bg-gold-500"}`}
@@ -273,7 +275,7 @@ export default function AdminSidebar({ contadores }: { contadores: Contadores })
                 <Icone d={ICONES.fechar} size={20} />
               </button>
             </div>
-            <Menu contadores={contadores} ativo={ativo} filtro="" grande aoNavegar={() => setAberto(false)} />
+            <Menu contadores={contadores} permitidos={permitidos} ativo={ativo} filtro="" grande aoNavegar={() => setAberto(false)} />
             <div className="flex-1" />
             <Rodape grande />
           </aside>

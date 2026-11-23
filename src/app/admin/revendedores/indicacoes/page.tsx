@@ -1,7 +1,7 @@
 import AdminHeader from "@/components/admin/AdminHeader";
 import ProducaoForm from "@/components/admin/ProducaoForm";
 import QuadroLogo from "@/components/QuadroLogo";
-import { requireAdmin } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { CAMPANHA, campanhaAtiva } from "@/lib/campanha";
 import { quadros } from "@/lib/config";
@@ -27,7 +27,7 @@ const input = "admin-input text-sm";
  * até o fechamento (congela a comissão) e marcar as parcelas pagas.
  */
 export default async function IndicacoesPage() {
-  await requireAdmin();
+  await requireAcesso("revendedores.ver");
   const { data, error } = await createServerSupabase()
     .from("indicacoes")
     .select("*, reseller:resellers(name, slug, apresentador, quadro)")

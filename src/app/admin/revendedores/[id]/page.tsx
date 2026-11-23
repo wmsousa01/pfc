@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import AdminHeader from "@/components/admin/AdminHeader";
 import ResellerForm from "@/components/admin/ResellerForm";
 import CopyButton from "@/components/CopyButton";
-import { requireAdmin } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { getOrders, getResellerById, summarizeOrders } from "@/lib/orders";
 import { brl } from "@/lib/money";
 import { couponFor } from "@/lib/commission";
@@ -31,7 +31,7 @@ export default async function EditResellerPage({
 }: {
   params: { id: string };
 }) {
-  await requireAdmin();
+  await requireAcesso("revendedores.ver");
 
   const reseller = await getResellerById(params.id);
   if (!reseller) notFound();

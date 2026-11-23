@@ -1,7 +1,7 @@
 import AdminHeader from "@/components/admin/AdminHeader";
 import { EspacoHeader } from "@/components/admin/Espaco";
 import ProducaoForm from "@/components/admin/ProducaoForm";
-import { requireAdmin } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { db, type Apresentador } from "@/lib/agenda/store";
 import { TIPOS_MATERIAL, listCadastros, materiaisDoCadastro, type Cadastro, type CadastroStatus } from "@/lib/apresentadores/store";
 import { site } from "@/lib/config";
@@ -27,7 +27,7 @@ const dataHora = (iso: string) =>
 const nomeQuadro = (q: string) => (isQuadroId(q) ? QUADROS[q].name : q);
 
 export default async function ApresentadoresPage({ searchParams }: { searchParams: { aba?: string } }) {
-  await requireAdmin();
+  await requireAcesso("apresentadores.ver");
   const aba = (ABAS.find((a) => a.key === searchParams.aba)?.key ?? "pendente") as CadastroStatus;
   const todos = await listCadastros();
   const lista = todos.filter((c) => c.status === aba);

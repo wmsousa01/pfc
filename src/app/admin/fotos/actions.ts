@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireAdmin } from "@/lib/auth";
+import { exigir } from "@/lib/auth";
 import { AVULSA, chavePreset, limparPreset, type Preset } from "@/lib/fotos/preset";
 import { clearConfig, setConfig } from "@/lib/producao/store";
 import { QUADROS, isQuadroId } from "@/lib/producao/quadros";
@@ -24,7 +24,7 @@ import {
 const valido = (quadro: string) => quadro === AVULSA || isQuadroId(quadro);
 
 export async function salvarPresetAction(quadro: string, bruto: unknown): Promise<{ ok: boolean; erro?: string; preset?: Preset }> {
-  await requireAdmin();
+  await exigir("fotos.editar");
   if (!valido(quadro)) return { ok: false, erro: "Quadro desconhecido." };
   try {
     const preset = limparPreset(bruto);
@@ -37,7 +37,7 @@ export async function salvarPresetAction(quadro: string, bruto: unknown): Promis
 }
 
 export async function restaurarPresetAction(quadro: string): Promise<{ ok: boolean; erro?: string }> {
-  await requireAdmin();
+  await exigir("fotos.editar");
   if (!valido(quadro)) return { ok: false, erro: "Quadro desconhecido." };
   try {
     await clearConfig(chavePreset(quadro));
@@ -109,7 +109,7 @@ function limparPedido(bruto: unknown): PedidoPost {
 }
 
 export async function buscarNumerosAction(periodo: PeriodoNumeros): Promise<{ ok: boolean; erro?: string; numeros?: NumerosPost }> {
-  await requireAdmin();
+  await exigir("fotos.editar");
   if (!["semana", "28d", "mes"].includes(periodo)) return { ok: false, erro: "Período desconhecido." };
   try {
     return { ok: true, numeros: await lerNumerosPeriodo(periodo) };
@@ -120,7 +120,7 @@ export async function buscarNumerosAction(periodo: PeriodoNumeros): Promise<{ ok
 
 /** Link para o navegador enviar a foto já tratada direto para o armazenamento. */
 export async function pedirEnvioFotoAction(): Promise<{ ok: boolean; erro?: string; path?: string; url?: string }> {
-  await requireAdmin();
+  await exigir("fotos.editar");
   try {
     return { ok: true, ...(await pedirEnvioFoto()) };
   } catch (e) {
@@ -129,7 +129,7 @@ export async function pedirEnvioFotoAction(): Promise<{ ok: boolean; erro?: stri
 }
 
 export async function conferirFotoAction(path: string): Promise<{ ok: boolean; erro?: string }> {
-  await requireAdmin();
+  await exigir("fotos.editar");
   if (!caminhoFotoValido(path)) return { ok: false, erro: "Foto inválida." };
   try {
     await conferirFoto(path);
@@ -141,7 +141,7 @@ export async function conferirFotoAction(path: string): Promise<{ ok: boolean; e
 
 /** As artes ficam guardadas: a tela recebe links (não a imagem), e a publicação usa os mesmos arquivos. */
 export async function gerarPostAction(bruto: unknown): Promise<{ ok: boolean; erro?: string; slides?: SlideGerado[] }> {
-  await requireAdmin();
+  await exigir("fotos.editar");
   try {
     const artes = await renderPost(limparPedido(bruto));
     return { ok: true, slides: await guardarArtes(artes) };
@@ -151,7 +151,7 @@ export async function gerarPostAction(bruto: unknown): Promise<{ ok: boolean; er
 }
 
 export async function montarComIAAction(ideia: string, quadro: string): Promise<{ ok: boolean; erro?: string; post?: PostSugerido }> {
-  await requireAdmin();
+  await exigir("fotos.editar");
   const texto = typeof ideia === "string" ? ideia.trim().slice(0, 2000) : "";
   if (texto.length < 10) return { ok: false, erro: "Descreva a ideia com um pouco mais de detalhe." };
   if (!isGeminiConfigured()) return { ok: false, erro: "A IA não está configurada no servidor (GOOGLE_AI_API_KEY)." };
@@ -169,7 +169,7 @@ export async function publicarPostAction(entrada: {
   perfilId: number | null;
   story: boolean;
 }): Promise<{ ok: boolean; erro?: string; publicado?: Publicado }> {
-  await requireAdmin();
+  await exigir("fotos.editar");
   const paths = (Array.isArray(entrada?.paths) ? entrada.paths : []).filter(
     (p): p is string => typeof p === "string" && p.startsWith(PASTA_ARTES) && /^[\w/.-]+$/.test(p) && !p.includes("..")
   );

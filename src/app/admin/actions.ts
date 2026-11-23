@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/auth";
+import { exigir } from "@/lib/auth";
 import * as storage from "@/lib/storage";
 import type { PartnerSection } from "@/lib/types";
 
@@ -68,7 +68,7 @@ function slugify(input: string): string {
  * admin exigem o papel de admin (tabela app_admins).
  */
 async function requireAuth() {
-  await requireAdmin();
+  await exigir("parceiros.editar");
   return createServerSupabase();
 }
 

@@ -16,7 +16,7 @@ const AREAS = [
  * Segue o padrão oficial @supabase/ssr (reescreve cookies no request/response).
  *
  * Aqui só se verifica SE há sessão. QUEM é (admin ou revendedor) é decidido
- * nas páginas, via requireAdmin()/requireReseller() — o middleware roda no
+ * nas páginas, via requireAcesso()/requireReseller() — o middleware roda no
  * edge a cada request e uma consulta de papel aqui sairia caro.
  */
 export async function middleware(request: NextRequest) {

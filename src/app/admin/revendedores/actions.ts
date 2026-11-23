@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
-import { requireAdmin } from "@/lib/auth";
+import { exigir } from "@/lib/auth";
 import { MAX_DISCOUNT_PERCENT } from "@/lib/commission";
 import { toCents } from "@/lib/money";
 import { quadros } from "@/lib/config";
@@ -102,7 +102,7 @@ async function ensureAuthUser(
 }
 
 export async function saveReseller(formData: FormData) {
-  await requireAdmin();
+  await exigir("revendedores.editar");
   const supabase = createServerSupabase();
 
   const id = String(formData.get("id") ?? "").trim();
@@ -174,7 +174,7 @@ export async function saveReseller(formData: FormData) {
 }
 
 export async function toggleResellerActive(formData: FormData) {
-  await requireAdmin();
+  await exigir("revendedores.editar");
   const supabase = createServerSupabase();
   const id = String(formData.get("id") ?? "");
   const active = formData.get("active") === "true";
@@ -185,7 +185,7 @@ export async function toggleResellerActive(formData: FormData) {
 }
 
 export async function deleteReseller(formData: FormData) {
-  await requireAdmin();
+  await exigir("revendedores.editar");
   const supabase = createServerSupabase();
   const id = String(formData.get("id") ?? "");
   if (id) {
@@ -202,7 +202,7 @@ export async function deleteReseller(formData: FormData) {
  * de um revendedor. É o "acerto de contas" do mês.
  */
 export async function payResellerCommission(formData: FormData) {
-  await requireAdmin();
+  await exigir("revendedores.editar");
   const supabase = createServerSupabase();
   const resellerId = String(formData.get("reseller_id") ?? "");
   if (!resellerId) return;

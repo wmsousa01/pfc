@@ -2,7 +2,7 @@ import AdminHeader from "@/components/admin/AdminHeader";
 import CopyButton from "@/components/CopyButton";
 import { EspacoHeader } from "@/components/admin/Espaco";
 import ProducaoForm from "@/components/admin/ProducaoForm";
-import { requireAdmin } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { db, getConfig } from "@/lib/producao/store";
 import {
   getEstado,
@@ -82,7 +82,7 @@ function Delta({ v }: { v: number | null }) {
 }
 
 export default async function SemanaPage({ searchParams }: { searchParams: { s?: string } }) {
-  await requireAdmin();
+  await requireAcesso("marketing.ver");
   const now = Date.now();
   const segunda = isSegunda(searchParams.s) ? searchParams.s : segundaDe(now);
   const { ini, fim } = limitesDaSemana(segunda);

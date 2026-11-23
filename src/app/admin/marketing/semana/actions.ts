@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireAdmin } from "@/lib/auth";
+import { exigir } from "@/lib/auth";
 import type { ActionState } from "@/app/admin/producao/actions";
 import { clearConfig, db, setConfig } from "@/lib/producao/store";
 import { IG_AUTO_PAUSA, YT_AUTO_PAUSA } from "@/lib/social/auto-youtube";
@@ -23,7 +23,7 @@ function segundaDo(form: FormData): string {
 }
 
 export async function gerarNumerosAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  await requireAdmin();
+  await exigir("marketing.editar");
   try {
     await gerarNumeros(segundaDo(form), { manterLegenda: str(form, "manter") === "1" });
     refresh();
@@ -35,7 +35,7 @@ export async function gerarNumerosAction(_prev: ActionState, form: FormData): Pr
 
 /** Salva a legenda e, conforme `modo`, publica agora ou programa. */
 export async function programarNumerosAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  await requireAdmin();
+  await exigir("marketing.editar");
   try {
     const segunda = segundaDo(form);
     const legenda = str(form, "legenda").slice(0, 2200);
@@ -60,7 +60,7 @@ export async function programarNumerosAction(_prev: ActionState, form: FormData)
 }
 
 export async function cancelarNumerosAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  await requireAdmin();
+  await exigir("marketing.editar");
   try {
     await cancelarNumeros(segundaDo(form));
     refresh();
@@ -75,7 +75,7 @@ export async function cancelarNumerosAction(_prev: ActionState, form: FormData):
  * espalha no ritmo de ritmo.ts (até 4 testes por dia, das 10h às 22h).
  */
 export async function devolverTestesAction(_prev: ActionState): Promise<ActionState> {
-  await requireAdmin();
+  await exigir("marketing.editar");
   try {
     const { data, error } = await db()
       .from("social_posts")
@@ -108,7 +108,7 @@ export async function devolverTestesAction(_prev: ActionState): Promise<ActionSt
 
 /** Liga ou pausa o agendamento automático no YouTube ou (rede=instagram) no Instagram. */
 export async function youtubeAutoAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  await requireAdmin();
+  await exigir("marketing.editar");
   try {
     const chave = str(form, "rede") === "instagram" ? IG_AUTO_PAUSA : YT_AUTO_PAUSA;
     if (str(form, "pausar") === "1") await setConfig(chave, "1");

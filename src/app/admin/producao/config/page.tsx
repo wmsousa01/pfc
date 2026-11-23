@@ -1,6 +1,6 @@
 import AdminHeader from "@/components/admin/AdminHeader";
 import ProducaoForm from "@/components/admin/ProducaoForm";
-import { requireAdmin } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { IMAGE_MODEL, isGeminiConfigured } from "@/lib/producao/gemini";
 import { DEFAULT_PLATE_PROMPT } from "@/lib/producao/prompt";
 import { QUADROS, QUADRO_IDS, quadroLogoPath } from "@/lib/producao/quadros";
@@ -15,7 +15,7 @@ export default async function ProducaoConfigPage({
 }: {
   searchParams: { ok?: string; erro?: string };
 }) {
-  await requireAdmin();
+  await requireAcesso("producao.ver");
   const [channel, prompt, logo] = await Promise.all([
     connectedChannel(),
     getConfig("plate_prompt"),

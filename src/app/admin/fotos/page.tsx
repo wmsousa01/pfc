@@ -2,7 +2,7 @@ import AdminHeader from "@/components/admin/AdminHeader";
 import { EspacoHeader } from "@/components/admin/Espaco";
 import EditorFotos, { type QuadroFoto } from "@/components/admin/fotos/EditorFotos";
 import EditorPosts from "@/components/admin/fotos/EditorPosts";
-import { requireAdmin } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { AVULSA, chavePreset, limparPreset, type Preset } from "@/lib/fotos/preset";
 import { perfisInstagram } from "@/lib/posts/publicar";
 import { db } from "@/lib/producao/store";
@@ -24,7 +24,7 @@ async function carregarPresets(): Promise<Record<string, Preset>> {
 }
 
 export default async function FotosPage({ searchParams }: { searchParams: { aba?: string } }) {
-  await requireAdmin();
+  await requireAcesso("fotos.ver");
   const aba = searchParams.aba === "posts" ? "posts" : "fotos";
   const presets = await carregarPresets();
   const quadros: QuadroFoto[] = [

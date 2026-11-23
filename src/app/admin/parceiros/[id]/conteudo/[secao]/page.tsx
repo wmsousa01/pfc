@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import AdminHeader from "@/components/admin/AdminHeader";
 import ContentSectionForm from "@/components/admin/ContentSectionForm";
-import { requireAdmin } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { getPartnerById } from "@/lib/admin";
 import { findContentSection } from "@/lib/partner-content-schema";
 import { derivePartnerLinks } from "@/lib/partner-links";
@@ -15,7 +15,7 @@ export default async function PartnerContentSectionPage({
 }: {
   params: { id: string; secao: string };
 }) {
-  await requireAdmin();
+  await requireAcesso("parceiros.ver");
 
   const section = findContentSection(params.secao);
   if (!section) notFound();

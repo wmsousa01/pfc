@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { ActionState } from "@/app/admin/producao/actions";
 import type { Inicio, Res } from "@/components/arquivos/EnvioGrande";
-import { requireAdmin } from "@/lib/auth";
+import { exigir } from "@/lib/auth";
 import {
   MAX_ARQUIVO,
   apagarArquivo,
@@ -28,8 +28,8 @@ import {
 const str = (form: FormData, key: string) => String(form.get(key) ?? "").trim();
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-async function ator(): Promise<string> {
-  const r = await requireAdmin();
+async function ator(perm = "arquivos.editar"): Promise<string> {
+  const r = await exigir(perm);
   return r.email ?? r.userId;
 }
 
@@ -146,7 +146,7 @@ export async function moverArquivoAction(_prev: ActionState, form: FormData): Pr
 
 /** Link para mandar a alguém de fora baixar, direto do R2, válido por alguns dias. */
 export async function linkDownloadAction(id: string, dias: number): Promise<Res<{ url: string }>> {
-  await ator();
+  await ator("arquivos.ver");
   return tentar(async () => {
     const a = await getArquivo(id);
     if (!a) throw new Error("Arquivo não encontrado.");
