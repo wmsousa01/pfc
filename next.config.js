@@ -12,6 +12,8 @@ const nextConfig = {
       "/api/cron/producao": ["./assets/fonts/**"],
       "/admin/agenda/[id]": ["./assets/fonts/**", "./node_modules/ffmpeg-static/ffmpeg*"],
       "/ao-vivo/tela/[token]/placa/[id]": ["./assets/fonts/**"],
+      // Artes dos posts (Anton e Noto Sans lidas em runtime pelas server actions da página).
+      "/admin/fotos": ["./assets/fonts/**"],
     },
   },
   images: {
