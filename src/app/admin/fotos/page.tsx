@@ -1,6 +1,7 @@
 import AdminHeader from "@/components/admin/AdminHeader";
 import { EspacoHeader } from "@/components/admin/Espaco";
 import EditorFotos, { type QuadroFoto } from "@/components/admin/fotos/EditorFotos";
+import EditorPosts from "@/components/admin/fotos/EditorPosts";
 import { requireAdmin } from "@/lib/auth";
 import { AVULSA, chavePreset, limparPreset, type Preset } from "@/lib/fotos/preset";
 import { db } from "@/lib/producao/store";
@@ -21,9 +22,9 @@ async function carregarPresets(): Promise<Record<string, Preset>> {
   return presets;
 }
 
-export default async function FotosPage() {
+export default async function FotosPage({ searchParams }: { searchParams: { aba?: string } }) {
   await requireAdmin();
-  const presets = await carregarPresets();
+  const aba = searchParams.aba === "posts" ? "posts" : "fotos";
   const quadros: QuadroFoto[] = [
     ...QUADRO_IDS.map((id) => ({ id, nome: QUADROS[id].name, cor: QUADROS[id].accent[1] })),
     { id: AVULSA, nome: "Outras fotos", cor: "#9ca3af" },
@@ -33,8 +34,15 @@ export default async function FotosPage() {
     <div className="min-h-screen bg-[#0a0a0a] pb-20">
       <AdminHeader />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-4 sm:pt-6">
-        <EspacoHeader area="Fotos" titulo="Correção de fotos" />
-        <EditorFotos quadros={quadros} presets={presets} />
+        <EspacoHeader
+          area="Fotos"
+          titulo={aba === "posts" ? "Criar posts" : "Correção de fotos"}
+          abas={[
+            { href: "/admin/fotos", label: "Corrigir fotos", ativa: aba === "fotos" },
+            { href: "/admin/fotos?aba=posts", label: "Criar posts", ativa: aba === "posts" },
+          ]}
+        />
+        {aba === "posts" ? <EditorPosts quadros={quadros} /> : <EditorFotos quadros={quadros} presets={await carregarPresets()} />}
       </div>
     </div>
   );
