@@ -5,6 +5,7 @@ export type NavKey =
   | "pendencias"
   | "agenda"
   | "apresentadores"
+  | "materiais"
   | "arquivos"
   | "producao"
   | "aoVivo"
@@ -49,6 +50,7 @@ export const ICONES = {
   recolher: "M11 17l-5-5 5-5M18 17l-5-5 5-5",
   expandir: "M13 17l5-5-5-5M6 17l5-5-5-5",
   mais: "M5 12h.01M12 12h.01M19 12h.01",
+  materiais: "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2zM12 11v6M9 14l3-3 3 3",
   equipe: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4",
 } as const;
 
@@ -63,6 +65,7 @@ export const NAV: NavGrupo[] = [
     itens: [
       { key: "agenda", href: "/admin/agenda", label: "Agenda", icon: ICONES.agenda, perm: "agenda.ver" },
       { key: "apresentadores", href: "/admin/apresentadores", label: "Apresentadores", icon: ICONES.mic, perm: "apresentadores.ver" },
+      { key: "materiais", href: "/admin/materiais", label: "Materiais", icon: ICONES.materiais, perm: "materiais.ver" },
       { key: "arquivos", href: "/admin/arquivos", label: "Arquivos", icon: ICONES.pasta, perm: "arquivos.ver" },
       { key: "producao", href: "/admin/producao", label: "Produção", icon: ICONES.producao, perm: "producao.ver" },
       { key: "aoVivo", href: "/admin/ao-vivo", label: "Ao vivo", icon: ICONES.aoVivo, perm: "ao_vivo.ver" },
