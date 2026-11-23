@@ -23,6 +23,7 @@ import { PLATFORMS, listConnections, type Platform, type PostStatus, type Social
 import {
   cancelPostAction,
   disconnectMetaAction,
+  disconnectPerfilAction,
   graduatePostAction,
   retryPostAction,
   runQueueAction,
@@ -163,7 +164,11 @@ export default async function MarketingPage({
     }
   }
 
-  const ig = connections?.find((c) => c.platform === "instagram" && c.status === "ativa");
+  const ig = connections?.find((c) => c.platform === "instagram" && c.status === "ativa" && c.principal);
+  // Perfis extras do Instagram (ex.: @ladoaladob26): vêm das outras Páginas marcadas no login da Meta.
+  const perfisExtras = (connections ?? []).filter((c) => c.platform === "instagram" && c.status === "ativa" && !c.principal);
+  const nomePerfil = (id: number | null) =>
+    id ? (connections?.find((c) => c.id === id)?.account_name ?? "perfil desconectado") : null;
   const fb = connections?.find((c) => c.platform === "facebook" && c.status === "ativa");
   const metaRevoked = !ig && !fb && connections?.some((c) => (c.platform === "instagram" || c.platform === "facebook") && c.status === "revogada");
 
@@ -261,6 +266,16 @@ export default async function MarketingPage({
         <option value="normal">Reel normal</option>
         <option value="off">Não publicar</option>
       </select>
+      {perfisExtras.length > 0 && (
+        <select name="perfil" defaultValue="" disabled={!connected.instagram} className={input} title="Em qual perfil do Instagram o Reel sai">
+          <option value="">{ig?.account_name ?? "Perfil principal"}</option>
+          {perfisExtras.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.account_name ?? `Perfil ${c.id}`}
+            </option>
+          ))}
+        </select>
+      )}
     </label>
   );
 
@@ -288,6 +303,9 @@ export default async function MarketingPage({
 
   const Extras = ({ p }: { p: SocialPost }) => (
     <>
+      {p.perfil_id && (
+        <span className={`${chip} border-sky-500/30 bg-sky-500/10 text-sky-300`}>{nomePerfil(p.perfil_id)}</span>
+      )}
       {p.trial && (
         <span className={`${chip} border-gold-500/30 bg-gold-500/10 text-gold-400`}>
           {p.graduated_at ? "Teste promovido" : "Teste"}
@@ -844,6 +862,15 @@ export default async function MarketingPage({
                     <p className={ig ? "text-emerald-400 font-semibold" : "text-yellow-300"}>
                       {ig ? `✓ Instagram ${ig.account_name ?? ""}` : "Instagram não ligado à Página (precisa ser Business/Creator)"}
                     </p>
+                    {perfisExtras.map((c) => (
+                      <div key={c.id} className="flex items-center gap-3">
+                        <p className="text-sky-300 font-semibold">✓ Perfil extra {c.account_name ?? ""}</p>
+                        <form action={disconnectPerfilAction}>
+                          <input type="hidden" name="id" value={c.id} />
+                          <button className="text-xs text-white/40 hover:text-red-400">Tirar</button>
+                        </form>
+                      </div>
+                    ))}
                   </div>
                   <div className="flex items-center gap-3">
                     <a href="/api/social/meta/oauth" className="text-xs text-white/60 hover:text-white">
@@ -853,6 +880,10 @@ export default async function MarketingPage({
                       <button className="text-xs text-white/40 hover:text-red-400">Desconectar</button>
                     </form>
                   </div>
+                  <p className="text-white/30 text-xs w-full">
+                    Outro perfil (ex.: Lado A Lado B): ligue o Instagram dele a uma Página do Facebook, clique em Reconectar e
+                    marque as duas Páginas e os dois Instagrams no login da Meta. Ele vira perfil extra, escolhido post a post.
+                  </p>
                 </div>
               ) : (
                 <div className="mt-2">

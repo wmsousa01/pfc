@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createBrowserSupabase } from "@/lib/supabase/client";
+import { enviarArquivo } from "@/lib/envio-arquivo";
 import {
   prepareUploadAction,
   sendMessageAction,
@@ -52,16 +52,12 @@ export default function MessageForm({ token, t }: { token: string; t: Theme }) {
       );
       if (!prep.ok) throw new Error(prep.error);
 
-      const supabase = createBrowserSupabase();
       for (let i = 0; i < prep.targets.length; i++) {
         const target = prep.targets[i];
         setStatus(`Enviando ${i + 1} de ${prep.targets.length}: ${target.name}`);
-        const { error: upErr } = await supabase.storage
-          .from("client-files")
-          .uploadToSignedUrl(target.path, target.token, files[i], {
-            contentType: files[i].type,
-          });
-        if (upErr) throw new Error(`Falha ao enviar "${target.name}". Tente de novo.`);
+        await enviarArquivo(target.url, files[i], target.type).catch(() => {
+          throw new Error(`Falha ao enviar "${target.name}". Tente de novo.`);
+        });
       }
 
       setStatus("Publicando a mensagem…");
