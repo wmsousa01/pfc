@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/auth";
+import { exigir } from "@/lib/auth";
 import { toCents } from "@/lib/money";
 
 function revalidateAll() {
@@ -33,7 +33,7 @@ function slugifySku(input: string): string {
  * gravados em centavos — é o custo que define o lucro mostrado no painel.
  */
 export async function saveProduct(formData: FormData) {
-  await requireAdmin();
+  await exigir("produtos.editar");
   const supabase = createServerSupabase();
 
   const id = String(formData.get("id") ?? "").trim();
@@ -64,7 +64,7 @@ export async function saveProduct(formData: FormData) {
 }
 
 export async function toggleProductActive(formData: FormData) {
-  await requireAdmin();
+  await exigir("produtos.editar");
   const supabase = createServerSupabase();
   const id = String(formData.get("id") ?? "");
   const active = formData.get("active") === "true";
@@ -75,7 +75,7 @@ export async function toggleProductActive(formData: FormData) {
 }
 
 export async function deleteProduct(formData: FormData) {
-  await requireAdmin();
+  await exigir("produtos.editar");
   const supabase = createServerSupabase();
   const id = String(formData.get("id") ?? "");
   if (id) {

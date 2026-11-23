@@ -4,7 +4,7 @@ import { ICONES } from "@/components/admin/nav";
 import ProducaoForm from "@/components/admin/ProducaoForm";
 import CopiarLink from "@/components/arquivos/CopiarLink";
 import EnvioGrande from "@/components/arquivos/EnvioGrande";
-import { requireAdmin } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { db } from "@/lib/agenda/store";
 import { arquivosDa, linkValido, linksDa, tamanhoLegivel, type Pasta } from "@/lib/arquivos/store";
 import { site } from "@/lib/config";
@@ -36,7 +36,7 @@ const quando = (iso: string) =>
   new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
 
 export default async function ArquivosPage({ searchParams }: { searchParams: { pasta?: string } }) {
-  await requireAdmin();
+  await requireAcesso("arquivos.ver");
 
   // As pastas são poucas: uma consulta só serve para a trilha, as subpastas e o "mover para".
   const { data: rows } = await db().from("arquivos_pastas").select("*").order("nome");

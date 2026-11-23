@@ -1,5 +1,5 @@
 import AdminHeader from "@/components/admin/AdminHeader";
-import { requireAdmin } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { getClientAccounts, getPartnersWithoutContract } from "@/lib/client-area";
 import { chatAwaitingReply, getClientDeliveries, isJiraConfigured } from "@/lib/jira";
 import { activateClientAreaAction } from "./actions";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
  * na página de cada cliente, /admin/entregas/<slug>.
  */
 export default async function EntregasPage() {
-  await requireAdmin();
+  await requireAcesso("entregas.ver");
 
   const [accounts, withoutContract] = await Promise.all([
     getClientAccounts(),

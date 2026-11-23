@@ -1,6 +1,6 @@
 import AdminHeader from "@/components/admin/AdminHeader";
 import StatusSelect from "@/components/admin/StatusSelect";
-import { requireAdmin } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { getOrders, summarizeShop } from "@/lib/orders";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { brl } from "@/lib/money";
@@ -34,7 +34,7 @@ export default async function AdminOrdersPage({
 }: {
   searchParams: { status?: string };
 }) {
-  await requireAdmin();
+  await requireAcesso("pedidos.ver");
 
   if (!isSupabaseConfigured()) {
     return (

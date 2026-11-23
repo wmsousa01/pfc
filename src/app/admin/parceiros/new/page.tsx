@@ -1,9 +1,11 @@
 import AdminHeader from "@/components/admin/AdminHeader";
 import PartnerForm from "@/components/admin/PartnerForm";
+import { requireAcesso } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-export default function NewPartnerPage() {
+export default async function NewPartnerPage() {
+  await requireAcesso("parceiros.editar");
   return (
     <div className="min-h-screen bg-[#0a0a0a] pb-20">
       <AdminHeader />

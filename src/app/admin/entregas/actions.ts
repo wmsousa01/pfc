@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAdmin } from "@/lib/auth";
+import { exigir } from "@/lib/auth";
 import {
   addDeliveryLink,
   createClientEpic,
@@ -28,7 +28,7 @@ function isoDate(v: string): string | null {
 }
 
 export async function createDeliveryAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await exigir("entregas.editar");
   const epic = str(form, "epic");
   const title = str(form, "title").slice(0, 200);
   if (!ISSUE_KEY.test(epic) || title.length < 3) return;
@@ -38,7 +38,7 @@ export async function createDeliveryAction(form: FormData): Promise<void> {
 
 /** Marca como entregue; se vier um link, anexa antes, para o cliente já ver. */
 export async function deliverAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await exigir("entregas.editar");
   const key = str(form, "key");
   if (!ISSUE_KEY.test(key)) return;
   const url = str(form, "url");
@@ -48,7 +48,7 @@ export async function deliverAction(form: FormData): Promise<void> {
 }
 
 export async function addLinkAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await exigir("entregas.editar");
   const key = str(form, "key");
   const url = str(form, "url");
   if (!ISSUE_KEY.test(key) || !url) return;
@@ -57,7 +57,7 @@ export async function addLinkAction(form: FormData): Promise<void> {
 }
 
 export async function reopenAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await exigir("entregas.editar");
   const key = str(form, "key");
   if (!ISSUE_KEY.test(key)) return;
   await transitionTo(key, "new");
@@ -65,7 +65,7 @@ export async function reopenAction(form: FormData): Promise<void> {
 }
 
 export async function rotateTokenAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await exigir("entregas.editar");
   // Confirmação explícita: trocar o token derruba o link que o cliente já tem.
   if (form.get("confirm") !== "on") return;
   const partnerId = str(form, "partner_id");
@@ -78,7 +78,7 @@ export async function rotateTokenAction(form: FormData): Promise<void> {
  * contrato (que gera os termos para ele aceitar no portal).
  */
 export async function activateClientAreaAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await exigir("entregas.editar");
   const partner = await getPartnerById(str(form, "partner_id"));
   if (!partner) return;
 

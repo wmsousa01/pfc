@@ -1,6 +1,6 @@
 import AdminHeader from "@/components/admin/AdminHeader";
 import CopyButton from "@/components/CopyButton";
-import { requireAdmin } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { getResellersWithStats } from "@/lib/orders";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { brl } from "@/lib/money";
@@ -11,7 +11,7 @@ import { toggleResellerActive, payResellerCommission } from "./actions";
 export const dynamic = "force-dynamic";
 
 export default async function AdminResellersPage() {
-  await requireAdmin();
+  await requireAcesso("revendedores.ver");
 
   if (!isSupabaseConfigured()) {
     return (

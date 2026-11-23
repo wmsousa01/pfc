@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireAdmin } from "@/lib/auth";
+import { exigir } from "@/lib/auth";
 import {
   alternarCota,
   apagarCota,
@@ -29,7 +29,7 @@ const int = (f: FormData, k: string) => {
 const data = (f: FormData, k: string) => (/^\d{4}-\d{2}-\d{2}$/.test(str(f, k)) ? str(f, k) : null);
 
 export async function pedirUploadAction(nome: string, mime: string, tamanho: number) {
-  await requireAdmin();
+  await exigir("ao_vivo.editar");
   try {
     return { ok: true as const, ...(await pedirUploadMidia(nome, mime, tamanho)) };
   } catch (e) {
@@ -39,7 +39,7 @@ export async function pedirUploadAction(nome: string, mime: string, tamanho: num
 
 /** Cria ou edita a cota (o combinado de inserções com o parceiro). */
 export async function salvarCotaAction(form: FormData): Promise<ActionState> {
-  await requireAdmin();
+  await exigir("ao_vivo.editar");
   try {
     const id = str(form, "id") || null;
     const quadro = str(form, "quadro");
@@ -113,19 +113,19 @@ export async function salvarCotaAction(form: FormData): Promise<ActionState> {
 }
 
 export async function alternarCotaAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await exigir("ao_vivo.editar");
   await alternarCota(str(form, "id"), str(form, "ativo") === "1");
   revalidatePath("/admin/ao-vivo");
 }
 
 export async function apagarCotaAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await exigir("ao_vivo.editar");
   await apagarCota(str(form, "id"));
   revalidatePath("/admin/ao-vivo");
 }
 
 export async function trocarLinksAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await exigir("ao_vivo.editar");
   const q = str(form, "quadro");
   if (isQuadroId(q)) await trocarLinks(q);
   revalidatePath("/admin/ao-vivo");

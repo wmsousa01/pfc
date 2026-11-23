@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/auth";
+import { exigir } from "@/lib/auth";
 import type { OrderStatus, PaymentStatus } from "@/lib/types";
 
 const ORDER_STATUSES: OrderStatus[] = [
@@ -25,7 +25,7 @@ function revalidateAll() {
 
 /** Avança (ou volta) a entrega. `delivered_at` acompanha o status. */
 export async function updateOrderStatus(formData: FormData) {
-  await requireAdmin();
+  await exigir("pedidos.editar");
   const supabase = createServerSupabase();
 
   const id = String(formData.get("id") ?? "");
@@ -44,7 +44,7 @@ export async function updateOrderStatus(formData: FormData) {
 }
 
 export async function updatePaymentStatus(formData: FormData) {
-  await requireAdmin();
+  await exigir("pedidos.editar");
   const supabase = createServerSupabase();
 
   const id = String(formData.get("id") ?? "");
@@ -57,7 +57,7 @@ export async function updatePaymentStatus(formData: FormData) {
 
 /** Liga/desliga o repasse da comissão de um pedido específico. */
 export async function toggleCommissionPaid(formData: FormData) {
-  await requireAdmin();
+  await exigir("pedidos.editar");
   const supabase = createServerSupabase();
 
   const id = String(formData.get("id") ?? "");
@@ -76,7 +76,7 @@ export async function toggleCommissionPaid(formData: FormData) {
 }
 
 export async function deleteOrder(formData: FormData) {
-  await requireAdmin();
+  await exigir("pedidos.editar");
   const supabase = createServerSupabase();
   const id = String(formData.get("id") ?? "");
   if (id) {

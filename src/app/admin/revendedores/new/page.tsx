@@ -1,11 +1,11 @@
 import AdminHeader from "@/components/admin/AdminHeader";
 import ResellerForm from "@/components/admin/ResellerForm";
-import { requireAdmin } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewResellerPage() {
-  await requireAdmin();
+  await requireAcesso("revendedores.editar");
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] pb-20">

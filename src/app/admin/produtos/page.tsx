@@ -1,5 +1,5 @@
 import AdminHeader from "@/components/admin/AdminHeader";
-import { requireAdmin } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { getAllProducts } from "@/lib/orders";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { brl, centsToInput } from "@/lib/money";
@@ -128,7 +128,7 @@ function ProductFields({ product }: { product?: Product }) {
 }
 
 export default async function AdminProductsPage() {
-  await requireAdmin();
+  await requireAcesso("produtos.ver");
 
   if (!isSupabaseConfigured()) {
     return (

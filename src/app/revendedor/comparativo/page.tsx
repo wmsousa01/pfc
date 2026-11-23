@@ -235,7 +235,7 @@ export default async function ComparativoPage() {
   const role = await requireResellerOrAdmin();
   const apresentador =
     role.kind === "reseller" ? role.reseller.name : "Fora da Caixa";
-  const voltarHref = role.kind === "admin" ? "/admin" : "/revendedor";
+  const voltarHref = role.kind === "reseller" ? "/revendedor" : "/admin";
 
   const pfc = rankingYouTube.find((v) => v.destaque)!;
   const novaOnda = rankingYouTube.find((v) => v.id === "nova-onda")!;

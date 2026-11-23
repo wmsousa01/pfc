@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireAdmin } from "@/lib/auth";
+import { exigir } from "@/lib/auth";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { CAMPANHA } from "@/lib/campanha";
 import { PROTECAO_DIAS, comissaoCents, type Ciclo, type IndicacaoPapel, type IndicacaoStatus } from "@/lib/indicacoes";
@@ -21,7 +21,7 @@ function refresh() {
  * comissão com a regra do dia (inclusive o bônus de apresentador da campanha).
  */
 export async function salvarIndicacao(_prev: ActionState, fd: FormData): Promise<ActionState> {
-  await requireAdmin();
+  await exigir("revendedores.editar");
   const supabase = createServerSupabase();
   const id = String(fd.get("id") ?? "");
   const status = String(fd.get("status") ?? "") as IndicacaoStatus;
@@ -74,7 +74,7 @@ export async function salvarIndicacao(_prev: ActionState, fd: FormData): Promise
 
 /** Marca a parcela 1 ou 2 da comissão como paga (Pix feito). */
 export async function pagarParcela(fd: FormData) {
-  await requireAdmin();
+  await exigir("revendedores.editar");
   const id = String(fd.get("id") ?? "");
   const n = fd.get("parcela") === "2" ? 2 : 1;
   if (!id) return;

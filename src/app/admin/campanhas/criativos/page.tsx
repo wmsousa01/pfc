@@ -3,7 +3,7 @@ import { AnaliseView, Miniatura, Nota, abasCampanhas, btnPri, btnSec, card, inpu
 import { EspacoHeader } from "@/components/admin/Espaco";
 import ProducaoForm from "@/components/admin/ProducaoForm";
 import MaterialUploader from "@/components/agenda/MaterialUploader";
-import { requireAdmin } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { arquivosDaPasta, pastaCampanhas } from "@/lib/campanhas/fontes";
 import { MODELOS } from "@/lib/campanhas/modelos";
 import { CAMPANHAS_DO_PLANO, FONTES, PECAS, PLANO_URL, pecaPorCodigo, type Peca } from "@/lib/campanhas/plano";
@@ -68,7 +68,7 @@ function Enquadrado({ e, atual }: { e: Enquadramento; atual: string | null }) {
 }
 
 export default async function CriativosPage({ searchParams }: { searchParams: { job?: string; f?: string; peca?: string } }) {
-  await requireAdmin();
+  await requireAcesso("campanhas.ver");
 
   const [criativos, estrategias, pasta] = await Promise.all([
     listCriativos().catch(() => [] as Criativo[]),

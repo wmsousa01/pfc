@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireAdmin } from "@/lib/auth";
+import { exigir, requireAdmin } from "@/lib/auth";
 import type { ActionState } from "@/app/admin/producao/actions";
 import { listJobCuts, type ContentaCut } from "@/lib/producao/contenta";
 import { db } from "@/lib/producao/store";
@@ -141,7 +141,7 @@ async function insertPosts(posts: NewPost[]): Promise<{ criados: number; repetid
 
 /** Programa um corte nas redes marcadas. Sem data, publica agora. */
 export async function scheduleCutAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  const role = await requireAdmin();
+  const role = await exigir("marketing.editar");
   try {
     const platforms = platformsOf(form);
     if (platforms.length === 0) return { ok: false, error: "Marque pelo menos uma rede." };
@@ -198,7 +198,7 @@ export async function scheduleCutAction(_prev: ActionState, form: FormData): Pro
  * numa rede é pulado sem ocupar horário.
  */
 export async function scheduleJobAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  const role = await requireAdmin();
+  const role = await exigir("marketing.editar");
   try {
     const platforms = platformsOf(form);
     if (platforms.length === 0) return { ok: false, error: "Marque pelo menos uma rede." };
@@ -258,7 +258,7 @@ export async function scheduleJobAction(_prev: ActionState, form: FormData): Pro
 }
 
 export async function cancelPostAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await exigir("marketing.editar");
   await db()
     .from("social_posts")
     .update({ status: "cancelado", updated_at: new Date().toISOString() })
@@ -269,7 +269,7 @@ export async function cancelPostAction(form: FormData): Promise<void> {
 
 /** Volta um post com erro para a fila, para a próxima rodada (até 5 min). */
 export async function retryPostAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await exigir("marketing.editar");
   const now = new Date().toISOString();
   await db()
     .from("social_posts")
@@ -280,7 +280,7 @@ export async function retryPostAction(form: FormData): Promise<void> {
 }
 
 export async function runQueueAction(_prev: ActionState): Promise<ActionState> {
-  await requireAdmin();
+  await exigir("marketing.editar");
   try {
     const r = await runSocialQueue();
     refresh();
@@ -292,7 +292,7 @@ export async function runQueueAction(_prev: ActionState): Promise<ActionState> {
 
 /** A equipe promoveu o Reel de teste no app: sai do ranking. */
 export async function graduatePostAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await exigir("marketing.editar");
   await db()
     .from("social_posts")
     .update({ graduated_at: new Date().toISOString(), updated_at: new Date().toISOString() })

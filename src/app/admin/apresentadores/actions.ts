@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import type { ActionState } from "@/app/admin/producao/actions";
-import { requireAdmin } from "@/lib/auth";
+import { exigir } from "@/lib/auth";
 import { db } from "@/lib/agenda/store";
 import {
   aprovarCadastro,
@@ -27,7 +27,7 @@ async function cadastroDo(form: FormData) {
 }
 
 async function run(fn: () => Promise<unknown>): Promise<ActionState> {
-  await requireAdmin();
+  await exigir("apresentadores.editar");
   try {
     await fn();
     refresh();
@@ -56,7 +56,7 @@ export async function fotoPadraoAction(_prev: ActionState, form: FormData): Prom
 
 /** Arquiva: sai da grade (apresentadores do quadro inativos) e o link para de receber materiais. */
 export async function arquivarAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await exigir("apresentadores.editar");
   const c = await cadastroDo(form);
   await atualizarCadastro(c.id, { status: "arquivado" });
   await db().from("agenda_apresentadores").update({ ativo: false }).eq("cadastro_id", c.id);
@@ -64,14 +64,14 @@ export async function arquivarAction(form: FormData): Promise<void> {
 }
 
 export async function reabrirAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await exigir("apresentadores.editar");
   const c = await cadastroDo(form);
   await atualizarCadastro(c.id, { status: "pendente" });
   refresh();
 }
 
 export async function removerMaterialAdminAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await exigir("apresentadores.editar");
   await removerMaterialApresentador(str(form, "cadastro"), str(form, "material"));
   refresh();
 }

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import AdminHeader from "@/components/admin/AdminHeader";
-import { requireAdmin } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { getClientAccounts } from "@/lib/client-area";
 import { chatAwaitingReply, getClientDeliveries } from "@/lib/jira";
 import { ClientSection } from "../shared";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 /** Página de um cliente: entregas, conversa e acesso ao portal. */
 export default async function ClienteEntregasPage({ params }: { params: { slug: string } }) {
-  await requireAdmin();
+  await requireAcesso("entregas.ver");
   const account = (await getClientAccounts()).find((a) => a.slug === params.slug);
   if (!account) notFound();
 
