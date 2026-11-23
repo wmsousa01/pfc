@@ -74,13 +74,13 @@ function periodoLabel(segunda: string): string {
 }
 
 /** Título de Short sem as hashtags. */
-function limpaTitulo(t: string): string {
+export function limpaTitulo(t: string): string {
   // Sem hashtags e sem emoji (a Anton não tem os glifos: viraria quadradinho na arte).
   const semEmoji = t.replace(new RegExp("[\\p{Extended_Pictographic}\\u{FE0F}\\u{200D}]", "gu"), "");
   return semEmoji.replace(/#[^\s#]+/g, "").replace(/\s+/g, " ").trim() || t.trim();
 }
 
-async function metricas(ini: string, fim: string): Promise<Metricas> {
+export async function metricas(ini: string, fim: string): Promise<Metricas> {
   const rows = await analyticsReport({
     startDate: ini,
     endDate: fim,
