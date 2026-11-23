@@ -191,6 +191,8 @@ export default function EditorFotos({ quadros, presets }: { quadros: QuadroFoto[
       } else if (r.tipo === "exportada") {
         pendentes.get(r.seq)?.ok(r.blob);
         pendentes.delete(r.seq);
+      } else if (r.tipo === "tratada") {
+        // Só a tela de posts pede foto tratada; aqui não chega.
       } else if (r.seq !== undefined && pendentes.has(r.seq)) {
         pendentes.get(r.seq)?.falha(r.mensagem);
         pendentes.delete(r.seq);

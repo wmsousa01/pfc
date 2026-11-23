@@ -4,6 +4,7 @@ import EditorFotos, { type QuadroFoto } from "@/components/admin/fotos/EditorFot
 import EditorPosts from "@/components/admin/fotos/EditorPosts";
 import { requireAdmin } from "@/lib/auth";
 import { AVULSA, chavePreset, limparPreset, type Preset } from "@/lib/fotos/preset";
+import { perfisInstagram } from "@/lib/posts/publicar";
 import { db } from "@/lib/producao/store";
 import { QUADROS, QUADRO_IDS } from "@/lib/producao/quadros";
 
@@ -25,6 +26,7 @@ async function carregarPresets(): Promise<Record<string, Preset>> {
 export default async function FotosPage({ searchParams }: { searchParams: { aba?: string } }) {
   await requireAdmin();
   const aba = searchParams.aba === "posts" ? "posts" : "fotos";
+  const presets = await carregarPresets();
   const quadros: QuadroFoto[] = [
     ...QUADRO_IDS.map((id) => ({ id, nome: QUADROS[id].name, cor: QUADROS[id].accent[1] })),
     { id: AVULSA, nome: "Outras fotos", cor: "#9ca3af" },
@@ -42,7 +44,11 @@ export default async function FotosPage({ searchParams }: { searchParams: { aba?
             { href: "/admin/fotos?aba=posts", label: "Criar posts", ativa: aba === "posts" },
           ]}
         />
-        {aba === "posts" ? <EditorPosts quadros={quadros} /> : <EditorFotos quadros={quadros} presets={await carregarPresets()} />}
+        {aba === "posts" ? (
+          <EditorPosts quadros={quadros} presets={presets} perfis={await perfisInstagram()} />
+        ) : (
+          <EditorFotos quadros={quadros} presets={presets} />
+        )}
       </div>
     </div>
   );

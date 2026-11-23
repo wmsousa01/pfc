@@ -9,7 +9,17 @@ import { isGeminiConfigured } from "@/lib/producao/gemini";
 import { montarPost, type PostSugerido } from "@/lib/posts/ia";
 import { lerNumerosPeriodo } from "@/lib/posts/numeros";
 import { renderPost } from "@/lib/posts/render";
-import { LIMITE_ITENS, type FormatoPost, type NumerosPost, type PedidoPost, type PeriodoNumeros } from "@/lib/posts/tipos";
+import { conferirFoto, guardarArtes, pedirEnvioFoto, publicarNoInstagram, type Publicado } from "@/lib/posts/publicar";
+import {
+  LIMITE_ITENS,
+  PASTA_ARTES,
+  caminhoFotoValido,
+  type FormatoPost,
+  type NumerosPost,
+  type PedidoPost,
+  type PeriodoNumeros,
+  type SlideGerado,
+} from "@/lib/posts/tipos";
 
 const valido = (quadro: string) => quadro === AVULSA || isQuadroId(quadro);
 
@@ -43,6 +53,8 @@ export async function restaurarPresetAction(quadro: string): Promise<{ ok: boole
 const texto = (v: unknown, max: number) => (typeof v === "string" ? v.slice(0, max) : "");
 const numero = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const talvez = (v: unknown) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
+/** Só caminho de foto enviado por esta tela: nada de ler outro arquivo do armazenamento. */
+const foto = (v: unknown) => (caminhoFotoValido(v) ? v : null);
 
 /** O pedido vem do navegador: só passa o que o desenho usa, com tamanho limitado. */
 function limparPedido(bruto: unknown): PedidoPost {
@@ -55,6 +67,7 @@ function limparPedido(bruto: unknown): PedidoPost {
       tipo: "numeros",
       quadro,
       chamada: texto(p.chamada, 80),
+      fotoCapa: foto(p.fotoCapa),
       slides: { capa: !!s.capa, views: !!s.views, horas: !!s.horas, inscritos: !!s.inscritos, top: !!s.top, fechamento: !!s.fechamento },
       numeros: {
         periodo: texto(n.periodo, 40),
@@ -76,11 +89,13 @@ function limparPedido(bruto: unknown): PedidoPost {
       titulo: texto(p.titulo, 120),
       subtitulo: texto(p.subtitulo, 200),
       chamada: texto(p.chamada, 80),
-      itens: (Array.isArray(p.itens) ? p.itens : []).slice(0, LIMITE_ITENS).map((i: Record<string, unknown>) => ({ titulo: texto(i?.titulo, 100), texto: texto(i?.texto, 500) })),
+      fotoCapa: foto(p.fotoCapa),
+      itens: (Array.isArray(p.itens) ? p.itens : [])
+        .slice(0, LIMITE_ITENS)
+        .map((i: Record<string, unknown>) => ({ titulo: texto(i?.titulo, 100), texto: texto(i?.texto, 500), foto: foto(i?.foto) })),
     };
   }
   const formato = (["4:5", "1:1", "9:16"] as FormatoPost[]).includes(p.formato as FormatoPost) ? (p.formato as FormatoPost) : "4:5";
-  const foto = typeof p.foto === "string" && /^data:image\/(jpeg|png|webp);base64,/.test(p.foto) ? p.foto : null;
   return {
     tipo: "cartaz",
     quadro,
@@ -89,7 +104,7 @@ function limparPedido(bruto: unknown): PedidoPost {
     titulo: texto(p.titulo, 120),
     mensagem: texto(p.mensagem, 300),
     assinatura: texto(p.assinatura, 60),
-    foto,
+    foto: foto(p.foto),
   };
 }
 
@@ -103,11 +118,33 @@ export async function buscarNumerosAction(periodo: PeriodoNumeros): Promise<{ ok
   }
 }
 
-export async function gerarPostAction(bruto: unknown): Promise<{ ok: boolean; erro?: string; slides?: string[] }> {
+/** Link para o navegador enviar a foto já tratada direto para o armazenamento. */
+export async function pedirEnvioFotoAction(): Promise<{ ok: boolean; erro?: string; path?: string; url?: string }> {
+  await requireAdmin();
+  try {
+    return { ok: true, ...(await pedirEnvioFoto()) };
+  } catch (e) {
+    return { ok: false, erro: e instanceof Error ? e.message : "Não consegui preparar o envio da foto." };
+  }
+}
+
+export async function conferirFotoAction(path: string): Promise<{ ok: boolean; erro?: string }> {
+  await requireAdmin();
+  if (!caminhoFotoValido(path)) return { ok: false, erro: "Foto inválida." };
+  try {
+    await conferirFoto(path);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, erro: e instanceof Error ? e.message : "A foto não chegou." };
+  }
+}
+
+/** As artes ficam guardadas: a tela recebe links (não a imagem), e a publicação usa os mesmos arquivos. */
+export async function gerarPostAction(bruto: unknown): Promise<{ ok: boolean; erro?: string; slides?: SlideGerado[] }> {
   await requireAdmin();
   try {
     const artes = await renderPost(limparPedido(bruto));
-    return { ok: true, slides: artes.map((a) => `data:image/jpeg;base64,${a.toString("base64")}`) };
+    return { ok: true, slides: await guardarArtes(artes) };
   } catch (e) {
     return { ok: false, erro: e instanceof Error ? e.message : "Não consegui gerar o post." };
   }
@@ -123,5 +160,28 @@ export async function montarComIAAction(ideia: string, quadro: string): Promise<
     return { ok: true, post: await montarPost(texto, nome) };
   } catch (e) {
     return { ok: false, erro: e instanceof Error ? e.message : "A IA não conseguiu montar o post." };
+  }
+}
+
+export async function publicarPostAction(entrada: {
+  paths: string[];
+  legenda: string;
+  perfilId: number | null;
+  story: boolean;
+}): Promise<{ ok: boolean; erro?: string; publicado?: Publicado }> {
+  await requireAdmin();
+  const paths = (Array.isArray(entrada?.paths) ? entrada.paths : []).filter(
+    (p): p is string => typeof p === "string" && p.startsWith(PASTA_ARTES) && /^[\w/.-]+$/.test(p) && !p.includes("..")
+  );
+  try {
+    const publicado = await publicarNoInstagram({
+      paths,
+      legenda: texto(entrada?.legenda, 2200),
+      perfilId: Number.isInteger(entrada?.perfilId) ? (entrada.perfilId as number) : null,
+      story: !!entrada?.story,
+    });
+    return { ok: true, publicado };
+  } catch (e) {
+    return { ok: false, erro: e instanceof Error ? e.message : "Não consegui publicar no Instagram." };
   }
 }

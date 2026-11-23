@@ -13,12 +13,15 @@ export type Pedido =
   | { tipo: "abrir"; id: string; arquivo: File }
   | { tipo: "fechar"; id: string }
   | { tipo: "previa"; id: string; seq: number; modo: ModoDirecao; ajustes: Ajustes; enquadro: Enquadro }
-  | { tipo: "exportar"; id: string; seq: number; modo: ModoDirecao; ajustes: Ajustes; enquadro: Enquadro; qualidade: Qualidade };
+  | { tipo: "exportar"; id: string; seq: number; modo: ModoDirecao; ajustes: Ajustes; enquadro: Enquadro; qualidade: Qualidade }
+  /** Foto de post: tratada inteira, sem recorte (o recorte é feito na arte). */
+  | { tipo: "tratar"; id: string; seq: number; arquivo: File; ajustes: Ajustes };
 
 export type Resposta =
   | { tipo: "aberta"; id: string; largura: number; altura: number }
   | { tipo: "previa"; id: string; seq: number; antes: ImageBitmap; depois: ImageBitmap; faixas: ResumoFaixas }
   | { tipo: "exportada"; id: string; seq: number; blob: Blob; largura: number; altura: number }
+  | { tipo: "tratada"; id: string; seq: number; blob: Blob }
   | { tipo: "erro"; id: string; seq?: number; mensagem: string };
 
 const canal = self as unknown as {
@@ -151,6 +154,20 @@ async function exportar(p: Extract<Pedido, { tipo: "exportar" }>) {
   canal.postMessage({ tipo: "exportada", id: p.id, seq: p.seq, blob, largura: width, altura: height });
 }
 
+/** Lado maior da foto de post: a arte tem 1080 de largura, então 2048 sobra para o recorte. */
+const LADO_POST = 2048;
+
+async function tratar(p: Extract<Pedido, { tipo: "tratar" }>) {
+  const bitmap = await createImageBitmap(p.arquivo);
+  const foto = reduzir(bitmap, LADO_POST);
+  const analise = analisarFaixas(reduzir(bitmap, LADO_ANALISE), "auto");
+  bitmap.close();
+  removerFaixas(foto, analise, p.ajustes.faixas / 100);
+  aplicarTratamento(foto, p.ajustes);
+  const blob = await paraCanvas(foto).convertToBlob({ type: "image/jpeg", quality: 0.9 });
+  canal.postMessage({ tipo: "tratada", id: p.id, seq: p.seq, blob });
+}
+
 /** Uma tarefa por vez: prévia e exportação disputariam a memória da aba. */
 let fila: Promise<void> = Promise.resolve();
 
@@ -164,6 +181,7 @@ canal.onmessage = (e) => {
     try {
       if (p.tipo === "abrir") await abrir(p.id, p.arquivo);
       else if (p.tipo === "previa") await previa(p);
+      else if (p.tipo === "tratar") await tratar(p);
       else await exportar(p);
     } catch (err) {
       const seq = p.tipo === "abrir" ? undefined : p.seq;

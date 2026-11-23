@@ -31,8 +31,20 @@ export type NumerosPost = {
 
 export type SlidesNumeros = { capa: boolean; views: boolean; horas: boolean; inscritos: boolean; top: boolean; fechamento: boolean };
 
+/**
+ * Foto já tratada no navegador (faixas + acabamento do quadro) e enviada ao
+ * armazenamento. O pedido leva só o caminho: foto em base64 estouraria o
+ * limite de 4,5 MB da Vercel num carrossel.
+ */
+export type FotoPost = string | null;
+
+export const PASTA_FOTOS = "posts/fotos/";
+export const PASTA_ARTES = "posts/artes/";
+export const caminhoFotoValido = (v: unknown): v is string =>
+  typeof v === "string" && /^posts\/fotos\/[0-9a-f-]{36}\.jpg$/.test(v);
+
 export type PedidoPost =
-  | { tipo: "numeros"; quadro: string; numeros: NumerosPost; slides: SlidesNumeros; chamada: string }
+  | { tipo: "numeros"; quadro: string; numeros: NumerosPost; slides: SlidesNumeros; chamada: string; fotoCapa: FotoPost }
   | {
       tipo: "cartaz";
       quadro: string;
@@ -41,10 +53,23 @@ export type PedidoPost =
       titulo: string;
       mensagem: string;
       assinatura: string;
-      /** Foto já reduzida no navegador, como data URL JPEG. */
-      foto: string | null;
+      foto: FotoPost;
     }
-  | { tipo: "texto"; quadro: string; titulo: string; subtitulo: string; itens: { titulo: string; texto: string }[]; chamada: string };
+  | {
+      tipo: "texto";
+      quadro: string;
+      titulo: string;
+      subtitulo: string;
+      itens: { titulo: string; texto: string; foto?: FotoPost }[];
+      chamada: string;
+      fotoCapa: FotoPost;
+    };
+
+/** Arte gerada e guardada: o caminho serve para publicar; a URL assinada, para ver e baixar. */
+export type SlideGerado = { path: string; url: string };
+
+/** Perfil do Instagram onde o post pode ir. */
+export type PerfilInstagram = { id: number; nome: string; principal: boolean };
 
 export type Modelo = { id: string; grupo: "Datas" | "Avisos"; nome: string; chapeu: string; titulo: string; mensagem: string };
 
