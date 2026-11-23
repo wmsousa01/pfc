@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { AVULSA, chavePreset, limparPreset, type Preset } from "@/lib/fotos/preset";
 import { clearConfig, setConfig } from "@/lib/producao/store";
-import { isQuadroId } from "@/lib/producao/quadros";
+import { QUADROS, isQuadroId } from "@/lib/producao/quadros";
+import { isGeminiConfigured } from "@/lib/producao/gemini";
+import { montarPost, type PostSugerido } from "@/lib/posts/ia";
 import { lerNumerosPeriodo } from "@/lib/posts/numeros";
 import { renderPost } from "@/lib/posts/render";
 import { LIMITE_ITENS, type FormatoPost, type NumerosPost, type PedidoPost, type PeriodoNumeros } from "@/lib/posts/tipos";
@@ -108,5 +110,18 @@ export async function gerarPostAction(bruto: unknown): Promise<{ ok: boolean; er
     return { ok: true, slides: artes.map((a) => `data:image/jpeg;base64,${a.toString("base64")}`) };
   } catch (e) {
     return { ok: false, erro: e instanceof Error ? e.message : "Não consegui gerar o post." };
+  }
+}
+
+export async function montarComIAAction(ideia: string, quadro: string): Promise<{ ok: boolean; erro?: string; post?: PostSugerido }> {
+  await requireAdmin();
+  const texto = typeof ideia === "string" ? ideia.trim().slice(0, 2000) : "";
+  if (texto.length < 10) return { ok: false, erro: "Descreva a ideia com um pouco mais de detalhe." };
+  if (!isGeminiConfigured()) return { ok: false, erro: "A IA não está configurada no servidor (GOOGLE_AI_API_KEY)." };
+  const nome = isQuadroId(quadro) ? QUADROS[quadro].name : "Fora da Caixa (geral)";
+  try {
+    return { ok: true, post: await montarPost(texto, nome) };
+  } catch (e) {
+    return { ok: false, erro: e instanceof Error ? e.message : "A IA não conseguiu montar o post." };
   }
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { buscarNumerosAction, gerarPostAction } from "@/app/admin/fotos/actions";
+import { buscarNumerosAction, gerarPostAction, montarComIAAction } from "@/app/admin/fotos/actions";
 import {
   LIMITE_ITENS,
   MODELOS_CARTAZ,
@@ -81,6 +81,12 @@ export default function EditorPosts({ quadros }: { quadros: QuadroFoto[] }) {
   const [erro, setErro] = useState<string | null>(null);
   const [slides, setSlides] = useState<string[]>([]);
 
+  // Ideia escrita pela equipe; a IA preenche o formulário e sugere a legenda.
+  const [ideia, setIdeia] = useState("");
+  const [legenda, setLegenda] = useState("");
+  const [copiada, setCopiada] = useState(false);
+  const [montando, iniciarMontagem] = useTransition();
+
   // Números do canal
   const [periodo, setPeriodo] = useState<PeriodoNumeros>("semana");
   const [numeros, setNumeros] = useState<NumerosPost | null>(null);
@@ -127,6 +133,42 @@ export default function EditorPosts({ quadros }: { quadros: QuadroFoto[] }) {
     setChapeu(m.chapeu);
     setTitulo(m.titulo);
     setMensagem(m.mensagem);
+  }
+
+  function montarComIA() {
+    setErro(null);
+    setCopiada(false);
+    iniciarMontagem(async () => {
+      const r = await montarComIAAction(ideia, quadro);
+      if (!r.ok || !r.post) return setErro(r.erro ?? "A IA não conseguiu montar o post.");
+      const p = r.post;
+      setSlides([]);
+      setLegenda(p.legenda);
+      if (p.tipo === "texto") {
+        setTipo("texto");
+        setTituloTexto(p.titulo);
+        setSubtitulo(p.subtitulo);
+        setItens(p.itens);
+        setChamadaTexto(p.chamada);
+      } else {
+        setTipo("cartaz");
+        setModelo("livre");
+        setFormato(p.formato);
+        setChapeu(p.chapeu);
+        setTitulo(p.titulo);
+        setMensagem(p.mensagem);
+        if (p.assinatura) setAssinatura(p.assinatura);
+      }
+    });
+  }
+
+  async function copiarLegenda() {
+    try {
+      await navigator.clipboard.writeText(legenda);
+      setCopiada(true);
+    } catch {
+      setErro("Não consegui copiar. Selecione o texto da legenda e copie à mão.");
+    }
   }
 
   function buscar() {
@@ -189,6 +231,50 @@ export default function EditorPosts({ quadros }: { quadros: QuadroFoto[] }) {
               </Opcao>
             ))}
           </div>
+        </section>
+
+        <section className="rounded-xl border border-[#1f1f1f] bg-[#111] p-4 space-y-2.5">
+          <div>
+            <h2 className="text-white text-sm font-semibold">Ideia do post</h2>
+            <p className="text-white/50 text-xs mt-0.5">
+              Conte a ideia e a proposta. A IA escolhe o modelo, escreve os textos e sugere a legenda. Você revisa antes de gerar.
+            </p>
+          </div>
+          <textarea
+            className="admin-input min-h-[120px]"
+            value={ideia}
+            maxLength={2000}
+            onChange={(e) => setIdeia(e.target.value)}
+            placeholder="Ex.: carrossel com 4 lições do episódio com a dona da padaria do centro: começou vendendo na rua, nunca desistiu, cliente é vizinho, qualidade antes de crescer. Tom inspirador."
+            aria-label="Ideia e proposta do post"
+          />
+          <button
+            type="button"
+            onClick={montarComIA}
+            disabled={montando || ideia.trim().length < 10}
+            className="w-full btn-outline rounded-lg py-2 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {montando ? "Montando o post…" : "Montar post com IA"}
+          </button>
+          {legenda && (
+            <div className="rounded-lg border border-[#2a2a2a] p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="admin-label">Legenda sugerida</span>
+                <button type="button" onClick={copiarLegenda} className="text-xs text-gold-400 hover:text-gold-300">
+                  {copiada ? "Copiada" : "Copiar"}
+                </button>
+              </div>
+              <textarea
+                className="admin-input min-h-[110px] mt-2"
+                value={legenda}
+                onChange={(e) => {
+                  setLegenda(e.target.value);
+                  setCopiada(false);
+                }}
+                aria-label="Legenda sugerida"
+              />
+            </div>
+          )}
         </section>
 
         <section className="rounded-xl border border-[#1f1f1f] bg-[#111] p-4 space-y-3">
