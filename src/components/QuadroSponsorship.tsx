@@ -1,4 +1,5 @@
-import Image from "next/image";
+import CampanhaFundador from "@/components/CampanhaFundador";
+import QuadroLogo from "@/components/QuadroLogo";
 import { quadros, quadroSponsorship, whatsapp, type CotaStatus } from "@/lib/config";
 import { WhatsAppIcon } from "@/components/icons";
 
@@ -39,10 +40,13 @@ export default function QuadroSponsorship() {
           </h2>
           <p className="text-white/50 mt-4 leading-relaxed">
             Em vez de aparecer no canal inteiro, sua marca fica com o quadro que conversa com o seu cliente. Uma cota
-            master exclusiva por quadro e cotas de apoio para quem quer começar menor. Contratação mínima de{" "}
+            master exclusiva por quadro e cotas de apoio a partir de {brl(apoio.modalidadePrice)}/mês para quem quer
+            começar menor. Contratação mínima de{" "}
             {minMonths} meses.
           </p>
         </div>
+
+        <CampanhaFundador className="max-w-4xl mx-auto mb-8" />
 
         {/* As duas cotas */}
         <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
@@ -54,7 +58,8 @@ export default function QuadroSponsorship() {
               <span className="text-white/40 text-sm">/mês</span>
             </div>
             <p className="text-white/40 text-xs mt-1.5">
-              Contrato mínimo de {minMonths} meses, cobrança mensal no Pix ou cartão. Contrato anual sob proposta.
+              Contrato mínimo de {minMonths} meses, cobrança mensal no Pix ou cartão. Com 6 meses ou mais, sua marca
+              participa como convidada em um episódio. Contrato anual sob proposta.
             </p>
             <ul className="mt-5 flex flex-col gap-2.5 flex-1">
               {master.features.map((f) => (
@@ -70,13 +75,15 @@ export default function QuadroSponsorship() {
             <span className="text-xs font-bold uppercase tracking-widest text-white/40">Sem exclusividade</span>
             <h3 className="text-2xl font-black mt-2">{apoio.name}</h3>
             <div className="flex items-baseline gap-2 mt-4">
-              <span className="text-3xl font-black text-white">Sob consulta</span>
+              <span className="text-3xl font-black text-white">{brl(apoio.monthlyPrice)}</span>
+              <span className="text-white/40 text-sm">/mês</span>
             </div>
             <p className="text-white/40 text-xs mt-1.5">
-              Contrato mínimo de {minMonths} meses. Valor conforme o quadro e o número de episódios.
+              Contrato mínimo de {minMonths} meses, cobrança mensal no Pix ou cartão. Com 6 meses ou mais, sua marca
+              participa como convidada em um episódio.
             </p>
             <p className="text-white/60 text-sm mt-4 leading-relaxed bg-white/[0.03] border border-white/[0.08] rounded-xl p-3">
-              <span className="text-gold-500 font-semibold">Por modalidade: </span>
+              <span className="text-gold-500 font-semibold">Por modalidade ({brl(apoio.modalidadePrice)}/mês): </span>
               {apoio.modalidade}
             </p>
             <ul className="mt-5 flex flex-col gap-2.5 flex-1">
@@ -106,11 +113,7 @@ export default function QuadroSponsorship() {
                   </span>
                 )}
                 <div className="flex items-center gap-3">
-                  {q.logo ? (
-                    <Image src={q.logo} alt={`Logo ${q.name}`} width={48} height={48} className="w-12 h-12 object-contain" />
-                  ) : (
-                    <div className="text-3xl w-12 text-center">{q.emoji}</div>
-                  )}
+                  <QuadroLogo quadro={q.slug} nome={q.name} className="w-12 h-12" />
                   <div className="text-white font-bold leading-tight">{q.name}</div>
                 </div>
                 <span className={`self-start text-[11px] font-semibold px-2.5 py-1 rounded-full border ${st.cls}`}>

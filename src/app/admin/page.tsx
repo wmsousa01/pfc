@@ -1,7 +1,7 @@
 import AdminHeader from "@/components/admin/AdminHeader";
 import { getPartnersWithStats, getAllIgHighlights, getLeads } from "@/lib/admin";
 import { getOrders, summarizeShop } from "@/lib/orders";
-import { requireAdmin } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { brl } from "@/lib/money";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import {
@@ -37,7 +37,7 @@ export default async function AdminDashboard() {
     );
   }
 
-  await requireAdmin();
+  await requireAcesso("parceiros.ver", { inicio: true });
 
   const partners = await getPartnersWithStats();
   const highlights = await getAllIgHighlights();

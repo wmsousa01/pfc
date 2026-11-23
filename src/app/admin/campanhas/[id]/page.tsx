@@ -14,7 +14,7 @@ import {
   input,
 } from "@/components/admin/Campanhas";
 import ProducaoForm from "@/components/admin/ProducaoForm";
-import { requireArea } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { metaAdUrl } from "@/lib/campanhas/meta-ads";
 import {
   CTAS,
@@ -51,7 +51,7 @@ const label = "block text-[11px] font-bold uppercase tracking-wide text-white/40
 const area = `${input} w-full text-sm`;
 
 export default async function EstrategiaPage({ params }: { params: { id: string } }) {
-  await requireArea("campanhas");
+  await requireAcesso("campanhas.ver");
   const e = await getEstrategia(params.id);
   if (!e) notFound();
 
@@ -95,6 +95,12 @@ export default async function EstrategiaPage({ params }: { params: { id: string 
             </span>
             <Nota n={nota} titulo={en.analise_nota !== null ? "Nota para esta estratégia" : "Nota genérica da biblioteca"} />
           </div>
+          {en.plataforma === "meta" && c?.par_id && (
+            <p className="text-white/40 text-xs mt-1">
+              {en.meta_creative_id ? "Subiu" : "Sobe"} junto com{" "}
+              <span className="text-white/70">{porId.get(c.par_id)?.nome ?? "o par"}</span>, cada versão no seu posicionamento.
+            </p>
+          )}
           {en.erro && <p className="text-red-400 text-xs mt-1 break-words">{en.erro}</p>}
           <MetricasView m={en.metrics} quando={en.metrics_at} />
 

@@ -1,7 +1,7 @@
 import AdminHeader from "@/components/admin/AdminHeader";
 import EnvioMaterial from "@/components/admin/EnvioMaterial";
 import { Coluna, EspacoHeader, Quadro, cartao, diaLabel, diaKey, selo } from "@/components/admin/Espaco";
-import { requireArea } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { driveAccount, linkPasta, raizId } from "@/lib/materiais/drive";
 import {
   CATEGORIAS,
@@ -51,9 +51,9 @@ export default async function MateriaisPage({
 }: {
   searchParams: { view?: string; cat?: string; q?: string; status?: string; ok?: string; erro?: string };
 }) {
-  const acesso = await requireArea("materiais");
+  const acesso = await requireAcesso("materiais.ver");
   const revisor = podeAprovar(acesso);
-  const views: View[] = ["quadro", "enviar", "acervo", ...(acesso.admin ? (["config"] as View[]) : [])];
+  const views: View[] = ["quadro", "enviar", "acervo", ...(acesso.kind === "admin" ? (["config"] as View[]) : [])];
   const view: View = views.includes(searchParams.view as View) ? (searchParams.view as View) : "quadro";
 
   const [conta, raiz] = await Promise.all([driveAccount(), raizId()]);
@@ -110,7 +110,7 @@ export default async function MateriaisPage({
             },
             { href: href("enviar"), label: "Enviar", ativa: view === "enviar" },
             { href: href("acervo"), label: "Acervo", ativa: view === "acervo" },
-            ...(acesso.admin ? [{ href: href("config"), label: "Configurar", ativa: view === "config", alerta: !conectado }] : []),
+            ...(acesso.kind === "admin" ? [{ href: href("config"), label: "Configurar", ativa: view === "config", alerta: !conectado }] : []),
           ]}
         />
 
@@ -159,7 +159,7 @@ export default async function MateriaisPage({
               </div>
             ) : (
               <p className="text-white/60 text-sm">
-                O Drive da produção ainda não foi conectado. {acesso.admin ? "Conecte em Configurar." : "Avise a produção."}
+                O Drive da produção ainda não foi conectado. {acesso.kind === "admin" ? "Conecte em Configurar." : "Avise a produção."}
               </p>
             )}
           </section>
@@ -232,7 +232,7 @@ export default async function MateriaisPage({
           </section>
         )}
 
-        {view === "config" && acesso.admin && (
+        {view === "config" && acesso.kind === "admin" && (
           <section className="mt-6 max-w-2xl space-y-4">
             {searchParams.ok && <p className="text-emerald-400 text-sm">Drive conectado: {searchParams.ok}</p>}
             {searchParams.erro && <p className="text-red-400 text-sm break-words">{searchParams.erro}</p>}

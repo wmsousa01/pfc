@@ -2,7 +2,7 @@
 
 import sharp from "sharp";
 import { revalidatePath } from "next/cache";
-import { requireArea } from "@/lib/auth";
+import { exigir, requireAdmin } from "@/lib/auth";
 import { isContentaConfigured } from "@/lib/producao/contenta";
 import { setLiveStatus, syncLives, triggerLiveCuts } from "@/lib/producao/lives";
 import { approveThumb, generateFor, syncChannel } from "@/lib/producao/pipeline";
@@ -28,7 +28,7 @@ function fail(e: unknown): ActionState {
 }
 
 export async function syncAction(): Promise<void> {
-  const role = await requireArea("producao");
+  const role = await exigir("producao.editar");
   await syncChannel(actorOf(role));
   // Lê as lives e o andamento dos jobs, sem disparar nada: o disparo
   // automático é do cron, o manual é o botão de cada live.
@@ -37,7 +37,7 @@ export async function syncAction(): Promise<void> {
 }
 
 export async function triggerLiveAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  const role = await requireArea("producao");
+  const role = await exigir("producao.editar");
   try {
     await triggerLiveCuts(str(form, "id"), actorOf(role), { force: str(form, "force") === "1" });
     refresh();
@@ -48,7 +48,7 @@ export async function triggerLiveAction(_prev: ActionState, form: FormData): Pro
 }
 
 export async function playlistsAction(_prev: ActionState): Promise<ActionState> {
-  await requireArea("producao");
+  await exigir("producao.editar");
   try {
     const r = await runPlaylists();
     refresh();
@@ -60,7 +60,7 @@ export async function playlistsAction(_prev: ActionState): Promise<ActionState> 
 }
 
 export async function liveStatusAction(form: FormData): Promise<void> {
-  await requireArea("producao");
+  await exigir("producao.editar");
   const status = str(form, "status");
   if (status !== "ignorada" && status !== "detectada" && status !== "ja_cortada") return;
   await setLiveStatus(str(form, "id"), status);
@@ -69,7 +69,7 @@ export async function liveStatusAction(form: FormData): Promise<void> {
 
 /** Gera (ou regenera) thumbs. Com l1/l2 (e l3, opcional) preenchidos, usa a headline da equipe. */
 export async function generateAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  const role = await requireArea("producao");
+  const role = await exigir("producao.editar");
   const id = str(form, "id");
   const l1 = str(form, "l1").toUpperCase().slice(0, 40);
   const l2 = str(form, "l2").toUpperCase().slice(0, 40);
@@ -86,7 +86,7 @@ export async function generateAction(_prev: ActionState, form: FormData): Promis
 
 /** `when` vem do datetime-local, no horário de Brasília (sem horário de verão). */
 export async function approveAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  const role = await requireArea("producao");
+  const role = await exigir("producao.editar");
   const when = str(form, "publish_at");
   let publishAt: Date | null = null;
   if (when) {
@@ -108,7 +108,7 @@ export async function approveAction(_prev: ActionState, form: FormData): Promise
 
 /** A equipe corrige o quadro do corte; a próxima geração usa a identidade dele. */
 export async function setQuadroAction(form: FormData): Promise<void> {
-  const role = await requireArea("producao");
+  const role = await exigir("producao.editar");
   const id = str(form, "id");
   const quadro = str(form, "quadro");
   if (!isQuadroId(quadro)) return;
@@ -118,7 +118,7 @@ export async function setQuadroAction(form: FormData): Promise<void> {
 }
 
 export async function setStatusAction(form: FormData): Promise<void> {
-  const role = await requireArea("producao");
+  const role = await exigir("producao.editar");
   const id = str(form, "id");
   const status = str(form, "status");
   if (status !== "ignorado" && status !== "novo") return;
@@ -129,7 +129,7 @@ export async function setStatusAction(form: FormData): Promise<void> {
 
 /** Frame enviado à mão, para quando a miniatura do YouTube não serve. */
 export async function uploadFrameAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  const role = await requireArea("producao");
+  const role = await exigir("producao.editar");
   const id = str(form, "id");
   const file = form.get("frame");
   if (!(file instanceof File) || file.size === 0) return { ok: false, error: "Escolha uma imagem." };
@@ -150,7 +150,7 @@ export async function uploadFrameAction(_prev: ActionState, form: FormData): Pro
 }
 
 export async function savePromptAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  await requireArea("producao");
+  await exigir("producao.editar");
   const prompt = str(form, "prompt");
   try {
     if (prompt) await setConfig("plate_prompt", prompt);
@@ -163,7 +163,7 @@ export async function savePromptAction(_prev: ActionState, form: FormData): Prom
 }
 
 export async function uploadLogoAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  await requireArea("producao");
+  await exigir("producao.editar");
   const file = form.get("logo");
   if (!(file instanceof File) || file.size === 0) return { ok: false, error: "Escolha o arquivo do logo." };
   // Sem `quadro`, é o logo do PFC (padrão de todas as thumbs).
@@ -182,7 +182,7 @@ export async function uploadLogoAction(_prev: ActionState, form: FormData): Prom
 }
 
 export async function disconnectAction(): Promise<void> {
-  await requireArea("producao");
+  await requireAdmin();
   await db().from("producao_config").delete().in("key", ["yt_refresh_token", "yt_channel"]);
   refresh();
 }

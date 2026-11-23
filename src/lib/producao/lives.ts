@@ -33,10 +33,16 @@ export type ProducaoLive = {
   updated_at: string;
 };
 
-const ALL_MODES: CutMode[] = ["shorts", "long"];
+/**
+ * Só shorts. Os cortes longos 16:9 saíram em 16/11/2026: nos 90 dias
+ * anteriores, 134 cortes de 2–15 min fizeram mediana de 10 views e 1,6% das
+ * views do canal, contra 89% dos shorts. O tipo "long" continua existindo para
+ * os jobs antigos que já estão no banco.
+ */
+const ALL_MODES: CutMode[] = ["shorts"];
 /** O YouTube ainda processa o VOD logo depois do fim da live. */
 const VOD_GRACE_MS = 30 * 60_000;
-/** Por rodada do cron: cada live vira dois jobs pesados no Contenta. */
+/** Por rodada do cron: cada live vira um job pesado no Contenta. */
 const AUTO_PER_RUN = 2;
 
 async function patch(id: string, p: Partial<ProducaoLive>) {

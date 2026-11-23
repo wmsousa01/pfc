@@ -2,6 +2,7 @@ import "server-only";
 import { createHash } from "crypto";
 import { site } from "@/lib/config";
 import { BUCKET } from "@/lib/producao/store";
+import { urlAssinada } from "@/lib/storage";
 import { casarNoticias } from "./casar-noticias";
 import { db, getEpisodio, logAgenda, materiaisDe, newToken, type Briefing, type Episodio, type Material, type Materia, type Roteiro } from "./store";
 
@@ -155,6 +156,32 @@ export function imagemNaTela(ep: Episodio, materiais: Material[]): { id: string;
   return m ? { id: m.id, mime: m.mime } : null;
 }
 
+/**
+ * O GC e o crédito da foto do bloco no ar, para a tela de telejornal. Abertura
+ * e encerramento ficam sem GC. "Concursos Públicos: Mogi Guaçu abre 43 vagas"
+ * vira o chapéu e o título; a manchete do roteiro vai na linha de baixo.
+ */
+export function jornalNoAr(ep: Episodio, materiais: Material[]) {
+  const blocos = blocosDoEspelho(ep.briefing, ep.roteiro);
+  const b = ep.espelho_atual == null ? undefined : blocos[ep.espelho_atual];
+  const ehNoticia = b ? (b.materia ? b.materia.tipo === "materia" : ep.espelho_atual !== 0) : false;
+  let gc: { chapeu: string | null; titulo: string; manchete: string | null } | null = null;
+  if (b && ehNoticia) {
+    const partes = b.titulo.match(/^([^:]{3,40}):\s*(.+)$/);
+    gc = { chapeu: partes?.[1].trim() ?? null, titulo: (partes?.[2] ?? b.titulo).trim(), manchete: b.materia?.manchete?.trim() || null };
+  }
+  // A foto tirada de um post leva o código dele no nome: o crédito é de quem publicou.
+  const tela = imagemNaTela(ep, materiais);
+  const nome = tela ? materiais.find((m) => m.id === tela.id)?.nome ?? "" : "";
+  const fonte = b?.noticias
+    .flatMap((n) => n.fontes)
+    .find((f) => {
+      const c = codigoDoPost(f.url);
+      return !!c && nome.includes(c);
+    });
+  return { gc, credito: fonte ? fonte.rotulo || `@${fonte.handle}` : null };
+}
+
 /** Imagens e vídeos do espelho, na ordem em que foram enviados. */
 export async function materiaisDoEspelho(epId: string): Promise<Material[]> {
   return (await materiaisDe(epId)).filter((m) => m.bloco != null && /^(image|video)\//.test(m.mime));
@@ -174,8 +201,5 @@ export async function urlMaterialEspelho(token: string, materialId: string, baix
   if (!ep) return null;
   const { data: m } = await db().from("agenda_materiais").select("*").eq("id", materialId).eq("episodio_id", ep.id).maybeSingle();
   if (!m) return null;
-  const { data } = await db()
-    .storage.from(BUCKET)
-    .createSignedUrl(m.path, 3600, baixar ? { download: (m as Material).nome } : undefined);
-  return data?.signedUrl ?? null;
+  return urlAssinada(BUCKET, m.path, 3600, baixar ? (m as Material).nome : undefined).catch(() => null);
 }

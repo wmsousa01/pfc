@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { getClientFile, signedDownloadUrl } from "@/lib/client-area";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
  * O bucket é privado: exige login de admin e gera um link de 5 minutos.
  */
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  await requireAdmin();
+  await requireAcesso("arquivos.ver");
   const file = await getClientFile(params.id);
   const url = file ? await signedDownloadUrl(file) : null;
   return url

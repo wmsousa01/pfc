@@ -2,7 +2,7 @@ import AdminHeader from "@/components/admin/AdminHeader";
 import CopyButton from "@/components/CopyButton";
 import { Coluna, EspacoHeader, GrupoColuna, Quadro, cartao, diaLabel, porDia } from "@/components/admin/Espaco";
 import ProducaoForm from "@/components/admin/ProducaoForm";
-import { requireArea } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { calendarAccount } from "@/lib/agenda/gcal";
 import {
   TZ,
@@ -59,7 +59,7 @@ const VIEWS = ["quadro", "calendario", "novo"] as const;
 type View = (typeof VIEWS)[number];
 
 export default async function AgendaPage({ searchParams }: { searchParams: { mes?: string; view?: string } }) {
-  await requireArea("agenda");
+  await requireAcesso("agenda.ver");
   // Navegar pelos meses só faz sentido no calendário.
   const view: View = VIEWS.includes(searchParams.view as View)
     ? (searchParams.view as View)

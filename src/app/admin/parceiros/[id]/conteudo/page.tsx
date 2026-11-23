@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import AdminHeader from "@/components/admin/AdminHeader";
-import { requireAdmin } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { getPartnerById } from "@/lib/admin";
 import {
   countForSection,
@@ -14,7 +14,7 @@ export default async function PartnerContentIndex({
 }: {
   params: { id: string };
 }) {
-  await requireAdmin();
+  await requireAcesso("parceiros.ver");
 
   const partner = await getPartnerById(params.id);
   if (!partner) notFound();

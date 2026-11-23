@@ -1,5 +1,5 @@
 import "server-only";
-import { saveConnection } from "./store";
+import { activeConnection, saveConnection } from "./store";
 
 /**
  * Meta (Facebook + Instagram) pela Graph API, com o token da Página.
@@ -66,7 +66,13 @@ export async function graph<T>(path: string, params: Record<string, string> = {}
   const json = await res.json().catch(() => ({}));
   if (!res.ok || json.error) {
     const e = json.error ?? {};
-    throw new MetaError(`Meta ${res.status}: ${e.error_user_msg ?? e.message ?? "erro"}`, e.code ?? null);
+    // A Meta às vezes manda error_user_msg vazio: com `??` o erro chegava como
+    // "Meta 400: " sem nada (foi o caso dos 112 vídeos do Facebook em nov/2026).
+    const texto = e.error_user_msg || e.message || "erro sem mensagem";
+    const codigo = [e.code && `código ${e.code}`, e.error_subcode && `subcódigo ${e.error_subcode}`, e.type, e.fbtrace_id && `trace ${e.fbtrace_id}`]
+      .filter(Boolean)
+      .join(" · ");
+    throw new MetaError(`Meta ${res.status}: ${texto}${codigo ? ` (${codigo})` : ""}`, e.code ?? null);
   }
   return json as T;
 }
@@ -74,10 +80,11 @@ export async function graph<T>(path: string, params: Record<string, string> = {}
 type Page = { id: string; name: string; access_token: string; instagram_business_account?: { id: string; username?: string } };
 
 /**
- * Qual Página usar: META_PAGE_ID manda; senão a única; senão a do Fora da
- * Caixa pelo nome. Com várias e nenhuma reconhecida, pede para fixar.
+ * Qual Página usar: META_PAGE_ID manda; senão a única; senão a que já era a
+ * principal; senão a do Fora da Caixa pelo nome. Com várias e nenhuma
+ * reconhecida, pede para fixar. As outras viram perfis extras do Instagram.
  */
-function pickPage(pages: Page[]): Page {
+function pickPage(pages: Page[], atual: string | null): Page {
   const forced = process.env.META_PAGE_ID;
   if (forced) {
     const p = pages.find((x) => x.id === forced);
@@ -85,6 +92,8 @@ function pickPage(pages: Page[]): Page {
     return p;
   }
   if (pages.length === 1) return pages[0];
+  const jaEra = atual ? pages.find((p) => p.id === atual) : undefined;
+  if (jaEra) return jaEra;
   const pfc = pages.filter((p) => /fora\s*da\s*caixa|pfc/i.test(p.name));
   if (pfc.length === 1) return pfc[0];
   if (pages.length === 0) throw new Error("Nenhuma Página autorizada. Marque a Página do Fora da Caixa no login da Meta.");
@@ -114,13 +123,33 @@ export async function connectMeta(
     fields: "id,name,access_token,instagram_business_account{id,username}",
     access_token: long.access_token,
   });
-  const page = pickPage(pages.data ?? []);
+  const atual = await activeConnection("facebook").catch(() => null);
+  const page = pickPage(pages.data ?? [], atual?.accountId ?? null);
   const extra = comTokenDeUsuario ? await comTokenDeUsuario(long.access_token) : null;
   const sufixo = extra ? ` · anúncios: ${extra}` : "";
 
   await saveConnection({ platform: "facebook", accountId: page.id, accountName: page.name, token: page.access_token, scopes: SCOPES });
+
+  // O Instagram das outras Páginas marcadas no login (ex.: Lado A Lado B)
+  // vira perfil extra, escolhido post a post. Cada um publica com o token da sua Página.
+  const extras: string[] = [];
+  for (const p of pages.data ?? []) {
+    const extra = p.instagram_business_account;
+    if (p.id === page.id || !extra || extra.id === page.instagram_business_account?.id) continue;
+    await saveConnection({
+      platform: "instagram",
+      accountId: extra.id,
+      accountName: extra.username ? `@${extra.username}` : p.name,
+      token: p.access_token,
+      scopes: SCOPES,
+      principal: false,
+    });
+    extras.push(extra.username ? `@${extra.username}` : p.name);
+  }
+  const maisPerfis = extras.length ? ` · perfis extras: ${extras.join(", ")}` : "";
+
   const ig = page.instagram_business_account;
-  if (!ig) return `${page.name} (sem Instagram Business ligado à Página)${sufixo}`;
+  if (!ig) return `${page.name} (sem Instagram Business ligado à Página)${maisPerfis}${sufixo}`;
   await saveConnection({
     platform: "instagram",
     accountId: ig.id,
@@ -128,14 +157,16 @@ export async function connectMeta(
     token: page.access_token,
     scopes: SCOPES,
   });
-  return `${page.name} + ${ig.username ? `@${ig.username}` : "Instagram"}${sufixo}`;
+  return `${page.name} + ${ig.username ? `@${ig.username}` : "Instagram"}${maisPerfis}${sufixo}`;
 }
 
 // ---- Instagram Reels: container → processamento → media_publish ----
 
 /**
- * `trial` = Reel de teste: só não seguidores veem. MANUAL porque a API não
- * promove — a equipe escolhe pelo ranking e promove no app.
+ * `trial` = Reel de teste: só não seguidores veem. SS_PERFORMANCE: o próprio
+ * Instagram promove aos seguidores os que forem bem. A API não promove um
+ * teste já publicado (no MANUAL só pelo app) e não informa quais a Meta
+ * promoveu. Até 16/11/2026 era MANUAL: ver IG_PROMOCAO_AUTO_DESDE.
  */
 export async function igCreateReel(
   igId: string,
@@ -151,7 +182,7 @@ export async function igCreateReel(
       media_type: "REELS",
       video_url: videoUrl,
       caption: caption.slice(0, 2200),
-      ...(trial ? { trial_params: JSON.stringify({ graduation_strategy: "MANUAL" }) } : { share_to_feed: "true" }),
+      ...(trial ? { trial_params: JSON.stringify({ graduation_strategy: "SS_PERFORMANCE" }) } : { share_to_feed: "true" }),
       // Convite de collab (até 3): o perfil aceita no app e o Reel aparece nos dois.
       ...(collaborators.length ? { collaborators: JSON.stringify(collaborators.slice(0, 3)) } : {}),
       access_token: token,

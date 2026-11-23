@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireArea } from "@/lib/auth";
+import { exigir, requireAdmin } from "@/lib/auth";
 import type { ActionState } from "@/app/admin/producao/actions";
 import { analisarCriativo, enquadrarPelaAnalise, sugerirCopy } from "@/lib/campanhas/analise";
 import { gerarEstatico } from "@/lib/campanhas/estatico";
@@ -27,6 +27,8 @@ import {
   getEntrega,
   getEstrategia,
   listCriativos,
+  posicionamentosDoFormato,
+  posicionamentosValidos,
   updateCriativo,
   updateEntrega,
   updateEstrategia,
@@ -71,7 +73,7 @@ const dataOuNull = (v: string) => (/^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
 // ---- Estratégias ----
 
 export async function criarEstrategiaAction(form: FormData): Promise<void> {
-  const role = await requireArea("campanhas");
+  const role = await exigir("campanhas.editar");
   const modelo = MODELOS[str(form, "modelo")]?.m;
   const { data, error } = await db()
     .from("mkt_estrategias")
@@ -84,7 +86,7 @@ export async function criarEstrategiaAction(form: FormData): Promise<void> {
 }
 
 export async function salvarEstrategiaAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  await requireArea("campanhas");
+  await exigir("campanhas.editar");
   try {
     const id = str(form, "id");
     const e = await getEstrategia(id);
@@ -129,7 +131,7 @@ export async function salvarEstrategiaAction(_prev: ActionState, form: FormData)
 }
 
 export async function statusEstrategiaAction(form: FormData): Promise<void> {
-  await requireArea("campanhas");
+  await exigir("campanhas.editar");
   const s = str(form, "status") as EstrategiaStatus;
   if (!["rascunho", "ativa", "pausada", "encerrada"].includes(s)) return;
   await updateEstrategia(str(form, "id"), { status: s });
@@ -137,7 +139,7 @@ export async function statusEstrategiaAction(form: FormData): Promise<void> {
 }
 
 export async function excluirEstrategiaAction(form: FormData): Promise<void> {
-  await requireArea("campanhas");
+  await exigir("campanhas.editar");
   await db().from("mkt_estrategias").delete().eq("id", str(form, "id"));
   refresh();
   redirect(BASE);
@@ -146,7 +148,7 @@ export async function excluirEstrategiaAction(form: FormData): Promise<void> {
 // ---- Entregas: criativo × estratégia × rede ----
 
 export async function entregarAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  const role = await requireArea("campanhas");
+  const role = await exigir("campanhas.editar");
   try {
     const estrategiaId = str(form, "estrategia_id");
     const plataforma = str(form, "plataforma") as Plataforma;
@@ -181,7 +183,7 @@ export async function entregarAction(_prev: ActionState, form: FormData): Promis
 }
 
 export async function salvarEntregaAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  await requireArea("campanhas");
+  await exigir("campanhas.editar");
   try {
     const en = await getEntrega(str(form, "id"));
     if (!en) throw new Error("Entrega não encontrada.");
@@ -202,7 +204,7 @@ export async function salvarEntregaAction(_prev: ActionState, form: FormData): P
 }
 
 export async function copyIaAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  await requireArea("campanhas");
+  await exigir("campanhas.editar");
   try {
     const en = await getEntrega(str(form, "id"));
     const e = en && (await getEstrategia(en.estrategia_id));
@@ -218,7 +220,7 @@ export async function copyIaAction(_prev: ActionState, form: FormData): Promise<
 
 /** Análise no contexto da estratégia; preenche a copy se ainda estiver vazia. */
 export async function analisarEntregaAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  await requireArea("campanhas");
+  await exigir("campanhas.editar");
   try {
     const en = await getEntrega(str(form, "id"));
     const e = en && (await getEstrategia(en.estrategia_id));
@@ -239,7 +241,7 @@ export async function analisarEntregaAction(_prev: ActionState, form: FormData):
 }
 
 export async function aprovarEntregaAction(form: FormData): Promise<void> {
-  const role = await requireArea("campanhas");
+  const role = await exigir("campanhas.editar");
   const en = await getEntrega(str(form, "id"));
   if (!en || en.status !== "rascunho") return;
   await updateEntrega(en.id, { status: "aprovado", aprovado_por: actorOf(role) });
@@ -247,7 +249,7 @@ export async function aprovarEntregaAction(form: FormData): Promise<void> {
 }
 
 export async function voltarRascunhoAction(form: FormData): Promise<void> {
-  await requireArea("campanhas");
+  await exigir("campanhas.editar");
   const en = await getEntrega(str(form, "id"));
   if (!en || en.meta_ad_id || en.google_ad_id) return;
   await updateEntrega(en.id, { status: "rascunho", aprovado_por: null, erro: null });
@@ -255,14 +257,14 @@ export async function voltarRascunhoAction(form: FormData): Promise<void> {
 }
 
 export async function removerEntregaAction(form: FormData): Promise<void> {
-  await requireArea("campanhas");
+  await exigir("campanhas.editar");
   // Anúncio já criado continua no gerenciador: aqui só sai do painel.
   await db().from("mkt_entregas").delete().eq("id", str(form, "id"));
   refresh();
 }
 
 export async function subirMetaAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  await requireArea("campanhas");
+  await exigir("campanhas.publicar");
   const en = await getEntrega(str(form, "id"));
   if (!en) return { ok: false, error: "Entrega não encontrada." };
   if (en.plataforma !== "meta") return { ok: false, error: "Só entregas da Meta sobem daqui." };
@@ -273,9 +275,11 @@ export async function subirMetaAction(_prev: ActionState, form: FormData): Promi
     if (!e || !c) throw new Error("Estratégia ou criativo não encontrado.");
     await updateEntrega(en.id, { status: "enviando", erro: null });
     const r = await subirNaMeta(en, e, c);
-    await updateEntrega(en.id, { status: r === "pronto" ? "no_gerenciador" : "enviando" });
+    // O aviso (par recusado) fica no cartão da entrega, mesmo com o anúncio criado.
+    await updateEntrega(en.id, { status: r.estado === "pronto" ? "no_gerenciador" : "enviando", ...(r.aviso ? { erro: r.aviso.slice(0, 500) } : {}) });
     refresh();
-    return r === "pronto"
+    if (r.estado === "pronto" && r.aviso) return { ok: false, error: r.aviso };
+    return r.estado === "pronto"
       ? { ok: true, error: null }
       : { ok: false, error: "A Meta ainda está processando o vídeo. Clique em \"Continuar subida\" em 1–2 minutos." };
   } catch (err) {
@@ -286,7 +290,7 @@ export async function subirMetaAction(_prev: ActionState, form: FormData): Promi
 }
 
 export async function sincronizarAction(_prev: ActionState): Promise<ActionState> {
-  await requireArea("campanhas");
+  await exigir("campanhas.editar");
   try {
     const r = await sincronizarMetricas();
     refresh();
@@ -297,7 +301,7 @@ export async function sincronizarAction(_prev: ActionState): Promise<ActionState
 }
 
 export async function escolherContaGoogleAction(form: FormData): Promise<void> {
-  await requireArea("campanhas");
+  await requireAdmin();
   let destino: string;
   try {
     destino = `${BASE}?view=contas&ok=${encodeURIComponent(`Google Ads conectado: ${await escolherConta(str(form, "conta"))}`)}`;
@@ -309,7 +313,7 @@ export async function escolherContaGoogleAction(form: FormData): Promise<void> {
 }
 
 export async function desconectarAdsAction(form: FormData): Promise<void> {
-  await requireArea("campanhas");
+  await requireAdmin();
   const p = str(form, "platform");
   if (p === "meta_ads" || p === "google_ads") await deleteConnections([p]);
   refresh();
@@ -318,7 +322,7 @@ export async function desconectarAdsAction(form: FormData): Promise<void> {
 // ---- Biblioteca de criativos ----
 
 export async function salvarPastaAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  await requireArea("campanhas");
+  await exigir("campanhas.editar");
   try {
     const v = str(form, "pasta");
     if (!v) throw new Error("Cole o link da pasta do Drive.");
@@ -331,7 +335,7 @@ export async function salvarPastaAction(_prev: ActionState, form: FormData): Pro
 }
 
 export async function importarDriveAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  const role = await requireArea("campanhas");
+  const role = await exigir("campanhas.editar");
   try {
     const arquivos = form
       .getAll("arquivos")
@@ -351,7 +355,7 @@ export async function importarDriveAction(_prev: ActionState, form: FormData): P
 }
 
 export async function importarContentaAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  const role = await requireArea("campanhas");
+  const role = await exigir("campanhas.editar");
   try {
     const files = form.getAll("cortes").map(String);
     if (files.length === 0) throw new Error("Marque os cortes.");
@@ -363,10 +367,10 @@ export async function importarContentaAction(_prev: ActionState, form: FormData)
   }
 }
 
-type Upload = { ok: true; path: string; token: string } | { ok: false; error: string };
+type Upload = { ok: true; path: string; url: string } | { ok: false; error: string };
 
 export async function pedirUploadAction(nome: string, mime: string, tamanho: number): Promise<Upload> {
-  await requireArea("campanhas");
+  await exigir("campanhas.editar");
   try {
     return { ok: true, ...(await pedirUploadCriativo(nome, mime, tamanho)) };
   } catch (e) {
@@ -376,7 +380,7 @@ export async function pedirUploadAction(nome: string, mime: string, tamanho: num
 
 /** Assinatura do MaterialUploader: o "tipo" escolhido lá é o formato da peça. */
 export async function registrarUploadAction(path: string, nome: string, mime: string, formato: string): Promise<ActionState> {
-  const role = await requireArea("campanhas");
+  const role = await exigir("campanhas.editar");
   try {
     await registrarUpload(path, nome, mime, formato, actorOf(role));
     refresh();
@@ -387,7 +391,7 @@ export async function registrarUploadAction(path: string, nome: string, mime: st
 }
 
 export async function analisarCriativoAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  await requireArea("campanhas");
+  await exigir("campanhas.editar");
   try {
     const c = await getCriativo(str(form, "id"));
     if (!c) throw new Error("Criativo não encontrado.");
@@ -412,7 +416,7 @@ function pecaAutomatica(c: Criativo, enq: Enquadramento | undefined): Partial<Cr
 
 /** Enquadra na pauta os criativos analisados que ainda não têm peça, pelo texto da análise. */
 export async function classificarNaPautaAction(_prev: ActionState, _form: FormData): Promise<ActionState> {
-  await requireArea("campanhas");
+  await exigir("campanhas.editar");
   try {
     const alvos = (await listCriativos()).filter((c) => c.analise && !c.peca).slice(0, 20);
     if (!alvos.length) throw new Error("Nenhum criativo analisado sem peça.");
@@ -432,21 +436,42 @@ export async function classificarNaPautaAction(_prev: ActionState, _form: FormDa
   }
 }
 
+/** Liga os dois criativos como par (nos dois sentidos) e solta os pares antigos de cada um. */
+async function ligarPar(id: string, parId: string | null): Promise<void> {
+  const atual = await getCriativo(id);
+  if (!atual || atual.par_id === parId) return;
+  const novo = parId && parId !== id ? await getCriativo(parId) : null;
+  if (parId && (!novo || novo.tipo !== atual.tipo)) throw new Error("O par precisa ser outro criativo do mesmo tipo.");
+  const soltar = [atual.par_id, novo?.par_id].filter((x): x is string => !!x && x !== id && x !== parId);
+  if (soltar.length) await db().from("mkt_criativos").update({ par_id: null }).in("id", soltar);
+  await updateCriativo(id, { par_id: novo?.id ?? null });
+  if (novo) await updateCriativo(novo.id, { par_id: id });
+}
+
 export async function classificarCriativoAction(form: FormData): Promise<void> {
-  await requireArea("campanhas");
+  await exigir("campanhas.editar");
   const peca = pecaPorCodigo(str(form, "peca"));
-  await updateCriativo(str(form, "id"), { formato: formatoDe(str(form, "formato")), peca: peca?.codigo ?? null });
+  const formato = formatoDe(str(form, "formato"));
+  // Nenhum marcado = volta ao padrão do formato (o form sempre manda a lista inteira).
+  const marcados = posicionamentosValidos(form.getAll("pos").map(String));
+  const id = str(form, "id");
+  await updateCriativo(id, {
+    formato,
+    peca: peca?.codigo ?? null,
+    posicionamentos: marcados.length ? marcados : posicionamentosDoFormato(formato),
+  });
+  if (form.has("par_id")) await ligarPar(id, str(form, "par_id") || null);
   refresh();
 }
 
 export async function arquivarCriativoAction(form: FormData): Promise<void> {
-  await requireArea("campanhas");
+  await exigir("campanhas.editar");
   await updateCriativo(str(form, "id"), { arquivado: true });
   refresh();
 }
 
 export async function gerarEstaticoAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  const role = await requireArea("campanhas");
+  const role = await exigir("campanhas.editar");
   try {
     const formato = formatoDe(str(form, "formato"));
     if (!formato) throw new Error("Escolha o formato.");

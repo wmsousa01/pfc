@@ -1,24 +1,12 @@
--- 029: equipe com papéis por área + recebimento de materiais dos editores.
+-- 040: recebimento de materiais dos editores (Drive da produção, com aprovação).
 --
--- Admin continua sendo quem está em app_admins (acesso total). A tabela equipe
--- dá acesso PARCIAL: cada membro tem um papel (nível pré-definido) e a lista de
--- áreas que abre. As áreas liberadas leem o banco com service-role no servidor,
--- então nenhuma das duas tabelas tem policy para o cliente.
-
-create table if not exists public.equipe (
-  user_id     uuid primary key references auth.users(id) on delete cascade,
-  nome        text not null,
-  email       text not null,
-  papel       text not null default 'editor',
-  -- Áreas do admin ("agenda", "materiais"...) e permissões finas ("materiais.aprovar").
-  areas       text[] not null default '{}',
-  ativo       boolean not null default true,
-  created_by  text,
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
-);
-
-alter table public.equipe enable row level security;
+-- Nasceu como 029_equipe_materiais no PR #50. A parte de equipe foi trocada
+-- pelo modelo de papéis da 039; aqui ficam só as tabelas de materiais (já
+-- criadas em produção pela 029 antiga — por isso o "if not exists") e as
+-- permissões novas nos papéis de partida.
+--
+-- Permissões: materiais.ver (vê os próprios envios), materiais.editar (envia),
+-- materiais.aprovar (vê os de todos e aprova ou pede ajuste).
 
 -- Materiais enviados pelos editores. O arquivo mora no Drive da produção, numa
 -- árvore criada pelo próprio app (Categoria / Quadro / Episódio ou referência);
@@ -71,3 +59,10 @@ create table if not exists public.materiais_eventos (
 create index if not exists materiais_eventos_material_idx on public.materiais_eventos (material_id, created_at);
 
 alter table public.materiais_eventos enable row level security;
+
+-- Papéis de partida: coordenação envia e aprova; editor, social media, tráfego
+-- e designer enviam (anúncios e vinhetas também passam por aqui).
+update public.papeis set permissoes = array(select distinct unnest(permissoes || array['materiais.editar']))
+ where chave in ('editor', 'social_media', 'trafego', 'designer');
+update public.papeis set permissoes = array(select distinct unnest(permissoes || array['materiais.editar', 'materiais.aprovar']))
+ where chave = 'coordenacao';

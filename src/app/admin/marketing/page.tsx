@@ -2,7 +2,7 @@ import AdminHeader from "@/components/admin/AdminHeader";
 import { Coluna, EspacoHeader, GrupoColuna, Quadro, diaKey, diaLabel, porDia, selo } from "@/components/admin/Espaco";
 import CardAcoes from "@/components/admin/CardAcoes";
 import ProducaoForm from "@/components/admin/ProducaoForm";
-import { requireArea } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import {
   contentaJobUrl,
   isContentaConfigured,
@@ -16,11 +16,14 @@ import { connectedChannel } from "@/lib/producao/youtube-api";
 import { defaultCaption } from "@/lib/social/caption";
 import { isCryptoConfigured } from "@/lib/social/crypto";
 import { isMetaConfigured } from "@/lib/social/meta";
+import { numerosDaSemanaPendente } from "@/lib/social/numeros-semana";
 import { IG_COLLAB_FAVORITOS, IG_DAILY_MAX } from "@/lib/social/publisher";
+import { IG_TESTES_POR_DIA, JANELA, METRICAS_DIAS, PROMOVER, promocaoAutomatica, valePromover } from "@/lib/social/ritmo";
 import { PLATFORMS, listConnections, type Platform, type PostStatus, type SocialPost } from "@/lib/social/store";
 import {
   cancelPostAction,
   disconnectMetaAction,
+  disconnectPerfilAction,
   graduatePostAction,
   retryPostAction,
   runQueueAction,
@@ -111,7 +114,7 @@ export default async function MarketingPage({
 }: {
   searchParams: { job?: string; ok?: string; erro?: string; view?: string; rede?: string; q?: string };
 }) {
-  await requireArea("marketing");
+  await requireAcesso("marketing.ver");
 
   const since = new Date(Date.now() - 14 * 86_400_000).toISOString();
   const [channel, connections, postsRes] = await Promise.all([
@@ -124,6 +127,7 @@ export default async function MarketingPage({
       .order("scheduled_at", { ascending: true })
       .limit(200),
   ]);
+  const numerosPendente = await numerosDaSemanaPendente().catch(() => false);
   const schemaMissing = connections === null || !!postsRes.error;
   const posts = (postsRes.data ?? []) as SocialPost[];
 
@@ -160,7 +164,11 @@ export default async function MarketingPage({
     }
   }
 
-  const ig = connections?.find((c) => c.platform === "instagram" && c.status === "ativa");
+  const ig = connections?.find((c) => c.platform === "instagram" && c.status === "ativa" && c.principal);
+  // Perfis extras do Instagram (ex.: @ladoaladob26): vêm das outras Páginas marcadas no login da Meta.
+  const perfisExtras = (connections ?? []).filter((c) => c.platform === "instagram" && c.status === "ativa" && !c.principal);
+  const nomePerfil = (id: number | null) =>
+    id ? (connections?.find((c) => c.id === id)?.account_name ?? "perfil desconectado") : null;
   const fb = connections?.find((c) => c.platform === "facebook" && c.status === "ativa");
   const metaRevoked = !ig && !fb && connections?.some((c) => (c.platform === "instagram" || c.platform === "facebook") && c.status === "revogada");
 
@@ -173,10 +181,20 @@ export default async function MarketingPage({
   const fila = posts.filter((p) => p.status !== "publicado" && p.status !== "cancelado");
   const postsOfCut = (file: string) => posts.filter((p) => p.contenta_job_id === jobId && p.cut_file === file);
   // Mais views primeiro; empate decide quem foi mais compartilhado e salvo.
+  // Os que já bateram a regra de promoção primeiro; depois mais views.
   const testes = posts
-    .filter((p) => p.platform === "instagram" && p.trial && p.status === "publicado" && !p.graduated_at)
+    .filter(
+      (p) =>
+        p.platform === "instagram" &&
+        p.trial &&
+        p.status === "publicado" &&
+        !p.graduated_at &&
+        // Os automáticos a Meta resolve: ficam só enquanto ainda são medidos.
+        (!promocaoAutomatica(p) || horasDesde(p.published_at) < METRICAS_DIAS * 24)
+    )
     .sort(
       (a, b) =>
+        Number(valePromover(b)) - Number(valePromover(a)) ||
         (b.metrics?.views ?? -1) - (a.metrics?.views ?? -1) ||
         (b.metrics?.shares ?? 0) + (b.metrics?.saved ?? 0) - ((a.metrics?.shares ?? 0) + (a.metrics?.saved ?? 0))
     );
@@ -248,6 +266,16 @@ export default async function MarketingPage({
         <option value="normal">Reel normal</option>
         <option value="off">Não publicar</option>
       </select>
+      {perfisExtras.length > 0 && (
+        <select name="perfil" defaultValue="" disabled={!connected.instagram} className={input} title="Em qual perfil do Instagram o Reel sai">
+          <option value="">{ig?.account_name ?? "Perfil principal"}</option>
+          {perfisExtras.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.account_name ?? `Perfil ${c.id}`}
+            </option>
+          ))}
+        </select>
+      )}
     </label>
   );
 
@@ -275,6 +303,9 @@ export default async function MarketingPage({
 
   const Extras = ({ p }: { p: SocialPost }) => (
     <>
+      {p.perfil_id && (
+        <span className={`${chip} border-sky-500/30 bg-sky-500/10 text-sky-300`}>{nomePerfil(p.perfil_id)}</span>
+      )}
       {p.trial && (
         <span className={`${chip} border-gold-500/30 bg-gold-500/10 text-gold-400`}>
           {p.graduated_at ? "Teste promovido" : "Teste"}
@@ -412,7 +443,10 @@ export default async function MarketingPage({
               />
             </>
           }
-          abas={TABS.map((t) => ({ href: href({ view: t.v }), label: t.label, ativa: view === t.v, count: t.count, alerta: t.alerta }))}
+          abas={[
+            { href: "/admin/marketing/semana", label: "Semana", ativa: false, alerta: numerosPendente },
+            ...TABS.map((t) => ({ href: href({ view: t.v }), label: t.label, ativa: view === t.v, count: t.count, alerta: t.alerta })),
+          ]}
         />
 
         <div className="space-y-3 mt-4">
@@ -564,8 +598,13 @@ export default async function MarketingPage({
         {view === "testes" && (
           <section className="mt-4">
             <p className="text-white/40 text-xs mb-3 max-w-3xl">
-              Só não seguidores viram estes Reels. Compare depois de 24–72 h e promova os melhores no app do Instagram
-              (Reel → ⋯ → Compartilhar com seguidores); depois marque aqui. Métricas atualizam a cada hora por 7 dias.
+              Só não seguidores viram estes Reels. Desde 17/11 os testes novos saem com promoção automática: o próprio
+              Instagram mostra aos seguidores os que forem bem (marcados <b className="text-sky-300">automático</b>; a API
+              não diz quais ele promoveu). Nos testes anteriores, promova no app (Reel → ⋯ → Compartilhar com seguidores)
+              os marcados com <b className="text-gold-400">promover</b>: {PROMOVER.aposHoras} h no ar e{" "}
+              {PROMOVER.assistidoMs / 1000} s ou mais de tempo médio assistido com {num(PROMOVER.minViews)}+ views, ou{" "}
+              {num(PROMOVER.views)} views. Um ou
+              dois por dia bastam; depois marque aqui. Métricas de todo Reel atualizam por {METRICAS_DIAS} dias.
             </p>
             {metricsErro && (
               <p className="text-yellow-300 text-xs mb-3 break-words">
@@ -606,7 +645,19 @@ export default async function MarketingPage({
                                 <img src={p.thumb_url} alt="" className="w-8 aspect-[9/16] object-cover rounded shrink-0 bg-black" />
                               )}
                               <div className="min-w-0">
-                                <p className="text-white font-semibold line-clamp-1">{p.title}</p>
+                                <p className="text-white font-semibold line-clamp-1">
+                                  {promocaoAutomatica(p) && (
+                                    <span className="text-[10px] font-bold px-1.5 mr-1.5 rounded border border-sky-500/40 text-sky-300">
+                                      automático
+                                    </span>
+                                  )}
+                                  {valePromover(p) && (
+                                    <span className="text-[10px] font-bold px-1.5 mr-1.5 rounded border border-gold-500/40 text-gold-400">
+                                      promover
+                                    </span>
+                                  )}
+                                  {p.title}
+                                </p>
                                 <p className="text-white/40">
                                   há {h < 48 ? `${h} h` : `${Math.floor(h / 24)} dias`}
                                   {h < 24 && " · cedo para comparar"}
@@ -632,7 +683,9 @@ export default async function MarketingPage({
                             )}
                             <form action={graduatePostAction} className="inline">
                               <input type="hidden" name="id" value={p.id} />
-                              <button className="text-white/60 hover:text-emerald-400">Já promovi</button>
+                              <button className="text-white/60 hover:text-emerald-400">
+                                {promocaoAutomatica(p) ? "Tirar da lista" : "Já promovi"}
+                              </button>
                             </form>
                           </td>
                         </tr>
@@ -686,7 +739,9 @@ export default async function MarketingPage({
                     </div>
                     <p className="text-white/40 text-xs mt-1">
                       Um corte por horário, nas redes marcadas, com a legenda padrão. Corte que já está numa rede é pulado.
-                      Com o Instagram, no máximo {IG_DAILY_MAX} Reels por dia (intervalo mínimo de {24 / IG_DAILY_MAX} h).
+                      A fila só publica das {JANELA.inicio}h às {JANELA.fim}h e segura cada rede no ritmo da aba Semana: o que
+                      passar disso vai para o próximo horário livre. Com o Instagram, no máximo {IG_DAILY_MAX} Reels por dia
+                      ({IG_TESTES_POR_DIA} de teste).
                     </p>
                     <ProducaoForm
                       action={scheduleJobAction}
@@ -753,6 +808,9 @@ export default async function MarketingPage({
                               rows={4}
                               className={`${input} w-full resize-y`}
                             />
+                            <p className="text-white/35 text-[11px]">
+                              Sem mudar a legenda, o Instagram recebe esta com uma pergunta e um pedido de envio no fim.
+                            </p>
                             <PlatformBoxes prefix={c.file} />
                             <InstagramMode />
                             <CollabFields />
@@ -804,6 +862,15 @@ export default async function MarketingPage({
                     <p className={ig ? "text-emerald-400 font-semibold" : "text-yellow-300"}>
                       {ig ? `✓ Instagram ${ig.account_name ?? ""}` : "Instagram não ligado à Página (precisa ser Business/Creator)"}
                     </p>
+                    {perfisExtras.map((c) => (
+                      <div key={c.id} className="flex items-center gap-3">
+                        <p className="text-sky-300 font-semibold">✓ Perfil extra {c.account_name ?? ""}</p>
+                        <form action={disconnectPerfilAction}>
+                          <input type="hidden" name="id" value={c.id} />
+                          <button className="text-xs text-white/40 hover:text-red-400">Tirar</button>
+                        </form>
+                      </div>
+                    ))}
                   </div>
                   <div className="flex items-center gap-3">
                     <a href="/api/social/meta/oauth" className="text-xs text-white/60 hover:text-white">
@@ -813,6 +880,10 @@ export default async function MarketingPage({
                       <button className="text-xs text-white/40 hover:text-red-400">Desconectar</button>
                     </form>
                   </div>
+                  <p className="text-white/30 text-xs w-full">
+                    Outro perfil (ex.: Lado A Lado B): ligue o Instagram dele a uma Página do Facebook, clique em Reconectar e
+                    marque as duas Páginas e os dois Instagrams no login da Meta. Ele vira perfil extra, escolhido post a post.
+                  </p>
                 </div>
               ) : (
                 <div className="mt-2">

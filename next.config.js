@@ -11,6 +11,9 @@ const nextConfig = {
       "/admin/producao": ["./assets/fonts/**"],
       "/api/cron/producao": ["./assets/fonts/**"],
       "/admin/agenda/[id]": ["./assets/fonts/**", "./node_modules/ffmpeg-static/ffmpeg*"],
+      "/ao-vivo/tela/[token]/placa/[id]": ["./assets/fonts/**"],
+      // Artes dos posts (Anton e Noto Sans lidas em runtime pelas server actions da página).
+      "/admin/fotos": ["./assets/fonts/**"],
     },
   },
   images: {
@@ -19,6 +22,9 @@ const nextConfig = {
       { protocol: "https", hostname: "*.ytimg.com" },
       { protocol: "https", hostname: "yt3.googleusercontent.com" },
       { protocol: "https", hostname: "*.supabase.co" },
+      // Logos e capas dos parceiros, servidos do R2 pela rota /arquivos.
+      { protocol: "https", hostname: "pfctv.com.br", pathname: "/arquivos/**" },
+      { protocol: "https", hostname: "www.pfctv.com.br", pathname: "/arquivos/**" },
     ],
     // Logos de parceiros (curados pelo admin) podem ser SVG.
     dangerouslyAllowSVG: true,

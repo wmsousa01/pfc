@@ -3,7 +3,7 @@ import AdminHeader from "@/components/admin/AdminHeader";
 import EnvioMaterial from "@/components/admin/EnvioMaterial";
 import ProducaoForm from "@/components/admin/ProducaoForm";
 import { EspacoHeader, selo } from "@/components/admin/Espaco";
-import { requireArea } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { TZ } from "@/lib/agenda/store";
 import { linkDrive, linkPasta } from "@/lib/materiais/drive";
 import {
@@ -28,7 +28,7 @@ const inputCls =
   "w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-gold-500/50";
 
 export default async function MaterialPage({ params }: { params: { id: string } }) {
-  const acesso = await requireArea("materiais");
+  const acesso = await requireAcesso("materiais.ver");
   const m = await getMaterial(params.id);
   if (!m || m.status === "enviando" || !podeVer(acesso, m)) notFound();
 

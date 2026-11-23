@@ -1,6 +1,5 @@
 import "server-only";
 import { pode, type Acesso } from "@/lib/auth";
-import { APROVAR_MATERIAIS } from "@/lib/permissoes";
 import { QUADROS, isQuadroId } from "@/lib/producao/quadros";
 import { db } from "@/lib/producao/store";
 import { TZ } from "@/lib/agenda/store";
@@ -12,8 +11,8 @@ export * from "./tipos";
 /** Teto por arquivo. O Drive aceita bem mais; isto só barra o engano (pasta zipada inteira). */
 export const MAX_ARQUIVO = 20 * 1024 * 1024 * 1024;
 
-export const podeAprovar = (a: Acesso) => pode(a, APROVAR_MATERIAIS);
-const quem = (a: Acesso) => a.nome ?? a.email ?? a.userId;
+export const podeAprovar = (a: Acesso) => pode(a, "materiais.aprovar");
+const quem = (a: Acesso) => (a.kind === "equipe" && a.nome) || a.email || a.userId;
 
 export async function logMaterial(id: string, actor: string, action: string, detail?: string) {
   await db().from("materiais_eventos").insert({ material_id: id, actor, action, detail: detail ?? null });

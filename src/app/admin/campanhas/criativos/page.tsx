@@ -3,11 +3,21 @@ import { AnaliseView, Miniatura, Nota, abasCampanhas, btnPri, btnSec, card, inpu
 import { EspacoHeader } from "@/components/admin/Espaco";
 import ProducaoForm from "@/components/admin/ProducaoForm";
 import MaterialUploader from "@/components/agenda/MaterialUploader";
-import { requireArea } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { arquivosDaPasta, pastaCampanhas } from "@/lib/campanhas/fontes";
 import { MODELOS } from "@/lib/campanhas/modelos";
 import { CAMPANHAS_DO_PLANO, FONTES, PECAS, PLANO_URL, pecaPorCodigo, type Peca } from "@/lib/campanhas/plano";
-import { FORMATOS, listCriativos, listEstrategias, previews, type Criativo, type Enquadramento, type Origem } from "@/lib/campanhas/store";
+import {
+  FORMATOS,
+  POSICIONAMENTOS,
+  listCriativos,
+  listEstrategias,
+  previews,
+  type Criativo,
+  type Enquadramento,
+  type Origem,
+  type Posicionamento,
+} from "@/lib/campanhas/store";
 import { isContentaConfigured, listContentaJobs, listJobCuts, type ContentaCut, type ContentaJob } from "@/lib/producao/contenta";
 import { isGeminiConfigured } from "@/lib/producao/gemini";
 import {
@@ -58,7 +68,7 @@ function Enquadrado({ e, atual }: { e: Enquadramento; atual: string | null }) {
 }
 
 export default async function CriativosPage({ searchParams }: { searchParams: { job?: string; f?: string; peca?: string } }) {
-  await requireArea("campanhas");
+  await requireAcesso("campanhas.ver");
 
   const [criativos, estrategias, pasta] = await Promise.all([
     listCriativos().catch(() => [] as Criativo[]),
@@ -168,6 +178,22 @@ export default async function CriativosPage({ searchParams }: { searchParams: { 
                               <span className={atrasada ? "text-red-400" : "text-white/30"}>falta</span>
                             )}
                           </span>
+                          {feitos.length > 0 && (
+                            <span className="basis-full pl-[4.25rem] text-[11px] text-white/40 space-y-0.5">
+                              {feitos.map((c) => (
+                                <span key={c.id} className="block">
+                                  <span className="text-white/60">{c.nome}</span>
+                                  {" → "}
+                                  {c.posicionamentos?.length ? c.posicionamentos.map((x) => POSICIONAMENTOS[x] ?? x).join(", ") : <span className="text-red-400">sem posicionamento</span>}
+                                </span>
+                              ))}
+                              {p.formatos
+                                .filter((f) => !feitos.some((c) => c.formato === f))
+                                .map((f) => (
+                                  <span key={f} className="block text-amber-400/80">falta a versão {f}</span>
+                                ))}
+                            </span>
+                          )}
                         </div>
                       );
                     })}
@@ -243,7 +269,7 @@ export default async function CriativosPage({ searchParams }: { searchParams: { 
 
           <div className={card}>
             <h2 className="text-white font-bold">Upload</h2>
-            <p className="text-white/40 text-xs mt-0.5">Até 50 MB por arquivo; maiores, pela pasta do Drive. Escolha o formato da peça.</p>
+            <p className="text-white/40 text-xs mt-0.5">Vídeo até 1 GB, imagem até 50 MB; maiores, pela pasta do Drive. Escolha o formato da peça.</p>
             <div className="mt-3">
               <MaterialUploader
                 pedir={pedirUploadAction}
@@ -400,6 +426,25 @@ export default async function CriativosPage({ searchParams }: { searchParams: { 
                           <option key={p.codigo} value={p.codigo}>{p.codigo} · {p.titulo}</option>
                         ))}
                       </select>
+                      {c.tipo === "video" && (
+                        <select name="par_id" defaultValue={c.par_id ?? ""} className={`${input} max-w-[13rem]`} title="A mesma peça no outro formato: sobe junto na Meta, cada versão no seu posicionamento">
+                          <option value="">Sem par (outro formato)</option>
+                          {c.par_id && !criativos.some((o) => o.id === c.par_id) && <option value={c.par_id}>Par atual (arquivado)</option>}
+                          {criativos
+                            .filter((o) => o.id !== c.id && o.tipo === "video")
+                            .map((o) => (
+                              <option key={o.id} value={o.id}>Par: {o.nome}{o.formato && !o.nome.includes(o.formato) ? ` · ${o.formato}` : ""}</option>
+                            ))}
+                        </select>
+                      )}
+                      <div className="basis-full flex flex-wrap gap-x-2 gap-y-1 mt-1">
+                        {(Object.keys(POSICIONAMENTOS) as Posicionamento[]).map((p) => (
+                          <label key={p} className="flex items-center gap-1 text-[11px] text-white/50 has-[:checked]:text-gold-400">
+                            <input type="checkbox" name="pos" value={p} defaultChecked={c.posicionamentos?.includes(p)} className="accent-gold-500" />
+                            {POSICIONAMENTOS[p]}
+                          </label>
+                        ))}
+                      </div>
                       <button className="text-[11px] text-white/40 hover:text-white px-1">ok</button>
                     </form>
                     {isGeminiConfigured() && (

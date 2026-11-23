@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { ActionState } from "@/app/admin/producao/actions";
-import { requireAdmin, requireArea } from "@/lib/auth";
+import { exigir, requireAdmin } from "@/lib/auth";
 import { disconnectDrive } from "@/lib/materiais/drive";
 import {
   arquivar,
@@ -36,7 +36,7 @@ export type EnvioDados = Omit<NovoEnvio, "categoria"> & { categoria: string };
 export type Inicio = { ok: true; id: string; uploadUrl: string } | { ok: false; error: string };
 
 export async function iniciarEnvioAction(dados: EnvioDados, nome: string, mime: string, tamanho: number): Promise<Inicio> {
-  const a = await requireArea("materiais");
+  const a = await exigir("materiais.editar");
   try {
     if (!dados.substitui_id && !isCategoria(dados.categoria)) throw new Error("Escolha a categoria.");
     const s = await iniciarEnvio(a, dados as NovoEnvio, { nome, mime, tamanho }, origemDoPedido());
@@ -47,7 +47,7 @@ export async function iniciarEnvioAction(dados: EnvioDados, nome: string, mime: 
 }
 
 export async function confirmarEnvioAction(id: string, fileId: string): Promise<ActionState> {
-  const a = await requireArea("materiais");
+  const a = await exigir("materiais.editar");
   try {
     const m = await confirmarEnvio(a, id, fileId);
     refresh(m.substitui_id ?? undefined);
@@ -58,12 +58,12 @@ export async function confirmarEnvioAction(id: string, fileId: string): Promise<
 }
 
 export async function cancelarEnvioAction(id: string, fileId: string | null): Promise<void> {
-  const a = await requireArea("materiais");
+  const a = await exigir("materiais.editar");
   await cancelarEnvio(a, id, fileId).catch(() => undefined);
 }
 
 export async function revisarAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  const a = await requireArea("materiais");
+  const a = await exigir("materiais.ver");
   const id = String(form.get("id") ?? "");
   const decisao = String(form.get("decisao") ?? "") === "ajuste" ? "ajuste" : "aprovado";
   try {
@@ -76,7 +76,7 @@ export async function revisarAction(_prev: ActionState, form: FormData): Promise
 }
 
 export async function arquivarAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  const a = await requireArea("materiais");
+  const a = await exigir("materiais.ver");
   const id = String(form.get("id") ?? "");
   try {
     await arquivar(a, id);

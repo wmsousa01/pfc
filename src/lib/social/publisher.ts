@@ -1,5 +1,5 @@
 import "server-only";
-import { db } from "@/lib/producao/store";
+import { db, getConfig, setConfig } from "@/lib/producao/store";
 import { connectedChannel, uploadVideo } from "@/lib/producao/youtube-api";
 import {
   MetaError,
@@ -10,7 +10,9 @@ import {
   igPublishingUsage,
   igReelInsights,
 } from "./meta";
-import { activeConnection, revokeConnection, updatePost, type SocialPost } from "./store";
+import { IG_TESTES_BLOQUEIO, IG_TESTES_POR_DIA, METRICAS_DIAS, RITMO, dentroDaJanela } from "./ritmo";
+import { activeConnection, connectionById, revokeConnection, updatePost, type Platform, type SocialPost } from "./store";
+import { youtubeShortMeta } from "./youtube-meta";
 
 /** Um "publicando" mais velho que isso morreu no meio (timeout da função). */
 const STALE_MS = 15 * 60_000;
@@ -22,23 +24,25 @@ const RETRY_MS = 10 * 60_000;
 const BUDGET_MS = 150_000;
 
 /**
- * Ritmo do Instagram, bem abaixo do teto da API (100/24h) para a conta não
- * parecer robô: no máximo 12 por 24h, 1h30 entre um e outro, horário com folga
- * aleatória. Vale para todo Reel, de teste ou não. O Instagram não documenta
- * limite próprio para reel de teste; os relatos (nov/2026) falam em ~20–25 por
- * dia e bloqueio de 30 dias de quem passa, então 12 deixa folga.
+ * Teto de Reels por 24h no Instagram (perfil + teste). O ritmo de todas as
+ * redes, a janela de horário e o teto dos testes ficam em ritmo.ts.
  */
-export const IG_DAILY_MAX = 12;
-const IG_GAP_MS = 90 * 60_000;
-const IG_JITTER_MS = 15 * 60_000;
+export const IG_DAILY_MAX = RITMO.instagram.porDia;
+const JITTER_MS = 15 * 60_000;
 /** Perfis com atalho de collab no formulário (sem @). */
 export const IG_COLLAB_FAVORITOS = ["ladoaladob26"];
 /** Uso da API (inclui outras ferramentas) a partir do qual a fila para. */
 const IG_API_STOP = 25;
 
-/** Métricas: até 7 dias depois de publicar, no máximo uma leitura por hora. */
-const METRICS_DAYS = 7;
+/**
+ * Métricas de todo Reel do Instagram (teste, promovido ou do perfil) por
+ * METRICAS_DIAS: de hora em hora nos 3 primeiros dias, depois a cada 12 h.
+ * Antes só os testes não promovidos eram lidos, e os melhores posts paravam
+ * de ser medidos justamente quando chegavam ao perfil.
+ */
+const METRICS_HOT_MS = 3 * 86_400_000;
 const METRICS_EVERY_MS = 60 * 60_000;
+const METRICS_SLOW_MS = 12 * 60 * 60_000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e)).slice(0, 500);
@@ -55,6 +59,17 @@ async function meta(platform: "instagram" | "facebook") {
   return c;
 }
 
+/** Conta do Instagram do post: o perfil extra escolhido (ex.: Lado A Lado B) ou a principal. */
+async function igDe(perfilId: number | null) {
+  if (!perfilId) return meta("instagram");
+  const c = await connectionById(perfilId);
+  if (!c) throw new Error("O perfil do Instagram escolhido para este post foi desconectado (/admin/marketing, aba Contas).");
+  return c;
+}
+
+/** O bloqueio dos testes vale por conta: cada perfil tem o seu limite na Meta. */
+const bloqueioTestes = (perfilId: number | null) => (perfilId ? `${IG_TESTES_BLOQUEIO}:${perfilId}` : IG_TESTES_BLOQUEIO);
+
 async function published(p: SocialPost, externalId: string, url: string | null) {
   await updatePost(p.id, {
     status: "publicado",
@@ -67,7 +82,7 @@ async function published(p: SocialPost, externalId: string, url: string | null) 
 
 /** Termina um Reel: espera o container ficar pronto e publica. false = ainda processando. */
 async function finishReel(p: SocialPost, waitMs: number): Promise<boolean> {
-  const c = await meta("instagram");
+  const c = await igDe(p.perfil_id);
   const until = Date.now() + waitMs;
   for (;;) {
     const s = await igContainerStatus(p.container_id!, c.token);
@@ -88,12 +103,15 @@ async function publishOne(p: SocialPost): Promise<void> {
   switch (p.platform) {
     case "youtube": {
       if (!(await connectedChannel())) throw new Error("Canal do YouTube não conectado (/admin/producao/config).");
-      const id = await uploadVideo(await download(p.video_url), { title: p.title, description: p.caption });
+      const yt = await youtubeShortMeta(p);
+      // Grava o título que de fato saiu, para a fila mostrar o mesmo que o canal.
+      if (yt.title !== p.title) await updatePost(p.id, { title: yt.title });
+      const id = await uploadVideo(await download(p.video_url), yt);
       await published(p, id, `https://youtube.com/shorts/${id}`);
       return;
     }
     case "instagram": {
-      const c = await meta("instagram");
+      const c = await igDe(p.perfil_id);
       const collab = p.collaborators ?? [];
       let containerId: string;
       try {
@@ -123,6 +141,19 @@ async function publishOne(p: SocialPost): Promise<void> {
 
 /** Falhou: tenta de novo em 10 min até MAX_ATTEMPTS; token morto vai direto para erro. */
 async function failed(p: SocialPost, e: unknown): Promise<void> {
+  // Limite de reels de teste da Meta: não é falha do post. Para os testes por
+  // 24 h e o post volta para a fila, sem gastar tentativa.
+  if (p.platform === "instagram" && p.trial && TRIAL_LIMIT.test(msg(e))) {
+    const ate = Date.now() + 86_400_000;
+    await setConfig(bloqueioTestes(p.perfil_id), new Date(ate).toISOString());
+    await updatePost(p.id, {
+      status: "agendado",
+      container_id: null,
+      error: "Limite de reels de teste da Meta: a fila parou os testes por 24 h e tenta de novo depois.",
+      scheduled_at: new Date(dentroDaJanela(ate)).toISOString(),
+    });
+    return;
+  }
   const attempts = p.attempts + 1;
   const dead = e instanceof MetaError && e.tokenDead;
   if (dead && p.connection_id) await revokeConnection(p.connection_id);
@@ -137,52 +168,83 @@ async function failed(p: SocialPost, e: unknown): Promise<void> {
   });
 }
 
-/** null = o Instagram pode receber um Reel agora; senão, o próximo horário permitido. */
-async function igNextSlot(): Promise<Date | null> {
-  const day = 86_400_000;
-  const { data } = await db()
-    .from("social_posts")
-    .select("published_at, updated_at")
-    .eq("platform", "instagram")
-    .or(`status.eq.processando,and(status.eq.publicado,published_at.gte.${new Date(Date.now() - day).toISOString()})`);
-  const times = (data ?? []).map((r) => new Date(r.published_at ?? r.updated_at).getTime()).sort((a, b) => a - b);
+const TRIAL_LIMIT = /maximum number of trial reels/i;
 
-  let next = 0;
-  if (times.length >= IG_DAILY_MAX) next = times[times.length - IG_DAILY_MAX] + day;
-  if (times.length > 0) next = Math.max(next, times[times.length - 1] + IG_GAP_MS);
-  if (next <= Date.now()) {
-    const c = await activeConnection("instagram");
-    const usage = c ? await igPublishingUsage(c.accountId, c.token).catch(() => 0) : 0;
-    if (usage < IG_API_STOP) return null;
-    next = Date.now() + 3 * 3_600_000;
+/**
+ * null = a rede pode receber o post agora; senão, o próximo horário permitido
+ * pela janela (10h–22h), pelo teto por 24h e pelo intervalo da rede (ritmo.ts).
+ * No Instagram, os testes têm teto próprio e param enquanto durar o bloqueio.
+ * Cada perfil (principal ou extra) tem o seu ritmo: as contas não dividem o teto.
+ */
+async function proximoHorario(platform: Platform, trial: boolean, perfilId: number | null): Promise<Date | null> {
+  const day = 86_400_000;
+  const now = Date.now();
+  const r = RITMO[platform];
+  let q = db()
+    .from("social_posts")
+    .select("published_at, updated_at, trial")
+    .eq("platform", platform);
+  q = perfilId ? q.eq("perfil_id", perfilId) : q.is("perfil_id", null);
+  const { data } = await q.or(`status.eq.processando,and(status.eq.publicado,published_at.gte.${new Date(now - day).toISOString()})`);
+  const rows = (data ?? []).map((x) => ({ t: new Date(x.published_at ?? x.updated_at).getTime(), trial: !!x.trial }));
+  const times = rows.map((x) => x.t).sort((a, b) => a - b);
+
+  let next = dentroDaJanela(now);
+  if (times.length >= r.porDia) next = Math.max(next, times[times.length - r.porDia] + day);
+  if (times.length > 0) next = Math.max(next, times[times.length - 1] + r.intervaloMin * 60_000);
+
+  if (platform === "instagram" && trial) {
+    const testes = rows.filter((x) => x.trial).map((x) => x.t).sort((a, b) => a - b);
+    if (testes.length >= IG_TESTES_POR_DIA) next = Math.max(next, testes[testes.length - IG_TESTES_POR_DIA] + day);
+    const bloqueio = Date.parse((await getConfig(bloqueioTestes(perfilId)).catch(() => null)) ?? "");
+    if (bloqueio > now) next = Math.max(next, bloqueio);
   }
-  return new Date(next + Math.random() * IG_JITTER_MS);
+
+  if (next <= now && platform === "instagram") {
+    const c = await igDe(perfilId).catch(() => null);
+    const usage = c ? await igPublishingUsage(c.accountId, c.token).catch(() => 0) : 0;
+    if (usage >= IG_API_STOP) next = now + 3 * 3_600_000;
+  }
+  if (next <= now) return null;
+  return new Date(dentroDaJanela(next + Math.random() * JITTER_MS));
 }
 
-/** Atualiza os insights dos Reels de teste recentes, que alimentam o ranking. */
-async function refreshTrialMetrics(started: number): Promise<number> {
-  const c = await activeConnection("instagram");
-  if (!c) return 0;
+/** Atualiza os insights dos Reels publicados nos últimos METRICAS_DIAS. */
+async function refreshIgMetrics(started: number): Promise<number> {
+  // Cada Reel é lido com o token da conta que publicou (principal ou perfil extra).
+  const contas = new Map<number, Awaited<ReturnType<typeof igDe>> | null>();
+  const contaDe = async (perfilId: number | null) => {
+    const k = perfilId ?? 0;
+    if (!contas.has(k)) contas.set(k, await igDe(perfilId).catch(() => null));
+    return contas.get(k) ?? null;
+  };
+  const now = Date.now();
   const { data } = await db()
     .from("social_posts")
-    .select("id, external_id, metrics_at")
+    .select("id, external_id, published_at, metrics, metrics_at, perfil_id")
     .eq("platform", "instagram")
-    .eq("trial", true)
     .eq("status", "publicado")
-    .is("graduated_at", null)
-    .gte("published_at", new Date(Date.now() - METRICS_DAYS * 86_400_000).toISOString())
-    .or(`metrics_at.is.null,metrics_at.lt.${new Date(Date.now() - METRICS_EVERY_MS).toISOString()}`)
+    .gte("published_at", new Date(now - METRICAS_DIAS * 86_400_000).toISOString())
+    .or(`metrics_at.is.null,metrics_at.lt.${new Date(now - METRICS_EVERY_MS).toISOString()}`)
     .order("metrics_at", { ascending: true, nullsFirst: true })
-    .limit(10);
+    .limit(40);
+  const due = (data ?? []).filter((p) => {
+    if (!p.metrics_at) return true;
+    const idade = now - new Date(p.published_at).getTime();
+    return now - new Date(p.metrics_at).getTime() >= (idade < METRICS_HOT_MS ? METRICS_EVERY_MS : METRICS_SLOW_MS);
+  });
   let n = 0;
-  for (const p of data ?? []) {
+  for (const p of due.slice(0, 10)) {
     if (!p.external_id || Date.now() - started > BUDGET_MS + 60_000) break;
+    const c = await contaDe(p.perfil_id);
+    if (!c) continue;
     try {
       const metrics = await igReelInsights(p.external_id, c.token);
       await updatePost(p.id, { metrics, metrics_at: new Date().toISOString() });
       n++;
     } catch (e) {
-      await updatePost(p.id, { metrics: { erro: msg(e) }, metrics_at: new Date().toISOString() });
+      // Guarda a última leitura boa: o erro não apaga o histórico do post.
+      await updatePost(p.id, { metrics: { ...(p.metrics ?? {}), erro: msg(e) }, metrics_at: new Date().toISOString() });
     }
   }
   return n;
@@ -233,15 +295,15 @@ export async function runSocialQueue(limit = 4) {
 
   const { data: due } = await db()
     .from("social_posts")
-    .select("id, platform")
+    .select("id, platform, trial, perfil_id")
     .eq("status", "agendado")
     .lte("scheduled_at", now)
     .order("scheduled_at", { ascending: true })
     .limit(limit);
   for (const row of due ?? []) {
     if (Date.now() - started > BUDGET_MS) break;
-    if (row.platform === "instagram") {
-      const slot = await igNextSlot();
+    {
+      const slot = await proximoHorario(row.platform as Platform, !!row.trial, row.perfil_id ?? null);
       if (slot) {
         await db()
           .from("social_posts")
@@ -265,6 +327,6 @@ export async function runSocialQueue(limit = 4) {
     }
   }
 
-  out.metricas = await refreshTrialMetrics(started).catch(() => 0);
+  out.metricas = await refreshIgMetrics(started).catch(() => 0);
   return out;
 }

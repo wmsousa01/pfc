@@ -4,9 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
-import { requireAdmin } from "@/lib/auth";
+import { exigir } from "@/lib/auth";
 import { MAX_DISCOUNT_PERCENT } from "@/lib/commission";
 import { toCents } from "@/lib/money";
+import { quadros } from "@/lib/config";
 
 function slugify(input: string): string {
   return input
@@ -101,7 +102,7 @@ async function ensureAuthUser(
 }
 
 export async function saveReseller(formData: FormData) {
-  await requireAdmin();
+  await exigir("revendedores.editar");
   const supabase = createServerSupabase();
 
   const id = String(formData.get("id") ?? "").trim();
@@ -144,6 +145,12 @@ export async function saveReseller(formData: FormData) {
     discount_percent: discountPercent,
     active: formData.get("active") === "on",
   };
+  // Campos da migração 029; sem ela, salva o resto (ver retry abaixo).
+  const quadro = String(formData.get("quadro") ?? "");
+  const extra029 = {
+    apresentador: formData.get("apresentador") === "on",
+    quadro: quadros.some((q) => q.slug === quadro) ? quadro : null,
+  };
 
   // Senha preenchida = admin quer criar/renovar o acesso ao painel.
   if (password) {
@@ -156,21 +163,18 @@ export async function saveReseller(formData: FormData) {
     payload.user_id = await ensureAuthUser(email, password, id);
   }
 
-  if (id) {
-    const { error } = await supabase.from("resellers").update(payload).eq("id", id);
-    if (error) throw new Error(error.message);
-    revalidateAll(id);
-  } else {
-    const { error } = await supabase.from("resellers").insert(payload);
-    if (error) throw new Error(error.message);
-    revalidateAll();
-  }
+  const gravar = (p: Record<string, unknown>) =>
+    id ? supabase.from("resellers").update(p).eq("id", id) : supabase.from("resellers").insert(p);
+  let { error } = await gravar({ ...payload, ...extra029 });
+  if (error && /apresentador|quadro/.test(error.message)) ({ error } = await gravar(payload));
+  if (error) throw new Error(error.message);
+  revalidateAll(id || undefined);
 
   redirect("/admin/revendedores");
 }
 
 export async function toggleResellerActive(formData: FormData) {
-  await requireAdmin();
+  await exigir("revendedores.editar");
   const supabase = createServerSupabase();
   const id = String(formData.get("id") ?? "");
   const active = formData.get("active") === "true";
@@ -181,7 +185,7 @@ export async function toggleResellerActive(formData: FormData) {
 }
 
 export async function deleteReseller(formData: FormData) {
-  await requireAdmin();
+  await exigir("revendedores.editar");
   const supabase = createServerSupabase();
   const id = String(formData.get("id") ?? "");
   if (id) {
@@ -198,7 +202,7 @@ export async function deleteReseller(formData: FormData) {
  * de um revendedor. É o "acerto de contas" do mês.
  */
 export async function payResellerCommission(formData: FormData) {
-  await requireAdmin();
+  await exigir("revendedores.editar");
   const supabase = createServerSupabase();
   const resellerId = String(formData.get("reseller_id") ?? "");
   if (!resellerId) return;

@@ -1,7 +1,7 @@
 import AdminHeader from "@/components/admin/AdminHeader";
 import { Coluna, EspacoHeader, GrupoColuna, Quadro, cartao, diaLabel, porDia } from "@/components/admin/Espaco";
 import ProducaoForm from "@/components/admin/ProducaoForm";
-import { requireArea } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { isGeminiConfigured } from "@/lib/producao/gemini";
 import {
   LOGO_PATH,
@@ -84,7 +84,7 @@ function quem(actor: string): string {
 }
 
 export default async function ProducaoPage({ searchParams }: { searchParams: { view?: string } }) {
-  await requireArea("producao");
+  await requireAcesso("producao.ver");
   const view: View = VIEWS.includes(searchParams.view as View) ? (searchParams.view as View) : "quadro";
   const href = (v: View) => (v === "quadro" ? "/admin/producao" : `/admin/producao?view=${v}`);
 

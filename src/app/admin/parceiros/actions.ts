@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/auth";
+import { exigir } from "@/lib/auth";
 import {
   findContentSection,
   type ContentField,
@@ -105,7 +105,7 @@ export async function savePartnerContentSection(
   _prev: ContentFormState,
   formData: FormData
 ): Promise<ContentFormState> {
-  await requireAdmin();
+  await exigir("parceiros.editar");
 
   const partnerId = String(formData.get("partner_id") ?? "").trim();
   const sectionSlug = String(formData.get("section") ?? "").trim();

@@ -18,7 +18,8 @@ export const metadata: Metadata = {
  * Página de venda do PFC Visita como produto AVULSO.
  *
  * A Visita é um quadro à parte: não entra obrigatoriamente em nenhum plano de
- * patrocínio. Quem já é cliente (qualquer plano ativo) paga menos — é o motivo
+ * patrocínio. Quem já é cliente (plano ou cota ativa, sempre com contrato de
+ * 3 meses ou mais — regra de 16/11/2026) paga menos — é o motivo
  * para assinar, sem forçar ninguém a subir de plano só por causa dela.
  *
  * O que a página NÃO faz: prometer views por episódio. Os episódios de Visita
@@ -170,7 +171,7 @@ const faq = (channelStats: ChannelStatsView) => [
   },
   {
     q: "Já sou patrocinador. A Visita está inclusa?",
-    a: `A Visita é um quadro à parte, contratado separadamente. Mas quem tem plano ativo paga ${PRECO_CLIENTE} em vez de ${PRECO_AVULSO}.`,
+    a: `A Visita é um quadro à parte, contratado separadamente. Mas quem tem plano ou cota de patrocínio ativa (contrato de 3 meses ou mais) paga ${PRECO_CLIENTE} em vez de ${PRECO_AVULSO}.`,
   },
 ];
 
@@ -463,8 +464,8 @@ export default async function PfcVisitaPage() {
                 {PAYMENT_TERMS_CASH}
               </p>
               <p className="text-white/55 text-sm mt-3 leading-relaxed flex-1">
-                Para quem tem qualquer plano de patrocínio ativo: Apoio,
-                Patrocinador ou Master.
+                Para quem tem plano (Apoio, Patrocinador ou Master) ou cota de
+                quadro ativa, com contrato de 3 meses ou mais.
               </p>
               <a
                 href={whatsapp(

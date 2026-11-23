@@ -33,6 +33,23 @@ export type PartnerProduct = {
 export type PartnerStep = { title: string; body: string };
 export type PartnerFaq = { q: string; a: string };
 
+/**
+ * Textos da placa do QR (a arte vertical exibida na live). Os itens ficam em
+ * `placa_itens` (ou, sem eles, nos três primeiros `perks`).
+ */
+export type PartnerPlaca = {
+  /** Gancho em branco, ex.: "Precisa de". Vazio usa a tagline. */
+  titulo?: string;
+  /** Linha grande na cor da marca, ex.: "Geladeira, freezer ou cervejeira?". */
+  destaque?: string;
+  /** Chamada acima do QR, ex.: "Peça já seu orçamento!". */
+  chamada?: string;
+  /** Mostra os benefícios na placa (padrão: sim). */
+  itens?: boolean;
+  /** Ícone (chave de PERK_ICONS) no lugar do logo, com nome e @ embaixo. */
+  simbolo?: string;
+};
+
 /** Ajustes da triagem de leads na página do parceiro. */
 export type PartnerTriage = {
   /** Desliga o formulário e deixa só o CTA de WhatsApp. */
@@ -92,6 +109,9 @@ export type PartnerContent = {
   /** Mensagem pré-preenchida do botão flutuante de WhatsApp. */
   whatsapp_message?: string;
   triage?: PartnerTriage;
+  placa?: PartnerPlaca;
+  /** Itens curtos da placa do QR. Vazio usa os três primeiros `perks`. */
+  placa_itens?: PartnerPerk[];
 };
 
 export type Partner = {
@@ -224,6 +244,10 @@ export type Reseller = {
   commission_value: number;
   /** Desconto que o cupom dele dá ao cliente (0 a 30%). 0 = cupom só atribui. */
   discount_percent: number;
+  /** Apresentador de quadro (migração 029): bônus e desconto da campanha. */
+  apresentador?: boolean;
+  /** Slug do quadro que apresenta (src/lib/config.ts). */
+  quadro?: string | null;
   active: boolean;
   created_at: string;
 };

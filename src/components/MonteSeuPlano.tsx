@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
-import Image from "next/image";
+import { ofertaFundador } from "@/lib/campanha";
+import QuadroLogo from "@/components/QuadroLogo";
 import { enviarPlano, type EnvioState } from "@/app/monte-seu-plano/actions";
 import { buscarInstagram } from "@/app/monte-seu-plano/instagram";
 import type { MarcaIg } from "@/lib/marca-instagram";
@@ -76,14 +77,15 @@ function ItemRow(props: {
   on: boolean;
   onChange: (v: boolean) => void;
   motivo?: string;
-  logo?: string;
+  /** Slug do quadro, para o logo. */
+  quadro?: string;
   /** Chave de INCLUI: mostra o que o item põe no ar. */
   inclui?: string;
 }) {
   return (
     <div className={`rounded-2xl border p-4 sm:p-5 ${props.on ? "border-gold-500/50 bg-gold-500/[0.04]" : "border-[#2a2a2a] bg-[#0d0d0d]"}`}>
       <div className="flex items-start gap-3">
-        {props.logo && <Image src={props.logo} alt="" width={40} height={40} className="w-10 h-10 object-contain flex-shrink-0" />}
+        {props.quadro && <QuadroLogo quadro={props.quadro} className="w-10 h-10" />}
         <div className="flex-1 min-w-0">
           <div className="text-white font-semibold leading-tight">{props.titulo}</div>
           <div className="text-white/45 text-xs mt-1">
@@ -475,7 +477,7 @@ export default function MonteSeuPlano() {
                     titulo={`Cota Master · ${q.name}`}
                     preco={`${brl(quadroSponsorship.master.monthlyPrice)}/mês`}
                     detalhe={q.cota?.status === "negociacao" ? "em negociação, sujeita a disponibilidade" : "exclusiva no quadro"}
-                    logo={q.logo}
+                    quadro={q.slug}
                     on={sel.quadros.includes(q.slug)}
                     onChange={(on) => setSel({ ...sel, quadros: toggleIn(sel.quadros, q.slug, on) })}
                     inclui="cota:master"
@@ -494,9 +496,9 @@ export default function MonteSeuPlano() {
                     <ItemRow
                       key={m.key}
                       titulo={`${m.nome} · ${m.quadro.name}`}
-                      preco="Sob consulta"
+                      preco={`${brl(quadroSponsorship.apoio.modalidadePrice)}/mês`}
                       detalhe="só nos episódios da modalidade"
-                      logo={m.quadro.logo}
+                      quadro={m.quadro.slug}
                       on={sel.modalidades.includes(m.key)}
                       onChange={(on) => setSel({ ...sel, modalidades: toggleIn(sel.modalidades, m.key, on) })}
                       inclui="cota:apoio"
@@ -512,7 +514,7 @@ export default function MonteSeuPlano() {
               <h3 className="text-white/50 text-xs font-bold uppercase tracking-widest mb-3">Episódio no seu espaço</h3>
               <ItemRow
                 titulo="PFC Visita"
-                preco={sel.plano || sel.quadros.length ? `${brl(VISITA_CLIENTE)} (preço de cliente)` : brl(VISITA_AVULSO)}
+                preco={sel.plano || sel.quadros.length || sel.modalidades.length ? `${brl(VISITA_CLIENTE)} (preço de cliente)` : brl(VISITA_AVULSO)}
                 detalhe="pagamento único"
                 on={sel.visita}
                 onChange={(on) => setSel({ ...sel, visita: on })}
@@ -524,7 +526,7 @@ export default function MonteSeuPlano() {
             {/* Duração */}
             <section>
               <h3 className="text-white/50 text-xs font-bold uppercase tracking-widest mb-3">Por quanto tempo?</h3>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {DURACOES.map((d) => {
                   const bloqueado = d < orc.minMeses;
                   return (
@@ -535,17 +537,17 @@ export default function MonteSeuPlano() {
                       onClick={() => setSel({ ...sel, meses: d })}
                       className={`${chip(orc.meses === d)} text-center disabled:opacity-30 disabled:cursor-not-allowed`}
                     >
-                      <span className="block font-bold">{d === 12 ? "1 ano" : `${d} ${d === 1 ? "mês" : "meses"}`}</span>
-                      {d === 12 && <span className="block text-[10px] text-emerald-400 font-bold">20% OFF no plano</span>}
+                      <span className="block font-bold">{d === 12 ? "1 ano" : `${d} meses`}</span>
+                      {d === 12 && <span className="block text-[10px] text-emerald-400 font-bold">até 20% OFF no plano</span>}
+                      {d === 6 && <span className="block text-[10px] text-emerald-400 font-bold">+ você como convidado</span>}
                     </button>
                   );
                 })}
               </div>
-              {orc.minMeses > 1 && (
-                <p className="text-white/35 text-xs mt-2">
-                  Cotas de quadro e de modalidade têm contrato mínimo de {orc.minMeses} meses.
-                </p>
-              )}
+              <p className="text-white/35 text-xs mt-2">
+                Planos e cotas têm contrato mínimo de {orc.minMeses} meses. A partir de 6 meses, sua marca participa como
+                convidada em um episódio. No anual, também 20% off no Pix à vista ou 10% off em até 3x no cartão.
+              </p>
             </section>
 
             <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-sm text-white/55">
@@ -578,7 +580,7 @@ export default function MonteSeuPlano() {
             <div>
               <span className="section-tag">Seu plano</span>
               <div className="text-white/40 text-xs mt-1">
-                {orc.meses} {orc.meses === 1 ? "mês" : "meses"} · estimativa, o comercial confirma
+                {orc.meses} meses · estimativa, o comercial confirma
               </div>
             </div>
 
@@ -592,7 +594,7 @@ export default function MonteSeuPlano() {
                       <div className="text-white font-semibold leading-tight">{l.label}</div>
                       <div className="text-white/40 text-xs mt-0.5">{l.detalhe}</div>
                     </div>
-                    <div className="text-white font-bold whitespace-nowrap">{l.valor === null ? "a consultar" : brl(l.valor)}</div>
+                    <div className="text-white font-bold whitespace-nowrap">{l.bonus ? <span className="text-emerald-400">incluso</span> : l.valor === null ? "a consultar" : brl(l.valor)}</div>
                   </li>
                 ))}
               </ul>
@@ -605,6 +607,14 @@ export default function MonteSeuPlano() {
               </div>
               {orc.sobConsulta.length > 0 && (
                 <p className="text-white/40 text-xs mt-1 text-right">+ {orc.sobConsulta.join(", ")} (sob consulta)</p>
+              )}
+              {orc.fundador.length > 0 && (
+                <p className="mt-3 rounded-xl border border-gold-500/40 bg-gold-500/[0.06] p-3 text-xs leading-relaxed text-white/70">
+                  <span className="block text-gold-400 font-bold uppercase tracking-wider text-[10px] mb-1">
+                    Patrocinador fundador · {orc.fundador.join(", ")}
+                  </span>
+                  {ofertaFundador()}
+                </p>
               )}
               <ul className="mt-3 flex flex-col gap-1">
                 {orc.pagamento.map((p) => (

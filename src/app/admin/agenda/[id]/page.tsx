@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
+import QuadroLogo from "@/components/QuadroLogo";
 import AdminHeader from "@/components/admin/AdminHeader";
 import CopyButton from "@/components/CopyButton";
 import ProducaoForm from "@/components/admin/ProducaoForm";
 import Diferenca from "@/components/agenda/Diferenca";
 import MaterialUploader from "@/components/agenda/MaterialUploader";
-import { requireArea } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { pautaTexto } from "@/lib/agenda/briefing";
 import { blocosDoEspelho, linkEspelho, linkRevisao } from "@/lib/agenda/espelho";
 import { CAMPOS, sugestoesDe, valorDoCampo } from "@/lib/agenda/sugestoes";
@@ -89,7 +90,7 @@ function localInput(iso: string): string {
 }
 
 export default async function EpisodioPage({ params }: { params: { id: string } }) {
-  await requireArea("agenda");
+  await requireAcesso("agenda.ver");
   const ep = await getEpisodio(params.id);
   if (!ep) notFound();
   const t = isQuadroId(ep.quadro) ? QUADROS[ep.quadro] : null;
@@ -167,6 +168,7 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
         <div>
           <a href="/admin/agenda" className="text-white/40 hover:text-white text-sm">← Agenda</a>
           <div className="flex flex-wrap items-center gap-3 mt-3">
+            {t && <QuadroLogo quadro={t.id} nome={t.name} className="w-9 h-9" />}
             {t && (
               <span
                 className="text-xs font-black px-2.5 py-1 rounded-md"
@@ -727,6 +729,14 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
                 <CopyButton value={`${espelho}/tela`} label="Copiar" className={btn2} />
                 <CopyButton value={`${espelho}/tela?fundo=transparente`} label="Copiar com fundo transparente" className={btn2} />
               </div>
+              {ep.quadro === "pfc-news" && (
+                <div className="flex flex-wrap items-center gap-2 text-xs text-white/50">
+                  <span>Telejornal para o OBS (por cima da câmera), com a imagem ao lado do apresentador e o GC:</span>
+                  <CopyButton value={`${espelho}/jornal?so=imagem`} label="Copiar só a imagem" className={btn2} />
+                  <CopyButton value={`${espelho}/jornal?so=gc`} label="Copiar só o GC" className={btn2} />
+                  <a href={`${espelho}/jornal?previa=2`} target="_blank" className={btn2}>Conferir ↗</a>
+                </div>
+              )}
               <p className="text-white/50 text-xs">
                 {blocos.length} blocos · {noEspelho} {noEspelho === 1 ? "imagem" : "imagens"} no espelho
                 {ep.espelho_atual != null && <> · no ar: bloco {ep.espelho_atual + 1}</>}

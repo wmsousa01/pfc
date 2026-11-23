@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { signOut } from "@/app/admin/actions";
-import { ICONES, itemAtivo, type Contadores, type NavGrupo, type NavKey } from "./nav";
+import { ICONES, NAV, itemAtivo, type Contadores, type NavKey } from "./nav";
 
 /** Guardado no navegador: o menu recolhido continua recolhido na próxima página. */
 const CHAVE = "pfc-admin-menu";
@@ -42,15 +42,15 @@ function Marca() {
 }
 
 function Menu({
-  grupos,
   contadores,
+  permitidos,
   ativo,
   filtro,
   grande,
   aoNavegar,
 }: {
-  grupos: NavGrupo[];
   contadores: Contadores;
+  permitidos: NavKey[];
   ativo: NavKey | null;
   filtro: string;
   grande?: boolean;
@@ -60,8 +60,8 @@ function Menu({
   const altura = grande ? "h-12 text-[15px] gap-3" : "h-9 text-sm gap-2.5";
   return (
     <>
-      {grupos.map((g) => {
-        const itens = g.itens.filter((i) => !f || i.label.toLowerCase().includes(f));
+      {NAV.map((g) => {
+        const itens = g.itens.filter((i) => permitidos.includes(i.key) && (!f || i.label.toLowerCase().includes(f)));
         if (itens.length === 0) return null;
         return (
           <nav key={g.label} aria-label={g.label} className="flex flex-col gap-0.5 mb-2.5">
@@ -125,8 +125,7 @@ function Rodape({ grande }: { grande?: boolean }) {
   );
 }
 
-/** `grupos`: o menu já filtrado pelo acesso de quem está logado (navPara). */
-export default function AdminSidebar({ grupos, contadores }: { grupos: NavGrupo[]; contadores: Contadores }) {
+export default function AdminSidebar({ contadores, permitidos }: { contadores: Contadores; permitidos: NavKey[] }) {
   const pathname = usePathname();
   const ativo = itemAtivo(pathname);
   const [aberto, setAberto] = useState(false);
@@ -166,11 +165,11 @@ export default function AdminSidebar({ grupos, contadores }: { grupos: NavGrupo[
   const irPrimeiro = (e: React.FormEvent) => {
     e.preventDefault();
     const f = filtro.trim().toLowerCase();
-    const alvo = grupos.flatMap((g) => g.itens).find((i) => i.label.toLowerCase().includes(f));
+    const alvo = NAV.flatMap((g) => g.itens).find((i) => permitidos.includes(i.key) && i.label.toLowerCase().includes(f));
     if (alvo) window.location.href = alvo.href;
   };
 
-  const areaAtual = grupos.flatMap((g) => g.itens).find((i) => i.key === ativo)?.label;
+  const areaAtual = NAV.flatMap((g) => g.itens).find((i) => i.key === ativo)?.label;
 
   return (
     <>
@@ -221,7 +220,7 @@ export default function AdminSidebar({ grupos, contadores }: { grupos: NavGrupo[
           </label>
         </form>
 
-        <Menu grupos={grupos} contadores={contadores} ativo={ativo} filtro={filtro} />
+        <Menu contadores={contadores} permitidos={permitidos} ativo={ativo} filtro={filtro} />
         <div className="flex-1" />
         <Rodape />
       </aside>
@@ -236,7 +235,7 @@ export default function AdminSidebar({ grupos, contadores }: { grupos: NavGrupo[
           className="relative flex items-center justify-center w-11 h-11 rounded-lg text-white/80"
         >
           <Icone d={ICONES.menu} size={22} />
-          {(contadores.pendencias?.n ?? 0) > 0 && (
+          {permitidos.includes("pendencias") && (contadores.pendencias?.n ?? 0) > 0 && (
             <span
               aria-hidden="true"
               className={`absolute top-2 right-2 w-2 h-2 rounded-full ${contadores.pendencias?.alerta ? "bg-red-400" : "bg-gold-500"}`}
@@ -276,7 +275,7 @@ export default function AdminSidebar({ grupos, contadores }: { grupos: NavGrupo[
                 <Icone d={ICONES.fechar} size={20} />
               </button>
             </div>
-            <Menu grupos={grupos} contadores={contadores} ativo={ativo} filtro="" grande aoNavegar={() => setAberto(false)} />
+            <Menu contadores={contadores} permitidos={permitidos} ativo={ativo} filtro="" grande aoNavegar={() => setAberto(false)} />
             <div className="flex-1" />
             <Rodape grande />
           </aside>

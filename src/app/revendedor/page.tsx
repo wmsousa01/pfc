@@ -5,10 +5,14 @@ import PasswordCard from "@/components/auth/PasswordCard";
 import { signOutAction } from "@/lib/auth-actions";
 import { requireReseller } from "@/lib/auth";
 import { getResellerOrders, summarizeOrders } from "@/lib/orders";
+import { createServerSupabase } from "@/lib/supabase/server";
+import PatrocinioParceiro from "@/components/revendedor/PatrocinioParceiro";
+import type { Indicacao } from "@/lib/indicacoes";
 import { brl } from "@/lib/money";
 import { commissionLabel, couponFor, discountLabel } from "@/lib/commission";
 import { qrDataUrl } from "@/lib/qr";
 import { whatsapp } from "@/lib/config";
+import { campanhaAtiva } from "@/lib/campanha";
 import { MicIcon, WhatsAppIcon } from "@/components/icons";
 import {
   DELIVERY_LABEL,
@@ -35,8 +39,13 @@ function baseUrlFromHeaders(): string {
 export default async function ResellerDashboard() {
   const { reseller } = await requireReseller();
 
-  const orders = await getResellerOrders();
+  const [orders, ind] = await Promise.all([
+    getResellerOrders(),
+    // RLS: o parceiro só lê as próprias indicações.
+    createServerSupabase().from("indicacoes").select("*").order("created_at", { ascending: false }).limit(100),
+  ]);
   const stats = summarizeOrders(orders);
+  const indicacoes = (ind.data ?? []) as Indicacao[];
 
   const link = `${baseUrlFromHeaders()}/r/${reseller.slug}`;
   const qr = await qrDataUrl(link);
@@ -81,7 +90,7 @@ export default async function ResellerDashboard() {
         </h1>
         <p className="text-white/45 text-sm mt-1">
           {reseller.role_label ? `${reseller.role_label} · ` : ""}
-          Sua comissão: <span className="text-gold-500">{commissionLabel(reseller)}</span>
+          Comissão na loja: <span className="text-gold-500">{commissionLabel(reseller)}</span> · patrocínio: {campanhaAtiva() ? "1 mensalidade" : "30% do contrato"}
         </p>
 
         {/* Números */}
@@ -98,6 +107,13 @@ export default async function ResellerDashboard() {
           &quot;A receber&quot; é a comissão de pedidos já entregues e pagos pelo
           cliente. {brl(stats.commission_paid_cents)} já foram repassados a você.
         </p>
+
+        <PatrocinioParceiro
+          reseller={reseller}
+          indicacoes={indicacoes}
+          linkPlano={`${link}?ir=plano`}
+          semTabela={!!ind.error}
+        />
 
         {/* Material de apoio comercial */}
         <Link
@@ -122,7 +138,7 @@ export default async function ResellerDashboard() {
         {/* Divulgação */}
         <div className="grid md:grid-cols-3 gap-6 mt-10">
           <div className="md:col-span-2 bg-[#111] border border-[#222] rounded-xl p-6">
-            <h2 className="text-white font-bold text-lg">Seu link e seu cupom</h2>
+            <h2 className="text-white font-bold text-lg">Loja: seu link e seu cupom</h2>
             <p className="text-white/45 text-sm mt-1 leading-relaxed">
               Toda venda feita pelo seu link — ou com seu cupom digitado no
               checkout — entra automaticamente aqui.
@@ -191,7 +207,7 @@ export default async function ResellerDashboard() {
         </div>
 
         {/* Pedidos */}
-        <h2 className="text-xl font-bold text-white mt-12 mb-4">Suas vendas</h2>
+        <h2 className="text-xl font-bold text-white mt-12 mb-4">Suas vendas na loja</h2>
         <div className="bg-[#111] border border-[#222] rounded-xl overflow-hidden">
           {orders.length === 0 ? (
             <div className="p-8 text-center text-white/40 text-sm">

@@ -1,6 +1,6 @@
 import AdminHeader from "@/components/admin/AdminHeader";
 import ProducaoForm from "@/components/admin/ProducaoForm";
-import { requireArea } from "@/lib/auth";
+import { requireAcesso } from "@/lib/auth";
 import { YT_STREAM_KEY } from "@/lib/agenda/fluxo";
 import { fontesNews } from "@/lib/agenda/noticias";
 import { sitesNews } from "@/lib/agenda/sites";
@@ -37,7 +37,7 @@ const card = "bg-[#111] border border-[#222] rounded-2xl p-6";
 const btn2 = "text-xs border border-[#2a2a2a] hover:border-gold-500/50 text-white/70 hover:text-white rounded-lg px-3 py-1.5";
 
 export default async function AgendaConfigPage({ searchParams }: { searchParams: { ok?: string; erro?: string } }) {
-  await requireArea("agenda");
+  await requireAcesso("agenda.ver");
   const hoje = new Date().toISOString().slice(0, 10);
   const [slots, { data: bloqRows }, gcal, cal, equipe, channel, streamId, { data: hostRows }] = await Promise.all([
     listSlots(),

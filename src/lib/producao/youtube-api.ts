@@ -380,6 +380,66 @@ export async function publishVideo(videoId: string, publishAt: Date | null): Pro
   });
 }
 
+// ---- Números do canal (site): cada chamada custa 1 de cota ----
+
+/** Inscritos (null se o canal esconde), views e vídeos totais. null sem canal conectado. */
+export async function channelStatisticsMine(): Promise<{ subscribers: number | null; views: number; videos: number } | null> {
+  if (!(await getConfig("yt_refresh_token"))) return null;
+  const r = await ytFetch<{
+    items?: { statistics: { subscriberCount?: string; hiddenSubscriberCount?: boolean; viewCount: string; videoCount: string } }[];
+  }>("/channels?part=statistics&mine=true");
+  const s = r.items?.[0]?.statistics;
+  if (!s) return null;
+  return {
+    subscribers: s.hiddenSubscriberCount || s.subscriberCount == null ? null : Number(s.subscriberCount),
+    views: Number(s.viewCount),
+    videos: Number(s.videoCount),
+  };
+}
+
+/** YouTube Analytics (reports.query) do próprio canal. Devolve as linhas cruas. */
+export async function analyticsReport(q: {
+  startDate: string;
+  endDate: string;
+  metrics: string;
+  dimensions?: string;
+  sort?: string;
+  maxResults?: string;
+}): Promise<unknown[][]> {
+  if (!(await getConfig("yt_refresh_token"))) return [];
+  const params = new URLSearchParams({ ids: "channel==MINE", ...q });
+  const r = await ytFetch<{ rows?: unknown[][] }>(`https://youtubeanalytics.googleapis.com/v2/reports?${params}`);
+  return r.rows ?? [];
+}
+
+/** Quantos uploads públicos saíram desde `since` (para a média por semana). */
+export async function uploadsSince(since: Date): Promise<number> {
+  if (!(await getConfig("yt_refresh_token"))) return 0;
+  const ch = await ytFetch<{ items?: { contentDetails: { relatedPlaylists: { uploads: string } } }[] }>(
+    "/channels?part=contentDetails&mine=true"
+  );
+  const uploads = ch.items?.[0]?.contentDetails.relatedPlaylists.uploads;
+  if (!uploads) return 0;
+  let count = 0;
+  let page = "";
+  // A playlist de uploads vem do mais novo para o mais velho: para no primeiro
+  // vídeo anterior a `since`. Teto de 6 páginas (300 vídeos) por segurança.
+  for (let i = 0; i < 6; i++) {
+    const r = await ytFetch<{ items?: { contentDetails: { videoPublishedAt?: string } }[]; nextPageToken?: string }>(
+      `/playlistItems?part=contentDetails&maxResults=50&playlistId=${uploads}${page ? `&pageToken=${page}` : ""}`
+    );
+    for (const it of r.items ?? []) {
+      const at = it.contentDetails.videoPublishedAt;
+      if (!at) continue; // privado/agendado: ainda não conta
+      if (new Date(at) < since) return count;
+      count++;
+    }
+    if (!r.nextPageToken) break;
+    page = r.nextPageToken;
+  }
+  return count;
+}
+
 // ---- Playlists: playlistItems.insert custa 50 de cota; listar custa 1 ----
 
 export type ChannelPlaylist = { id: string; title: string };
@@ -486,4 +546,13 @@ export async function updateBroadcast(id: string, b: BroadcastInput): Promise<vo
 
 export async function deleteBroadcast(id: string): Promise<void> {
   await ytFetch(`/liveBroadcasts?id=${id}`, { method: "DELETE" });
+}
+
+/** Títulos dos vídeos pelo id (até 50 por chamada). */
+export async function videoTitles(ids: string[]): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+  const r = await ytFetch<{ items?: { id: string; snippet: { title: string } }[] }>(
+    `/videos?part=snippet&id=${ids.slice(0, 50).join(",")}`
+  );
+  return new Map((r.items ?? []).map((i) => [i.id, i.snippet.title]));
 }
