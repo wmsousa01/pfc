@@ -274,7 +274,7 @@ function liveInput(ep: Episodio, convidados: Convidado[]) {
 export async function sincronizarLive(epId: string, actor: string): Promise<string> {
   const ep = await mustGet(epId);
   if (ep.status !== "confirmado") throw new Error("Confirme o episódio antes de criar a live.");
-  if (ep.video_drive_id) throw new Error("Episódio gravado: ele vai para o YouTube pelo envio do vídeo, não por live.");
+  if (ep.video_drive_id || ep.video_arquivo_id) throw new Error("Episódio gravado: ele vai para o YouTube pelo envio do vídeo, não por live.");
   if (!(await connectedChannel())) throw new Error("Canal do YouTube não conectado (/admin/producao/config).");
   const convidados = await convidadosDe(ep.id);
   const input = liveInput(ep, convidados);

@@ -31,7 +31,7 @@ import { pedirUpload, registrarMaterial, removerMaterial } from "@/lib/agenda/ma
 import { FONTES_KEY, gerarPautaNews } from "@/lib/agenda/noticias";
 import { SITES_KEY } from "@/lib/agenda/sites";
 import { escolherArteSemana, gerarArteSemana, liberarSemana, programarSemana } from "@/lib/agenda/semana";
-import { PASTA_KEY, atualizarVideo, enviarVideo, liberarEnvio, ligarVideo, tirarFrames } from "@/lib/agenda/video";
+import { PASTA_KEY, atualizarVideo, enviarVideo, liberarEnvio, ligarArquivo, ligarVideo, tirarFrames } from "@/lib/agenda/video";
 import {
   brt,
   cleanInstagram,
@@ -597,8 +597,9 @@ export async function semanaResetAction(form: FormData): Promise<void> {
 // ---- Episódio gravado (Drive → YouTube) ----
 
 export async function ligarVideoAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  // O select da pasta manda "id|nome"; o campo livre, o link.
+  // O select manda "r2:<id>" (central de arquivos) ou "id|nome" (pasta do Drive); o campo livre, o link.
   const escolha = str(form, "arquivo");
+  if (escolha.startsWith("r2:") && !str(form, "link")) return run((a) => ligarArquivo(str(form, "id"), escolha.slice(3), a));
   const [idDaPasta, ...nome] = escolha.split("|");
   const link = str(form, "link") || idDaPasta;
   return run((a) => ligarVideo(str(form, "id"), link, nome.join("|") || null, a));

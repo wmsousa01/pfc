@@ -272,6 +272,7 @@ export async function transmissoesAguardandoCorte(agora = Date.now()): Promise<{
     .select("id, quadro, inicio, duracao_min, yt_broadcast_id")
     .neq("status", "cancelado")
     .is("video_drive_id", null)
+    .is("video_arquivo_id", null)
     .gte("inicio", new Date(agora - JANELA_POS_LIVE_MS - 2 * 86_400_000).toISOString())
     .lte("inicio", new Date(agora).toISOString());
   if (error) throw new Error(error.message);
