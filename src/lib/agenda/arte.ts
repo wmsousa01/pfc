@@ -390,7 +390,7 @@ export async function gerarArtes(ep: Episodio, convidados: Convidado[], h: Headl
     const a = ep.briefing?.arte;
     out = await gerarCenas({
       frames: await framesDaArte(materiais),
-      gravado: !!ep.video_drive_id,
+      gravado: !!(ep.video_drive_id || ep.video_arquivo_id),
       quadro: t,
       inicio: ep.inicio,
       hoje: opts.hoje,

@@ -131,8 +131,9 @@ export type Episodio = {
   ig_erro: string | null;
   /** null = todos os apresentadores ativos do quadro. */
   apresentadores: string[] | null;
-  /** Episódio gravado (PFC Visita): o arquivo no Drive e o envio ao YouTube. */
+  /** Episódio gravado (PFC Visita): o arquivo no Drive ou na central (R2) e o envio ao YouTube. */
   video_drive_id: string | null;
+  video_arquivo_id: string | null;
   video_nome: string | null;
   video_tamanho: number | null;
   video_duracao_s: number | null;

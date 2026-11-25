@@ -9,6 +9,8 @@ import { isGeminiConfigured, pickBestFrame } from "@/lib/producao/gemini";
 import { triggerLiveCuts } from "@/lib/producao/lives";
 import { QUADROS, isQuadroId } from "@/lib/producao/quadros";
 import { download, getConfig, upload } from "@/lib/producao/store";
+import { getArquivo } from "@/lib/arquivos/store";
+import { urlAssinada } from "@/lib/storage";
 import {
   addToPlaylist,
   connectedChannel,
@@ -25,8 +27,9 @@ import {
 import { db, getArte, getEpisodio, logAgenda, updateEpisodio, type Episodio } from "./store";
 
 /**
- * Episódio gravado (PFC Visita): o arquivo pronto fica numa pasta pública do
- * Drive, com vários GB. Nada disso passa inteiro pela função da Vercel:
+ * Episódio gravado (PFC Visita): o arquivo pronto, com vários GB, fica numa
+ * pasta pública do Drive ou na central de arquivos (R2). Nada disso passa
+ * inteiro pela função da Vercel:
  * - frames: o ffmpeg lê só os trechos que precisa, por Range, direto do link;
  * - YouTube: o vídeo vai em pedaços de 64 MB (Drive por Range → upload
  *   retomável do YouTube), e cada rodada do cron empurra o que cabe em ~4 min.
@@ -53,6 +56,20 @@ export function driveIdDe(v: string): string | null {
   const m = /\/file\/d\/([A-Za-z0-9_-]{20,})/.exec(s) ?? /[?&]id=([A-Za-z0-9_-]{20,})/.exec(s);
   if (m) return m[1];
   return /^[A-Za-z0-9_-]{20,}$/.test(s) ? s : null;
+}
+
+/** Onde está o vídeo do episódio: link público do Drive ou arquivo da central no R2. */
+type Fonte = { url: string; drive: boolean };
+
+async function fonteDo(ep: Pick<Episodio, "video_drive_id" | "video_arquivo_id">): Promise<Fonte> {
+  if (ep.video_arquivo_id) {
+    const a = await getArquivo(ep.video_arquivo_id);
+    if (!a || a.status !== "pronto") throw new Error("O arquivo do vídeo não está mais na central de arquivos.");
+    // Vale por 6 h: cada rodada do envio pede um link novo.
+    return { url: await urlAssinada("arquivos", a.path, 6 * 3600), drive: false };
+  }
+  if (ep.video_drive_id) return { url: driveUrl(ep.video_drive_id), drive: true };
+  throw new Error("Ligue o vídeo do episódio primeiro.");
 }
 
 export async function pastaDrive(): Promise<string> {
@@ -95,7 +112,7 @@ const JANELA = 4 * 1024 * 1024;
  * valendo. Este servidor local recebe os pedidos do ffmpeg e lê do Drive em
  * janelas fechadas, só enquanto o ffmpeg estiver lendo.
  */
-async function comProxy<T>(id: string, total: number, fn: (url: string) => Promise<T>): Promise<T> {
+async function comProxy<T>(fonte: string, total: number, fn: (url: string) => Promise<T>): Promise<T> {
   const server = http.createServer(async (req, res) => {
     const m = /bytes=(\d+)-(\d*)/.exec(req.headers.range ?? "");
     let start = m ? Number(m[1]) : 0;
@@ -115,7 +132,7 @@ async function comProxy<T>(id: string, total: number, fn: (url: string) => Promi
     try {
       while (start <= end && !fechado) {
         const e = Math.min(start + JANELA - 1, end);
-        const r = await fetch(driveUrl(id), { headers: { Range: `bytes=${start}-${e}` }, cache: "no-store" });
+        const r = await fetch(fonte, { headers: { Range: `bytes=${start}-${e}` }, cache: "no-store" });
         if (r.status !== 206) throw new Error(`Drive ${r.status}`);
         const buf = Buffer.from(await r.arrayBuffer());
         if (!res.write(buf)) await once(res, "drain");
@@ -135,12 +152,12 @@ async function comProxy<T>(id: string, total: number, fn: (url: string) => Promi
   }
 }
 
-/** Um trecho fechado do arquivo no Drive, com prazo: o Drive às vezes não responde. */
-async function trecho(id: string, start: number, end: number): Promise<{ buf: Buffer; total: number; tipo: string }> {
-  const res = await fetch(driveUrl(id), { headers: { Range: `bytes=${start}-${end}` }, cache: "no-store", signal: AbortSignal.timeout(20_000) });
+/** Um trecho fechado do arquivo, com prazo: o Drive às vezes não responde. */
+async function trecho(url: string, start: number, end: number): Promise<{ buf: Buffer; total: number; tipo: string }> {
+  const res = await fetch(url, { headers: { Range: `bytes=${start}-${end}` }, cache: "no-store", signal: AbortSignal.timeout(20_000) });
   if (res.status !== 206) {
     await res.body?.cancel().catch(() => null);
-    throw new Error(`Não consegui abrir o vídeo no Drive (${res.status}): confira se o arquivo está com link público.`);
+    throw new Error(`Não consegui abrir o vídeo (${res.status}): no Drive, confira se o arquivo está com link público.`);
   }
   return {
     buf: Buffer.from(await res.arrayBuffer()),
@@ -154,10 +171,10 @@ async function trecho(id: string, start: number, end: number): Promise<{ buf: Bu
  * moov. Poucos KB lidos, sem ffmpeg: na Vercel o ffmpeg pelo proxy deixava o
  * "Ligar vídeo" pendurado. Devolve 0 se não achar (a duração é só informativa).
  */
-async function duracaoMp4(id: string, total: number): Promise<number> {
+async function duracaoMp4(url: string, total: number): Promise<number> {
   let pos = 0;
   for (let i = 0; i < 20 && pos + 8 <= total; i++) {
-    const { buf: h } = await trecho(id, pos, Math.min(pos + 15, total - 1));
+    const { buf: h } = await trecho(url, pos, Math.min(pos + 15, total - 1));
     let size = h.readUInt32BE(0);
     const tipo = h.toString("latin1", 4, 8);
     let head = 8;
@@ -168,7 +185,7 @@ async function duracaoMp4(id: string, total: number): Promise<number> {
     if (size < head) return 0;
     if (tipo === "moov") {
       // O mvhd costuma ser o primeiro filho; 4 KB bastam.
-      const { buf } = await trecho(id, pos + head, Math.min(pos + head + 4095, total - 1));
+      const { buf } = await trecho(url, pos + head, Math.min(pos + head + 4095, total - 1));
       const at = buf.indexOf("mvhd", 0, "latin1");
       if (at < 4) return 0;
       const v = buf[at + 4];
@@ -182,10 +199,10 @@ async function duracaoMp4(id: string, total: number): Promise<number> {
 }
 
 /** Tamanho pelo Content-Range e duração pelo cabeçalho do MP4. */
-async function infoVideo(id: string): Promise<{ tamanho: number; duracao: number }> {
-  const { total, tipo } = await trecho(id, 0, 0);
+async function infoVideo(url: string): Promise<{ tamanho: number; duracao: number }> {
+  const { total, tipo } = await trecho(url, 0, 0);
   if (!total || !tipo.startsWith("video/")) throw new Error("Não consegui abrir o vídeo: confira se o arquivo é MP4 e está com link público.");
-  const duracao = await duracaoMp4(id, total).catch(() => 0);
+  const duracao = await duracaoMp4(url, total).catch(() => 0);
   return { tamanho: total, duracao };
 }
 
@@ -196,14 +213,38 @@ export async function ligarVideo(epId: string, link: string, nome: string | null
   const ep = await getEpisodio(epId);
   if (!ep) throw new Error("Episódio não encontrado.");
   if (ep.yt_status === "enviando" || ep.yt_status === "enviado") throw new Error("O vídeo já foi para o YouTube; não dá para trocar o arquivo.");
-  const { tamanho, duracao } = await infoVideo(id);
-  await updateEpisodio(ep.id, { video_drive_id: id, video_nome: nome, video_tamanho: tamanho, video_duracao_s: duracao || null, yt_erro: null });
+  const { tamanho, duracao } = await infoVideo(driveUrl(id));
+  await updateEpisodio(ep.id, { video_drive_id: id, video_arquivo_id: null, video_nome: nome, video_tamanho: tamanho, video_duracao_s: duracao || null, yt_erro: null });
   await logAgenda(ep.id, actor, "ligou o vídeo do Drive", `${nome ?? id} (${(tamanho / 1e9).toFixed(1)} GB)`);
 }
 
+/** Vídeo que já está na central de arquivos (R2): o mesmo fluxo, lido por link assinado. */
+export async function ligarArquivo(epId: string, arquivoId: string, actor: string): Promise<void> {
+  const a = await getArquivo(arquivoId);
+  if (!a) throw new Error("Arquivo não encontrado na central.");
+  if (a.status !== "pronto") throw new Error("O arquivo ainda está subindo para a central.");
+  if (!a.mime.startsWith("video/") && !/\.(mp4|mov|m4v)$/i.test(a.nome)) throw new Error("Escolha um arquivo de vídeo (MP4).");
+  const ep = await getEpisodio(epId);
+  if (!ep) throw new Error("Episódio não encontrado.");
+  if (ep.yt_status === "enviando" || ep.yt_status === "enviado") throw new Error("O vídeo já foi para o YouTube; não dá para trocar o arquivo.");
+  const url = await urlAssinada("arquivos", a.path, 3600);
+  const duracao = await duracaoMp4(url, a.tamanho).catch(() => 0);
+  await updateEpisodio(ep.id, {
+    video_arquivo_id: a.id,
+    video_drive_id: null,
+    video_nome: a.nome,
+    video_tamanho: a.tamanho,
+    video_duracao_s: duracao || null,
+    yt_erro: null,
+  });
+  await logAgenda(ep.id, actor, "ligou o vídeo da central de arquivos", `${a.nome} (${(a.tamanho / 1e9).toFixed(1)} GB)`);
+}
+
 /** Um frame em `seg` segundos. O Drive às vezes falha uma leitura: tenta de novo uma vez. */
-async function frameEm(id: string, total: number, seg: number): Promise<Buffer> {
-  return comProxy(id, total, (url) => lerFrame(url, seg).catch(() => lerFrame(url, seg)));
+async function frameEm(fonte: Fonte, total: number, seg: number): Promise<Buffer> {
+  const ler = (url: string) => lerFrame(url, seg).catch(() => lerFrame(url, seg));
+  // O R2 aceita o Range aberto do ffmpeg; o Drive precisa do proxy em janelas.
+  return fonte.drive ? comProxy(fonte.url, total, ler) : ler(fonte.url);
 }
 
 /** JPEG 1080p lido por Range, sem baixar o resto do vídeo. */
@@ -224,13 +265,14 @@ async function lerFrame(url: string, seg: number): Promise<Buffer> {
  */
 export async function tirarFrames(epId: string, actor: string, n = 9): Promise<number> {
   const ep = await getEpisodio(epId);
-  if (!ep?.video_drive_id || !ep.video_tamanho) throw new Error("Ligue o vídeo do Drive primeiro.");
+  if (!ep?.video_tamanho) throw new Error("Ligue o vídeo do episódio primeiro.");
+  const fonte = await fonteDo(ep);
   const dur = ep.video_duracao_s || 600;
   const tempos = Array.from({ length: n }, (_, i) => Math.round(dur * (0.08 + (0.84 * i) / Math.max(1, n - 1))));
   const frames: { seg: number; buf: Buffer }[] = [];
-  // Três de cada vez: cada um abre uma conexão com o Drive.
+  // Três de cada vez: cada um abre uma conexão com o arquivo.
   for (let i = 0; i < tempos.length; i += 3) {
-    const lote = await Promise.all(tempos.slice(i, i + 3).map((seg) => frameEm(ep.video_drive_id!, ep.video_tamanho!, seg).then((buf) => ({ seg, buf })).catch(() => null)));
+    const lote = await Promise.all(tempos.slice(i, i + 3).map((seg) => frameEm(fonte, ep.video_tamanho!, seg).then((buf) => ({ seg, buf })).catch(() => null)));
     frames.push(...lote.filter((f): f is { seg: number; buf: Buffer } => !!f));
   }
   if (frames.length === 0) throw new Error("O ffmpeg não conseguiu ler o vídeo.");
@@ -274,7 +316,7 @@ export async function enviarVideo(epId: string, actor: string, budgetMs: number)
   const ep = await getEpisodio(epId);
   if (!ep) throw new Error("Episódio não encontrado.");
   if (ep.status !== "confirmado") throw new Error("Confirme o episódio antes de enviar.");
-  if (!ep.video_drive_id || !ep.video_tamanho) throw new Error("Ligue o vídeo do Drive primeiro.");
+  if (!(ep.video_drive_id || ep.video_arquivo_id) || !ep.video_tamanho) throw new Error("Ligue o vídeo do episódio primeiro.");
   if (ep.yt_status === "enviando" || ep.yt_status === "enviado") return;
   if (!(await connectedChannel())) throw new Error("Canal do YouTube não conectado (/admin/producao/config).");
   if (new Date(ep.inicio).getTime() < Date.now() + 15 * 60_000) throw new Error("A data do episódio já passou ou está em cima: remarque para quando ele deve estrear.");
@@ -302,17 +344,18 @@ async function travar(epId: string, ms: number): Promise<Episodio | null> {
 /** Empurra pedaços até acabar o tempo. Retomável: o que já foi fica no YouTube. */
 async function empurrar(epId: string, budgetMs: number): Promise<void> {
   const ep = await travar(epId, budgetMs);
-  if (!ep?.yt_upload || !ep.video_drive_id) return;
+  if (!ep?.yt_upload || !(ep.video_drive_id || ep.video_arquivo_id)) return;
   const up = ep.yt_upload as YtUpload;
   const fim = Date.now() + budgetMs;
   try {
+    const fonte = await fonteDo(ep);
     // A rodada anterior pode ter caído no meio de um pedaço: pergunta onde parou.
     let r = await queryUpload(up.session, up.total);
     while (!r.done && Date.now() < fim) {
       const start = r.next;
       const end = Math.min(start + CHUNK, up.total) - 1;
-      const res = await fetch(driveUrl(ep.video_drive_id), { headers: { Range: `bytes=${start}-${end}` }, cache: "no-store" });
-      if (res.status !== 206) throw new Error(`Drive ${res.status} ao ler o trecho ${start}.`);
+      const res = await fetch(fonte.url, { headers: { Range: `bytes=${start}-${end}` }, cache: "no-store" });
+      if (res.status !== 206) throw new Error(`${fonte.drive ? "Drive" : "R2"} ${res.status} ao ler o trecho ${start}.`);
       const chunk = new Uint8Array(await res.arrayBuffer());
       r = await putChunk(up.session, chunk, start, up.total);
       up.offset = r.done ? up.total : r.next;

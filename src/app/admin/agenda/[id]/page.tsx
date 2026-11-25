@@ -12,6 +12,7 @@ import { CAMPOS, sugestoesDe, valorDoCampo } from "@/lib/agenda/sugestoes";
 import { youtubeUrl } from "@/lib/agenda/fluxo";
 import { calendarAccount } from "@/lib/agenda/gcal";
 import { listarPasta, pastaDrive, type ArquivoDrive } from "@/lib/agenda/video";
+import { tamanhoLegivel, type Arquivo, type Pasta } from "@/lib/arquivos/store";
 import {
   MATERIAL_TIPOS,
   TZ,
@@ -124,18 +125,48 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
     convidados.find((c) => c.id === convidadoId)?.nome ?? hosts.find((h) => h.id === apresentadorId)?.nome ?? null;
   const aprovada = artes.find((a) => a.id === ep.arte_id) ?? null;
   // Episódio gravado: o PFC Visita, ou qualquer um que já tenha vídeo ligado.
-  const gravado = ep.quadro === "pfc-visita" || !!ep.video_drive_id;
+  const temVideo = !!(ep.video_drive_id || ep.video_arquivo_id);
+  const gravado = ep.quadro === "pfc-visita" || temVideo;
   let arquivos: ArquivoDrive[] = [];
   let erroPasta: string | null = null;
-  if (gravado && !ep.video_drive_id) {
-    try {
-      const todos = await listarPasta(await pastaDrive());
-      const { data: usados } = await db().from("agenda_episodios").select("video_drive_id").not("video_drive_id", "is", null).neq("status", "cancelado");
-      const ja = new Set((usados ?? []).map((u) => u.video_drive_id as string));
-      arquivos = todos.filter((a) => !ja.has(a.id));
-    } catch (e) {
-      erroPasta = e instanceof Error ? e.message : String(e);
+  // Vídeos da central de arquivos (R2): os da pasta com o nome do quadro vêm primeiro.
+  let centralDoQuadro: { id: string; label: string }[] = [];
+  let centralOutros: { id: string; label: string }[] = [];
+  let pastaDoVideo: string | null = null;
+  if (gravado && !temVideo) {
+    const [drive, { data: pastaRows }, { data: videoRows }, { data: usados }] = await Promise.all([
+      pastaDrive()
+        .then(listarPasta)
+        .catch((e) => {
+          erroPasta = e instanceof Error ? e.message : String(e);
+          return [] as ArquivoDrive[];
+        }),
+      db().from("arquivos_pastas").select("*"),
+      db().from("arquivos").select("*").eq("status", "pronto").like("mime", "video/%").order("created_at", { ascending: false }).limit(300),
+      db().from("agenda_episodios").select("video_drive_id, video_arquivo_id").neq("status", "cancelado"),
+    ]);
+    const ja = new Set((usados ?? []).flatMap((u) => [u.video_drive_id, u.video_arquivo_id]).filter(Boolean) as string[]);
+    arquivos = drive.filter((a) => !ja.has(a.id));
+
+    const pastas = new Map(((pastaRows ?? []) as Pasta[]).map((x) => [x.id, x]));
+    const trilha = (id: string) => {
+      const nomes: string[] = [];
+      for (let x = pastas.get(id); x && nomes.length < 10; x = x.parent_id ? pastas.get(x.parent_id) : undefined) nomes.unshift(x.nome);
+      return nomes;
+    };
+    const norm = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+    const nomeQuadro = norm(t?.name ?? ep.quadro);
+    for (const a of (videoRows ?? []) as Arquivo[]) {
+      if (ja.has(a.id)) continue;
+      const caminho = trilha(a.pasta_id);
+      const item = { id: a.id, label: `${a.nome} · ${caminho.join(" / ")} · ${tamanhoLegivel(a.tamanho)}` };
+      if (caminho[0] && norm(caminho[0]) === nomeQuadro) centralDoQuadro.push(item);
+      else centralOutros.push(item);
     }
+  }
+  if (ep.video_arquivo_id) {
+    const { data } = await db().from("arquivos").select("pasta_id").eq("id", ep.video_arquivo_id).maybeSingle();
+    pastaDoVideo = (data?.pasta_id as string | undefined) ?? null;
   }
   const up = ep.yt_upload;
   const pct = up ? Math.floor((up.offset / up.total) * 100) : 0;
@@ -762,30 +793,58 @@ export default async function EpisodioPage({ params }: { params: { id: string } 
           <section className={card}>
             <h2 className="text-white font-bold">Vídeo gravado</h2>
             <p className="text-white/40 text-sm mt-1">
-              O episódio pronto fica no Drive. O hub tira frames dele para a arte, sobe o vídeo para o YouTube em
-              pedaços, direto do Drive e agendado para estrear em {quandoLongo(ep.inicio)}, e manda cortar no Contenta
-              depois da estreia.
+              O episódio pronto fica na central de arquivos ou no Drive. O hub tira frames dele para a arte, sobe o vídeo
+              para o YouTube em pedaços, direto do arquivo e agendado para estrear em {quandoLongo(ep.inicio)}, e manda
+              cortar no Contenta depois da estreia.
             </p>
-            {!ep.video_drive_id ? (
+            {!temVideo ? (
               <ProducaoForm action={ligarVideoAction} label="Ligar vídeo" pending="Lendo o vídeo..." className="mt-4 flex flex-wrap items-start gap-2" buttonClassName={btn2}>
                 <input type="hidden" name="id" value={ep.id} />
-                {arquivos.length > 0 && (
-                  <select name="arquivo" defaultValue="" className={`${input} min-w-64`}>
-                    <option value="">Da pasta do Drive...</option>
-                    {arquivos.map((a) => (
-                      <option key={a.id} value={`${a.id}|${a.nome}`}>{a.nome}</option>
-                    ))}
+                {centralDoQuadro.length + centralOutros.length + arquivos.length > 0 ? (
+                  <select name="arquivo" defaultValue="" className={`${input} min-w-64 max-w-full`}>
+                    <option value="">Escolha o vídeo...</option>
+                    {centralDoQuadro.length > 0 && (
+                      <optgroup label={`Central de arquivos: ${t?.name ?? "pasta do quadro"}`}>
+                        {centralDoQuadro.map((a) => (
+                          <option key={a.id} value={`r2:${a.id}`}>{a.label}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {centralOutros.length > 0 && (
+                      <optgroup label="Central de arquivos: outras pastas">
+                        {centralOutros.map((a) => (
+                          <option key={a.id} value={`r2:${a.id}`}>{a.label}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {arquivos.length > 0 && (
+                      <optgroup label="Pasta do Drive">
+                        {arquivos.map((a) => (
+                          <option key={a.id} value={`${a.id}|${a.nome}`}>{a.nome}</option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
+                ) : (
+                  <p className="text-white/40 text-xs w-full">
+                    Nenhum vídeo livre na <a href="/admin/arquivos" className="underline">central de arquivos</a> nem na pasta do Drive.
+                  </p>
                 )}
                 <input name="link" placeholder="ou cole o link do arquivo no Drive" className={`${input} w-72`} />
-                {erroPasta && <p className="text-yellow-300/80 text-xs w-full">{erroPasta}</p>}
+                {erroPasta && <p className="text-yellow-300/80 text-xs w-full">Drive: {erroPasta}</p>}
               </ProducaoForm>
             ) : (
               <div className="mt-4 space-y-4 text-sm">
                 <p className="text-white/80">
-                  <a href={`https://drive.google.com/file/d/${ep.video_drive_id}/view`} target="_blank" className="text-gold-400 hover:underline">
-                    {ep.video_nome ?? ep.video_drive_id}
-                  </a>{" "}
+                  {ep.video_drive_id ? (
+                    <a href={`https://drive.google.com/file/d/${ep.video_drive_id}/view`} target="_blank" className="text-gold-400 hover:underline">
+                      {ep.video_nome ?? ep.video_drive_id}
+                    </a>
+                  ) : (
+                    <a href={pastaDoVideo ? `/admin/arquivos?pasta=${pastaDoVideo}` : "/admin/arquivos"} className="text-gold-400 hover:underline">
+                      {ep.video_nome ?? "Arquivo da central"}
+                    </a>
+                  )}{" "}
                   <span className="text-white/40">{[gb(ep.video_tamanho), min(ep.video_duracao_s)].filter(Boolean).join(" · ")}</span>
                 </p>
                 <ProducaoForm action={framesAction} label="Tirar frames para a arte" pending="Lendo o vídeo (~1 min)..." buttonClassName={btn2}>
